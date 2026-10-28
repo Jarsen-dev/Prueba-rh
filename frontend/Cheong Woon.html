@@ -311,6 +311,22 @@
             throw new Error(`No se pudo conectar con el servidor (${API_BASES.join(' | ')}): ${ultimoErrorRed ? ultimoErrorRed.message : 'Error desconocido de red'}`);
         }
 
+        async function completarTurnosDesdeFicha(empleados) {
+            await Promise.all(empleados.map(async (emp) => {
+                if (String(emp.turno || '').trim() || !emp.registro_id) return;
+                try {
+                    const { respuesta, texto } = await getConFallback(`/obtener-empleado/${encodeURIComponent(emp.registro_id)}`);
+                    if (!respuesta.ok) {
+                        throw new Error(`Error ${respuesta.status}: ${texto || 'No se pudo consultar la ficha.'}`);
+                    }
+                    const datosEmpleado = JSON.parse(texto || '{}');
+                    emp.turno = datosEmpleado.turno || '';
+                } catch (error) {
+                    console.error(`No se pudo cargar el turno del empleado ${emp.registro_id}:`, error);
+                }
+            }));
+        }
+
         async function descargarExcelEmpleados(empresa) {
             for (const baseUrl of API_BASES) {
                 try {
@@ -448,6 +464,7 @@
                 }
 
                 const empleados = JSON.parse(texto || '[]');
+                await completarTurnosDesdeFicha(empleados);
                 empleadosCache = window.DataManager && typeof window.DataManager.deduplicate === 'function'
                     ? window.DataManager.deduplicate(empleados)
                     : (Array.isArray(empleados) ? empleados : []);
