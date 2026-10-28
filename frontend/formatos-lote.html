@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formatos automatizados</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #121212;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+            margin: 0 auto 20px;
+            max-width: 1000px;
+        }
+
+        .toolbar h1 {
+            flex: 1 1 100%;
+            margin: 0;
+            font-size: 1.25rem;
+        }
+
+        .toolbar button,
+        .toolbar a {
+            padding: 10px 15px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            background: #1e1e1e;
+            color: #fff;
+            cursor: pointer;
+            font: inherit;
+            text-decoration: none;
+        }
+
+        .toolbar button:disabled {
+            cursor: wait;
+            opacity: 0.6;
+        }
+
+        #estado-documentos {
+            color: #ddd;
+        }
+
+        #documentos {
+            display: grid;
+            justify-items: center;
+            gap: 20px;
+        }
+
+        .documento-empleado {
+            width: 100%;
+            max-width: 900px;
+            overflow: hidden;
+            border: 1px solid #444;
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        .documento-empleado iframe {
+            display: block;
+            width: 100%;
+            border: 0;
+            background: #fff;
+        }
+
+        @media print {
+            @page {
+                size: letter;
+                margin: 0;
+            }
+
+            body {
+                padding: 0;
+                background: #fff;
+            }
+
+            .toolbar {
+                display: none;
+            }
+
+            #documentos {
+                display: block;
+            }
+
+            .documento-empleado {
+                width: 8.5in;
+                max-width: none;
+                margin: 0;
+                border: 0;
+                border-radius: 0;
+                page-break-after: always;
+                break-after: page;
+                overflow: visible;
+            }
+
+            .documento-empleado iframe {
+                width: 8.5in;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="toolbar">
+        <h1 id="titulo-formato">Formato automatizado</h1>
+        <a id="btn-regresar" href="Cheong%20Woon.html">Regresar al listado</a>
+        <button id="btn-imprimir" type="button" disabled>Preparando documentos...</button>
+        <span id="estado-documentos" role="status" aria-live="polite">Cargando datos de empleados...</span>
+    </header>
+    <main id="documentos"></main>
+
+    <script>
+        const formatos = {
+            cartacom: { titulo: 'Carta Compromiso', pagina: 'cartacom.html' },
+            cartaimss: { titulo: 'Carta Patronal IMSS', pagina: 'cartaimss.html' },
+            contrato: { titulo: 'Contrato Laboral', pagina: 'contrato.html' },
+        };
+        const parametros = new URLSearchParams(window.location.search);
+        const formato = formatos[parametros.get('tipo')];
+        const ids = [...new Set((parametros.get('ids') || '').split(',').filter((id) => /^\d+$/.test(id) && Number(id) > 0))];
+        const returnUrl = ['Cheong Woon.html', 'Kronos.html'].includes(parametros.get('return_url'))
+            ? parametros.get('return_url')
+            : 'Cheong Woon.html';
+        const documentos = document.getElementById('documentos');
+        const estado = document.getElementById('estado-documentos');
+        const botonImprimir = document.getElementById('btn-imprimir');
+        const promesasCarga = [];
+
+        document.getElementById('btn-regresar').href = encodeURI(returnUrl);
+
+        function crearDocumento(registroId, indice) {
+            const contenedor = document.createElement('section');
+            contenedor.className = 'documento-empleado';
+            contenedor.setAttribute('aria-label', `Documento ${indice + 1}`);
+
+            const frame = document.createElement('iframe');
+            frame.title = `${formato.titulo}, empleado ${registroId}`;
+            frame.loading = 'eager';
+            contenedor.append(frame);
+            documentos.append(contenedor);
+
+            const promesa = new Promise((resolve, reject) => {
+                const timeout = window.setTimeout(
+                    () => reject(new Error(`No cargaron los datos del empleado ${registroId}.`)),
+                    20000,
+                );
+
+                frame.addEventListener('load', () => {
+                    try {
+                        const contenido = frame.contentDocument;
+                        if (!contenido) throw new Error('No se pudo leer el documento generado.');
+
+                        const estilo = contenido.createElement('style');
+                        estilo.textContent = '.controls{display:none!important}.page{margin:0 auto!important;box-shadow:none!important}';
+                        contenido.head.append(estilo);
+
+                        const esperarDatos = () => {
+                            const nombre = contenido.getElementById('lbl-nombre')?.textContent.trim();
+                            if (nombre) {
+                                const paginas = Math.max(1, contenido.querySelectorAll('.page').length);
+                                frame.style.height = `${paginas * 11}in`;
+                                window.clearTimeout(timeout);
+                                resolve();
+                                return;
+                            }
+                            window.setTimeout(esperarDatos, 150);
+                        };
+                        esperarDatos();
+                    } catch (error) {
+                        window.clearTimeout(timeout);
+                        reject(error);
+                    }
+                }, { once: true });
+
+                frame.src = `${formato.pagina}?registro_id=${encodeURIComponent(registroId)}`;
+            });
+            promesasCarga.push(promesa);
+        }
+
+        if (!formato || !ids.length) {
+            estado.textContent = 'No se indicó un formato o empleados válidos.';
+            botonImprimir.textContent = 'No disponible';
+        } else {
+            document.title = formato.titulo;
+            document.getElementById('titulo-formato').textContent = `${formato.titulo} (${ids.length} empleado${ids.length === 1 ? '' : 's'})`;
+            ids.forEach(crearDocumento);
+
+            Promise.all(promesasCarga).then(() => {
+                estado.textContent = 'Todos los documentos están listos para imprimir o guardar como PDF.';
+                botonImprimir.disabled = false;
+                botonImprimir.textContent = 'Imprimir todos';
+            }).catch((error) => {
+                estado.textContent = error.message;
+                botonImprimir.textContent = 'No se pudo preparar';
+            });
+        }
+
+        botonImprimir.addEventListener('click', () => window.print());
+    </script>
+</body>
+</html>

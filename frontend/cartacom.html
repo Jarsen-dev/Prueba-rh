@@ -163,7 +163,7 @@
 
         function buildEmpleadoEndpoint(idValue) {
             const encodedId = encodeURIComponent(idValue);
-            const bases = API_BASES.map((baseUrl) => `${baseUrl}/api/obtener-empleado/${encodedId}`);
+            const bases = API_BASES.map((baseUrl) => `${baseUrl}/obtener-empleado/${encodedId}`);
             return bases.filter((value, index, arr) => arr.indexOf(value) === index);
         }
 

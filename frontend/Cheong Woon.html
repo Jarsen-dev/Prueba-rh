@@ -9,39 +9,34 @@
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js'></script>
     <style>
 /* FILTROS*/
-        .filtros-container { display: grid; grid-template-columns: minmax(310px, 2fr) minmax(170px, 1fr) minmax(300px, 2fr) minmax(150px, 1fr); gap: 14px; align-items: center; background: #1e1e1e; padding: 16px; border-radius: 12px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.3); margin-bottom: 25px; }
+        .filtros-container { display: grid; grid-template-columns: minmax(220px, 1.15fr) minmax(330px, 2fr) minmax(170px, 0.8fr) auto; gap: 18px; align-items: center; background: #1e1e1e; padding: 16px; border-radius: 12px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.3); margin-bottom: 14px; }
         .filtro-grupo { min-width: 0; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
         .filtro-grupo.filtro-fechas { min-width: 0; }
         .filtro-grupo.filtro-fechas .filtro-input { flex: 1 1 0; width: auto; }
-        .filtro-grupo.filtro-busqueda #buscador { flex: 1 1 0; width: auto !important; }
-        .filtro-grupo.filtro-busqueda #btn-limpiar-filtros { flex: 0 0 auto; }
-        .filtro-grupo.filtro-excel { overflow: hidden; }
-        .filtro-grupo.filtro-excel .btn-descargar-excel { flex: 0 0 auto; width: auto; }
+        .filtro-grupo.filtro-busqueda #buscador { flex: 1 1 0; width: 100% !important; }
         .filtro-grupo .filtro-input { min-width: 0; }
-        .btn-descargar-excel { cursor: pointer; text-align: center; box-sizing: border-box; }
-        .excel-nombre { min-width: 0; color: #aaa; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .acciones-container { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; background: #1e1e1e; padding: 16px; border-radius: 12px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.3); margin-bottom: 25px; }
+        .acciones-menu { position: relative; }
+        .acciones-menu > summary, .accion-principal, .accion-secundaria { list-style: none; background: #121212; border: 1px solid #444; color: #fff; padding: 10px 15px; border-radius: 8px; font-size: 0.95rem; cursor: pointer; font-family: inherit; }
+        .acciones-menu > summary::-webkit-details-marker { display: none; }
+        .acciones-menu > summary::after { content: " ▾"; }
+        .acciones-dropdown { display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; min-width: 230px; padding: 8px; background: #1e1e1e; border: 1px solid #007bff; border-radius: 8px; box-shadow: 0 8px 18px rgba(0,0,0,0.35); }
+        .acciones-menu[open] .acciones-dropdown { display: grid; gap: 6px; }
+        .acciones-dropdown button { text-align: left; background: transparent; border: 0; color: #fff; padding: 9px 10px; border-radius: 5px; cursor: pointer; font: inherit; }
+        .acciones-dropdown button:hover, .acciones-dropdown a:hover { background: #2c2c2c; }
+        .acciones-dropdown a { display: block; color: #fff; padding: 9px 10px; border-radius: 5px; text-decoration: none; }
+        .seleccion-formatos { display: none; align-items: center; gap: 10px; margin-left: auto; }
+        .modo-seleccion .seleccion-column { display: table-cell; }
+        .seleccion-column { display: none; }
+        .seleccion-contador { color: #ddd; }
         @media (max-width: 1100px) { .filtros-container { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-        @media (max-width: 650px) { .filtros-container { grid-template-columns: 1fr; } .filtro-grupo { width: 100%; } #buscador { width: 100% !important; } }
+        @media (max-width: 650px) { .filtros-container { grid-template-columns: 1fr; } .filtro-grupo { width: 100%; } .acciones-container { align-items: stretch; flex-direction: column; } .acciones-menu > summary, .accion-principal, .accion-secundaria { width: 100%; text-align: center; box-sizing: border-box; } .acciones-menu { width: 100%; } .acciones-dropdown { right: 0; } .seleccion-formatos { margin-left: 0; flex-wrap: wrap; } }
         .filtro-input { background: #121212; border: 1px solid #444; color: #fff; padding: 10px 15px; border-radius: 8px; font-size: 0.95rem; transition: all 0.3s ease; outline: none; }
         .filtro-input:focus { border-color: #007bff; box-shadow: 0 0 8px rgba(0,123,255,0.3); }
         .filtro-label { font-size: 0.85rem; margin-right: 8px; font-weight: bold; }
         .btn-nombre { color: #ffffff; text-decoration: none; font-weight: 600; cursor: pointer; }
         .btn-nombre:hover { text-decoration: underline; }
 
-        .btn-descargar-gafette { 
-            background: #2c2c2c; 
-            text-decoration: none;
-            color: #007bff;
-            font-weight: bold;
-            font-size: 0.9rem;
-            border: 1px solid #007bff;
-            padding: 5px 12px;
-            border-radius: 5px;
-            transition: 0.3s;
-            text-transform: uppercase;
-        }
-
-        .btn-descargar-gafette:hover { background: #007bff; color: white; }
     </style>
 </head>
 <body>
@@ -63,6 +58,9 @@
     </header>
     <main style="padding: 20px;">
         <div class="filtros-container">
+            <div class="filtro-grupo filtro-busqueda">
+                <input type="text" id="buscador" class="filtro-input" placeholder="🔍 Buscar por nombre o # empleado...">
+            </div>
             <div class="filtro-grupo filtro-fechas">
                 <span class="filtro-label">DE:</span>
                 <input type="date" id="filtro-fecha-desde" class="filtro-input">
@@ -77,18 +75,38 @@
                     <option value="INACTIVOS">Inactivos</option>
                 </select>
             </div>
-            <div class="filtro-grupo filtro-busqueda">
-                <input type="text" id="buscador" class="filtro-input" placeholder="🔍 Buscar por nombre o # empleado..." style="width: 350px;">
-                <button id="btn-limpiar-filtros" type="button" class="filtro-input" style="width: auto; cursor: pointer;">Limpiar filtros</button>
-            </div>
-            <div class="filtro-grupo filtro-excel">
-                <button id="btn-descargar-excel" type="button" class="filtro-input btn-descargar-excel">Descargar Excel</button>
+            <button id="btn-limpiar-filtros" type="button" class="filtro-input" style="width: auto; cursor: pointer;">Limpiar filtros</button>
+        </div>
+        <div class="acciones-container">
+            <details class="acciones-menu" id="menu-formatos-automatizados">
+                <summary>Formatos Automatizados</summary>
+                <div class="acciones-dropdown">
+                    <button type="button" data-formato="gafete">Gafete</button>
+                    <button type="button" data-formato="cartacom">Carta Compromiso</button>
+                    <button type="button" data-formato="cartaimss">Carta Patronal IMSS</button>
+                    <button type="button" data-formato="contrato">Contrato Laboral</button>
+                </div>
+            </details>
+            <details class="acciones-menu">
+                <summary>Formatos para Imprimir</summary>
+                <div class="acciones-dropdown">
+                    <a href="https://drive.google.com/file/d/1IMw93o8y56e423HZoKVJNnE5z5b26e5A/view?usp=sharing" target="_blank" rel="noopener noreferrer">Suspensión</a>
+                    <a href="https://drive.google.com/file/d/1MjIXgFLUJAO25hNfZb0IzTFwIW4YLvU5/view?usp=sharing" target="_blank" rel="noopener noreferrer">Entrada/Salida</a>
+                    <a href="https://drive.google.com/file/d/1gWuv28J-7WjbfsaOdUMSIb0Mbb6KHRqO/view?usp=sharing" target="_blank" rel="noopener noreferrer">Indisciplina</a>
+                </div>
+            </details>
+            <button id="btn-descargar-excel" type="button" class="accion-principal">Listado General</button>
+            <div id="seleccion-formatos" class="seleccion-formatos">
+                <span id="seleccion-contador" class="seleccion-contador">0 empleados seleccionados</span>
+                <button id="btn-generar-formato" type="button" class="accion-principal">Generar formato</button>
+                <button id="btn-cancelar-formato" type="button" class="accion-secundaria">Cancelar</button>
             </div>
         </div>
         
         <table style="width: 100%; border-collapse: collapse; background: #1e1e1e; border-radius: 8px;">
             <thead>
                 <tr style="border-bottom: 2px solid #444;">
+                    <th class="seleccion-column" style="padding: 12px;"></th>
                     <th style="padding: 12px;">No. Empleado</th>
                     <th style="padding: 12px; text-align: left;">Nombre</th>
                     <th style="padding: 12px; text-align: left;">Apellido</th>
@@ -96,14 +114,11 @@
                     <th style="padding: 12px;">Área</th>
                     <th style="padding: 12px;">Turno</th>
                     <th style="padding: 12px;">Estatus</th>
-                    <th style="padding: 12px; min-width: 180px; text-align: center;">
-                        <button id="btn-descargar-gafette" class="btn-descargar-gafette">Descargar gafette</button>
-                    </th>
                 </tr>
             </thead>
             <tbody id="cuerpo-tabla-empleados">
                 <tr>
-                    <td colspan="8" style="padding: 12px; text-align: center;">Cargando empleados...</td>
+                    <td colspan="7" style="padding: 12px; text-align: center;">Cargando empleados...</td>
                 </tr>
             </tbody>
         </table>
@@ -123,10 +138,13 @@
         const fechaHastaInput = document.getElementById('filtro-fecha-hasta');
         const btnLimpiarFiltros = document.getElementById('btn-limpiar-filtros');
         const btnDescargarExcel = document.getElementById('btn-descargar-excel');
+        const seleccionFormatos = document.getElementById('seleccion-formatos');
+        const seleccionContador = document.getElementById('seleccion-contador');
         let empleadosCache = [];
         let statusFilter = 'TODOS';
         let searchQuery = '';
         let selectedRegistroIds = new Set();
+        let selectedFormat = '';
         const FILTER_STATE_KEY = 'cheongWoonFiltersState';
 
         function parseFechaValor(valor) {
@@ -266,13 +284,14 @@
             });
 
             if (!visibles.length) {
-                cuerpo.innerHTML = '<tr><td colspan="8" style="padding: 12px; text-align: center;">No hay empleados que coincidan con el filtro.</td></tr>';
+                cuerpo.innerHTML = `<tr><td colspan="${selectedFormat ? 8 : 7}" style="padding: 12px; text-align: center;">No hay empleados que coincidan con el filtro.</td></tr>`;
+                actualizarSeleccionFormatos();
                 return;
             }
 
             cuerpo.innerHTML = visibles.map(renderFila).join('');
 
-            document.querySelectorAll('.seleccion-gafete').forEach((checkbox) => {
+            cuerpo.querySelectorAll('.seleccion-empleado').forEach((checkbox) => {
                 checkbox.checked = selectedRegistroIds.has(checkbox.value);
                 checkbox.addEventListener('change', () => {
                     const id = checkbox.value;
@@ -281,11 +300,33 @@
                     } else {
                         selectedRegistroIds.delete(id);
                     }
+                    actualizarSeleccionFormatos();
                     saveFilterState();
                 });
             });
 
+            actualizarSeleccionFormatos();
             saveFilterState();
+        }
+
+        function actualizarSeleccionFormatos() {
+            document.body.classList.toggle('modo-seleccion', Boolean(selectedFormat));
+            seleccionFormatos.style.display = selectedFormat ? 'flex' : 'none';
+            const cantidad = selectedRegistroIds.size;
+            seleccionContador.textContent = `${cantidad} empleado${cantidad === 1 ? '' : 's'} seleccionado${cantidad === 1 ? '' : 's'}`;
+        }
+
+        function iniciarSeleccionFormato(formato) {
+            selectedFormat = formato;
+            selectedRegistroIds.clear();
+            document.getElementById('menu-formatos-automatizados').open = false;
+            renderTabla();
+        }
+
+        function cancelarSeleccionFormato() {
+            selectedFormat = '';
+            selectedRegistroIds.clear();
+            renderTabla();
         }
 
         function getEstatusSincronizado(emp) {
@@ -330,7 +371,7 @@
         async function descargarExcelEmpleados(empresa) {
             for (const baseUrl of API_BASES) {
                 try {
-                    const respuesta = await fetch(`${baseUrl}/api/exportar-empleados/${encodeURIComponent(empresa)}`);
+                    const respuesta = await fetch(`${baseUrl}/api/exportar-empleados/${encodeURIComponent(empresa)}?todos=1`);
                     if (!respuesta.ok) {
                         throw new Error(`Error ${respuesta.status}: ${await respuesta.text()}`);
                     }
@@ -340,7 +381,7 @@
                     const fecha = new Date();
                     const fechaArchivo = `${fecha.getFullYear()}${String(fecha.getMonth() + 1).padStart(2, '0')}${String(fecha.getDate()).padStart(2, '0')}`;
                     enlace.href = url;
-                    enlace.download = `empleados_${empresa.toLowerCase()}_${fechaArchivo}.xlsx`;
+                    enlace.download = `listado_general_${empresa.toLowerCase()}_${fechaArchivo}.xlsx`;
                     enlace.click();
                     setTimeout(() => URL.revokeObjectURL(url), 1000);
                     return;
@@ -377,9 +418,9 @@
             const estatus = displayEmp.estatus;
             const color = estatus === 'ACTIVO' ? '#28a745' : '#dc3545';
             const linkEmpleado = `empleado.html?registro_id=${encodeURIComponent(displayEmp.registro_id || '')}&nombre=${encodeURIComponent(displayEmp.nombre || '')}`;
-            const registroId = String(displayEmp.registro_id || '');
             return `
                 <tr>
+                    <td class="seleccion-column" style="padding: 12px; text-align: center;"><input class="seleccion-empleado" type="checkbox" value="${String(displayEmp.registro_id || '')}" ${displayEmp.registro_id ? '' : 'disabled'} /></td>
                     <td style="padding: 12px; text-align: center;">${displayEmp.no_empleado || ''}</td>
                     <td style="padding: 12px;"><a class="btn-nombre" href="${linkEmpleado}">${nombre}</a></td>
                     <td style="padding: 12px;"><a class="btn-nombre" href="${linkEmpleado}">${apellidos}</a></td>
@@ -389,76 +430,57 @@
                     <td style="padding: 12px; text-align: center;">
                         <button class="btn-estatus" data-registro-id="${String(displayEmp.registro_id || '').replace(/"/g, '&quot;')}" data-curp="${String(displayEmp.curp || '').replace(/"/g, '&quot;')}" data-nombre="${(displayEmp.nombre || '').replace(/"/g, '&quot;')}" style="background: ${color}; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; opacity: 1;">${estatus}</button>
                     </td>
-                    <td style="padding: 12px; text-align: center;"><input class="seleccion-gafete" type="checkbox" value="${registroId}" /></td>
                 </tr>
             `;
         }
 
-        function getSeleccionadosParaGafete() {
+        function getSeleccionadosParaFormato() {
             const idsSeleccionados = new Set([...selectedRegistroIds].filter(Boolean));
             return empleadosCache
                 .map(getEmpleadoConLocal)
                 .filter((emp) => idsSeleccionados.has(String(emp.registro_id || '')));
         }
 
-        async function descargarGafette() {
-            const seleccionados = getSeleccionadosParaGafete();
+        async function generarFormatoSeleccionado() {
+            const seleccionados = getSeleccionadosParaFormato();
             if (!seleccionados.length) {
-                alert('Selecciona al menos una persona para generar gafetes.');
+                alert('Selecciona al menos un empleado para generar el formato.');
                 return;
             }
 
-            const datosParaGafetes = [];
-            for (const emp of seleccionados) {
-                const registroId = String(emp.registro_id || '').trim();
-                let datosEmpleado = {
-                    nombre_completo: emp.nombre_completo || emp.nombre || '',
-                    nss: emp.nss || emp.imss || '',
-                    curp: emp.curp || '',
-                    area: emp.area || emp.puesto || '',
-                    nombre_emergencia: emp.nombre_emergencia || '',
-                    telefono_emergencia: emp.telefono_emergencia || emp.num_emergencias || '',
-                    fecha_ingreso: emp.fecha_ingreso || '',
-                    fotografia_base64: emp.fotografia_base64 || '',
-                    no_empleado: emp.no_empleado || '',
-                };
-
-                if (registroId) {
-                    try {
-                        const { respuesta, texto } = await getConFallback(`/api/obtener-empleado/${encodeURIComponent(registroId)}`);
-                        if (respuesta.ok) {
-                            const datosDetallados = JSON.parse(texto || '{}');
-                            datosEmpleado = {
-                                ...datosEmpleado,
-                                ...datosDetallados,
-                                nombre_completo: datosDetallados.nombre_completo || datosDetallados.nombre || datosEmpleado.nombre_completo,
-                                nss: datosDetallados.nss || datosDetallados.imss || datosEmpleado.nss,
-                                curp: datosDetallados.curp || datosEmpleado.curp,
-                                area: datosDetallados.area || datosDetallados.puesto || datosEmpleado.area,
-                                nombre_emergencia: datosDetallados.nombre_emergencia || datosEmpleado.nombre_emergencia,
-                                telefono_emergencia: datosDetallados.telefono_emergencia || datosDetallados.num_emergencias || datosEmpleado.telefono_emergencia,
-                                fecha_ingreso: datosDetallados.fecha_ingreso || datosEmpleado.fecha_ingreso,
-                                fotografia_base64: datosDetallados.fotografia_base64 || datosEmpleado.fotografia_base64,
-                            };
+            try {
+                if (selectedFormat === 'gafete') {
+                    const datosParaGafetes = await Promise.all(seleccionados.map(async (emp) => {
+                        const { respuesta, texto } = await getConFallback(`/obtener-empleado/${encodeURIComponent(emp.registro_id)}`);
+                        if (!respuesta.ok) {
+                            throw new Error(`No se pudo cargar el empleado ${emp.no_empleado || emp.registro_id}: ${texto || respuesta.status}`);
                         }
-                    } catch (_) {}
+                        return { ...emp, ...JSON.parse(texto || '{}') };
+                    }));
+                    localStorage.setItem('gafeteBatchData', JSON.stringify(datosParaGafetes));
+                    localStorage.setItem('gafeteReturnUrl', 'Cheong Woon.html');
+                    window.location.href = 'maingafette.html?batch=1&return_url=Cheong%20Woon.html';
+                    return;
                 }
 
-                datosParaGafetes.push(datosEmpleado);
+                const params = new URLSearchParams({
+                    tipo: selectedFormat,
+                    ids: seleccionados.map((emp) => emp.registro_id).join(','),
+                    return_url: 'Cheong Woon.html',
+                });
+                window.location.href = `formatos-lote.html?${params.toString()}`;
+            } catch (error) {
+                alert(`No se pudo generar el formato: ${error.message}`);
             }
-
-            localStorage.setItem('gafeteBatchData', JSON.stringify(datosParaGafetes));
-            localStorage.setItem('gafeteReturnUrl', 'Cheong Woon.html');
-            window.location.href = 'maingafette.html?batch=1&return_url=Cheong%20Woon.html';
         }
 
         async function cargarEmpleadosCheongWoon() {
-            cuerpo.innerHTML = '<tr><td colspan="8" style="padding: 12px; text-align: center;">Cargando empleados...</td></tr>';
+            cuerpo.innerHTML = `<tr><td colspan="${selectedFormat ? 8 : 7}" style="padding: 12px; text-align: center;">Cargando empleados...</td></tr>`;
 
             try {
                 const { respuesta, texto } = await getConFallback('/api/obtener-empleados/CHEONG_WOON');
                 if (!respuesta.ok) {
-                    cuerpo.innerHTML = '<tr><td colspan="8" style="padding: 12px; text-align: center;">No se pudieron cargar empleados.</td></tr>';
+                    cuerpo.innerHTML = `<tr><td colspan="${selectedFormat ? 8 : 7}" style="padding: 12px; text-align: center;">No se pudieron cargar empleados.</td></tr>`;
                     alert(`Error al cargar empleados (${respuesta.status}): ${texto || 'Sin detalle'}`);
                     return;
                 }
@@ -485,7 +507,7 @@
 
                 renderTabla();
             } catch (error) {
-                cuerpo.innerHTML = '<tr><td colspan="8" style="padding: 12px; text-align: center;">No se pudieron cargar empleados.</td></tr>';
+                cuerpo.innerHTML = `<tr><td colspan="${selectedFormat ? 8 : 7}" style="padding: 12px; text-align: center;">No se pudieron cargar empleados.</td></tr>`;
                 alert('Error de conexión al cargar empleados: ' + error.message);
             }
         }
@@ -570,6 +592,12 @@
             btnDescargarExcel.addEventListener('click', () => descargarExcelEmpleados('CHEONG_WOON'));
         }
 
+        document.querySelectorAll('[data-formato]').forEach((button) => {
+            button.addEventListener('click', () => iniciarSeleccionFormato(button.dataset.formato));
+        });
+        document.getElementById('btn-generar-formato').addEventListener('click', generarFormatoSeleccionado);
+        document.getElementById('btn-cancelar-formato').addEventListener('click', cancelarSeleccionFormato);
+
         cuerpo.addEventListener('click', (event) => {
             const btn = event.target.closest('.btn-estatus');
             if (!btn) return;
@@ -578,12 +606,6 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             restoreFilterState();
-
-            const btnDescargarGafette = document.getElementById('btn-descargar-gafette');
-            if (btnDescargarGafette) {
-                btnDescargarGafette.addEventListener('click', descargarGafette);
-            }
-
             cargarEmpleadosCheongWoon();
             if (window.DataManager) {
                 window.DataManager.subscribeVistas(cargarEmpleadosCheongWoon);

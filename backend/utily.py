@@ -1317,11 +1317,22 @@ def exportar_empleados(empresa):
     if not empresa:
         return ("ERROR: El parámetro empresa es obligatorio", 400)
 
+    filtro_estatus = '' if request.args.get('todos') == '1' else """
+                      AND (
+                          COALESCE(NULLIF(UPPER(TRIM(r.estatus)), ''), 'ACTIVO') = 'ACTIVO'
+                          OR (
+                              COALESCE(NULLIF(UPPER(TRIM(r.estatus)), ''), 'ACTIVO') = 'INACTIVO'
+                              AND r.fecha_inactivo >= CURRENT_TIMESTAMP - INTERVAL '7 days'
+                          )
+                      )
+    """
+
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS estatus VARCHAR(20) DEFAULT 'ACTIVO'")
                 cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS fecha_inactivo TIMESTAMP")
+                cur.execute("ALTER TABLE encuesta_reclutamiento ADD COLUMN IF NOT EXISTS nombre_empleado VARCHAR(200)")
                 cur.execute(
                     """
                     UPDATE registro
@@ -1331,7 +1342,7 @@ def exportar_empleados(empresa):
                     """
                 )
                 cur.execute(
-                    """
+                    f"""
                     SELECT r.fecha_registro,
                            r.nombre_completo,
                            r.fecha_nacimiento,
@@ -1374,13 +1385,7 @@ def exportar_empleados(empresa):
                         LIMIT 1
                     ) AS reclutamiento ON TRUE
                     WHERE UPPER(REPLACE(ip.empresa, ' ', '_')) = %s
-                      AND (
-                          COALESCE(NULLIF(UPPER(TRIM(r.estatus)), ''), 'ACTIVO') = 'ACTIVO'
-                          OR (
-                              COALESCE(NULLIF(UPPER(TRIM(r.estatus)), ''), 'ACTIVO') = 'INACTIVO'
-                              AND r.fecha_inactivo >= CURRENT_TIMESTAMP - INTERVAL '7 days'
-                          )
-                      )
+                    {filtro_estatus}
                     ORDER BY r.nombre_completo ASC
                     """,
                     (empresa,),

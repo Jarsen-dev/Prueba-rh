@@ -25,15 +25,24 @@
         .filtro-grupo { min-width: 0; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
         .filtro-grupo.filtro-fechas { min-width: 0; }
         .filtro-grupo.filtro-fechas .filtro-input { flex: 1 1 0; width: auto; }
-        .filtro-grupo.filtro-busqueda #buscador { flex: 1 1 220px; width: auto !important; }
-        .filtro-grupo.filtro-busqueda #buscador { flex: 1 1 0; }
-        .filtro-grupo.filtro-excel { overflow: hidden; }
-        .filtro-grupo.filtro-excel .btn-descargar-excel { flex: 0 0 auto; width: auto; }
+        .filtro-grupo.filtro-busqueda #buscador { flex: 1 1 0; width: 100% !important; }
         .filtro-grupo .filtro-input { min-width: 0; }
-        .btn-descargar-excel { cursor: pointer; text-align: center; box-sizing: border-box; }
-        .excel-nombre { min-width: 0; color: #aaa; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .acciones-container { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; background: #1e1e1e; padding: 16px; border-radius: 12px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.3); margin-bottom: 25px; }
+        .acciones-menu { position: relative; }
+        .acciones-menu > summary, .accion-principal, .accion-secundaria { list-style: none; background: #121212; border: 1px solid #444; color: #fff; padding: 10px 15px; border-radius: 8px; font-size: 0.95rem; cursor: pointer; font-family: inherit; }
+        .acciones-menu > summary::-webkit-details-marker { display: none; }
+        .acciones-menu > summary::after { content: " ▾"; }
+        .acciones-dropdown { display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; min-width: 230px; padding: 8px; background: #1e1e1e; border: 1px solid #007bff; border-radius: 8px; box-shadow: 0 8px 18px rgba(0,0,0,0.35); }
+        .acciones-menu[open] .acciones-dropdown { display: grid; gap: 6px; }
+        .acciones-dropdown button { text-align: left; background: transparent; border: 0; color: #fff; padding: 9px 10px; border-radius: 5px; cursor: pointer; font: inherit; }
+        .acciones-dropdown button:hover, .acciones-dropdown a:hover { background: #2c2c2c; }
+        .acciones-dropdown a { display: block; color: #fff; padding: 9px 10px; border-radius: 5px; text-decoration: none; }
+        .seleccion-formatos { display: none; align-items: center; gap: 10px; margin-left: auto; }
+        .modo-seleccion .seleccion-column { display: table-cell; }
+        .seleccion-column { display: none; }
+        .seleccion-contador { color: #ddd; }
         @media (max-width: 1100px) { .filtros-container { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-        @media (max-width: 650px) { .filtros-container { grid-template-columns: 1fr; } .filtro-grupo { width: 100%; } #buscador { width: 100% !important; } }
+        @media (max-width: 650px) { .filtros-container { grid-template-columns: 1fr; } .filtro-grupo { width: 100%; } .acciones-container { align-items: stretch; flex-direction: column; } .acciones-menu > summary, .accion-principal, .accion-secundaria { width: 100%; text-align: center; box-sizing: border-box; } .acciones-menu { width: 100%; } .acciones-dropdown { right: 0; } .seleccion-formatos { margin-left: 0; flex-wrap: wrap; } }
 
         /* Estilo común para todos los inputs */
         .filtro-input {
@@ -91,6 +100,9 @@
     </header>
     <main style="padding: 20px;">
         <div class="filtros-container">
+            <div class="filtro-grupo filtro-busqueda">
+                <input type="text" id="buscador" class="filtro-input" placeholder="🔍 Buscar por nombre o # empleado...">
+            </div>
             <div class="filtro-grupo filtro-fechas">
                 <span class="filtro-label">DE:</span>
                 <input type="date" id="filtro-fecha-desde" class="filtro-input">
@@ -105,18 +117,38 @@
                     <option value="INACTIVOS">Inactivos</option>
                 </select>
             </div>
-            <div class="filtro-grupo filtro-busqueda">
-                <input type="text" id="buscador" class="filtro-input" placeholder="🔍 Buscar por nombre o # empleado..." style="width: 350px;">
-                <button id="btn-limpiar-filtros" type="button" class="filtro-input" style="width: auto; cursor: pointer;">Limpiar filtros</button>
-            </div>
-            <div class="filtro-grupo filtro-excel">
-                <button id="btn-descargar-excel" type="button" class="filtro-input btn-descargar-excel">Descargar Excel</button>
+            <button id="btn-limpiar-filtros" type="button" class="filtro-input" style="width: auto; cursor: pointer;">Limpiar filtros</button>
+        </div>
+        <div class="acciones-container">
+            <details class="acciones-menu" id="menu-formatos-automatizados">
+                <summary>Formatos Automatizados</summary>
+                <div class="acciones-dropdown">
+                    <button type="button" data-formato="gafete">Gafete</button>
+                    <button type="button" data-formato="cartacom">Carta Compromiso</button>
+                    <button type="button" data-formato="cartaimss">Carta Patronal IMSS</button>
+                    <button type="button" data-formato="contrato">Contrato Laboral</button>
+                </div>
+            </details>
+            <details class="acciones-menu">
+                <summary>Formatos para Imprimir</summary>
+                <div class="acciones-dropdown">
+                    <a href="https://drive.google.com/file/d/1IMw93o8y56e423HZoKVJNnE5z5b26e5A/view?usp=sharing" target="_blank" rel="noopener noreferrer">Suspensión</a>
+                    <a href="https://drive.google.com/file/d/1MjIXgFLUJAO25hNfZb0IzTFwIW4YLvU5/view?usp=sharing" target="_blank" rel="noopener noreferrer">Entrada/Salida</a>
+                    <a href="https://drive.google.com/file/d/1gWuv28J-7WjbfsaOdUMSIb0Mbb6KHRqO/view?usp=sharing" target="_blank" rel="noopener noreferrer">Indisciplina</a>
+                </div>
+            </details>
+            <button id="btn-descargar-excel" type="button" class="accion-principal">Listado General</button>
+            <div id="seleccion-formatos" class="seleccion-formatos">
+                <span id="seleccion-contador" class="seleccion-contador">0 empleados seleccionados</span>
+                <button id="btn-generar-formato" type="button" class="accion-principal">Generar formato</button>
+                <button id="btn-cancelar-formato" type="button" class="accion-secundaria">Cancelar</button>
             </div>
         </div>
         
         <table style="width: 100%; border-collapse: collapse; background: #1e1e1e; border-radius: 8px;">
             <thead>
                 <tr style="border-bottom: 2px solid #444;">
+                    <th class="seleccion-column" style="padding: 12px;"></th>
                     <th style="padding: 12px;">No. Empleado</th>
                     <th style="padding: 12px; text-align: left;">Nombre</th>
                     <th style="padding: 12px; text-align: left;">Apellido</th>
@@ -148,9 +180,13 @@
         const fechaHastaInput = document.getElementById('filtro-fecha-hasta');
         const btnLimpiarFiltros = document.getElementById('btn-limpiar-filtros');
         const btnDescargarExcel = document.getElementById('btn-descargar-excel');
+        const seleccionFormatos = document.getElementById('seleccion-formatos');
+        const seleccionContador = document.getElementById('seleccion-contador');
         let empleadosCache = [];
         let statusFilter = 'TODOS';
         let searchQuery = '';
+        let selectedRegistroIds = new Set();
+        let selectedFormat = '';
 
         function clearFilters() {
             if (fechaDesdeInput) fechaDesdeInput.value = '';
@@ -214,11 +250,41 @@
             });
 
             if (!visibles.length) {
-                cuerpo.innerHTML = '<tr><td colspan="7" style="padding: 12px; text-align: center;">No hay empleados que coincidan con el filtro.</td></tr>';
+                cuerpo.innerHTML = `<tr><td colspan="${selectedFormat ? 8 : 7}" style="padding: 12px; text-align: center;">No hay empleados que coincidan con el filtro.</td></tr>`;
+                actualizarSeleccionFormatos();
                 return;
             }
 
             cuerpo.innerHTML = visibles.map(renderFila).join('');
+            cuerpo.querySelectorAll('.seleccion-empleado').forEach((checkbox) => {
+                checkbox.checked = selectedRegistroIds.has(checkbox.value);
+                checkbox.addEventListener('change', () => {
+                    if (checkbox.checked) selectedRegistroIds.add(checkbox.value);
+                    else selectedRegistroIds.delete(checkbox.value);
+                    actualizarSeleccionFormatos();
+                });
+            });
+            actualizarSeleccionFormatos();
+        }
+
+        function actualizarSeleccionFormatos() {
+            document.body.classList.toggle('modo-seleccion', Boolean(selectedFormat));
+            seleccionFormatos.style.display = selectedFormat ? 'flex' : 'none';
+            const cantidad = selectedRegistroIds.size;
+            seleccionContador.textContent = `${cantidad} empleado${cantidad === 1 ? '' : 's'} seleccionado${cantidad === 1 ? '' : 's'}`;
+        }
+
+        function iniciarSeleccionFormato(formato) {
+            selectedFormat = formato;
+            selectedRegistroIds.clear();
+            document.getElementById('menu-formatos-automatizados').open = false;
+            renderTabla();
+        }
+
+        function cancelarSeleccionFormato() {
+            selectedFormat = '';
+            selectedRegistroIds.clear();
+            renderTabla();
         }
 
         function getEstatusSincronizado(emp) {
@@ -263,7 +329,7 @@
         async function descargarExcelEmpleados(empresa) {
             for (const baseUrl of API_BASES) {
                 try {
-                    const respuesta = await fetch(`${baseUrl}/api/exportar-empleados/${encodeURIComponent(empresa)}`);
+                    const respuesta = await fetch(`${baseUrl}/api/exportar-empleados/${encodeURIComponent(empresa)}?todos=1`);
                     if (!respuesta.ok) {
                         throw new Error(`Error ${respuesta.status}: ${await respuesta.text()}`);
                     }
@@ -273,7 +339,7 @@
                     const fecha = new Date();
                     const fechaArchivo = `${fecha.getFullYear()}${String(fecha.getMonth() + 1).padStart(2, '0')}${String(fecha.getDate()).padStart(2, '0')}`;
                     enlace.href = url;
-                    enlace.download = `empleados_${empresa.toLowerCase()}_${fechaArchivo}.xlsx`;
+                    enlace.download = `listado_general_${empresa.toLowerCase()}_${fechaArchivo}.xlsx`;
                     enlace.click();
                     setTimeout(() => URL.revokeObjectURL(url), 1000);
                     return;
@@ -312,6 +378,7 @@
             const linkEmpleado = `empleado.html?registro_id=${encodeURIComponent(displayEmp.registro_id || '')}&nombre=${encodeURIComponent(displayEmp.nombre || '')}`;
             return `
                 <tr>
+                    <td class="seleccion-column" style="padding: 12px; text-align: center;"><input class="seleccion-empleado" type="checkbox" value="${String(displayEmp.registro_id || '')}" ${displayEmp.registro_id ? '' : 'disabled'} /></td>
                     <td style="padding: 12px; text-align: center;">${displayEmp.no_empleado || ''}</td>
                     <td style="padding: 12px;"><a class="btn-nombre" href="${linkEmpleado}">${nombre}</a></td>
                     <td style="padding: 12px;"><a class="btn-nombre" href="${linkEmpleado}">${apellidos}</a></td>
@@ -325,13 +392,54 @@
             `;
         }
 
+        function getSeleccionadosParaFormato() {
+            const idsSeleccionados = new Set([...selectedRegistroIds].filter(Boolean));
+            return empleadosCache
+                .map(getEmpleadoConLocal)
+                .filter((emp) => idsSeleccionados.has(String(emp.registro_id || '')));
+        }
+
+        async function generarFormatoSeleccionado() {
+            const seleccionados = getSeleccionadosParaFormato();
+            if (!seleccionados.length) {
+                alert('Selecciona al menos un empleado para generar el formato.');
+                return;
+            }
+
+            try {
+                if (selectedFormat === 'gafete') {
+                    const datosParaGafetes = await Promise.all(seleccionados.map(async (emp) => {
+                        const { respuesta, texto } = await getConFallback(`/obtener-empleado/${encodeURIComponent(emp.registro_id)}`);
+                        if (!respuesta.ok) {
+                            throw new Error(`No se pudo cargar el empleado ${emp.no_empleado || emp.registro_id}: ${texto || respuesta.status}`);
+                        }
+                        return { ...emp, ...JSON.parse(texto || '{}') };
+                    }));
+                    const returnUrl = 'Kronos.html';
+                    localStorage.setItem('gafeteBatchData', JSON.stringify(datosParaGafetes));
+                    localStorage.setItem('gafeteReturnUrl', returnUrl);
+                    window.location.href = 'maingafette.html?batch=1&return_url=Kronos.html';
+                    return;
+                }
+
+                const params = new URLSearchParams({
+                    tipo: selectedFormat,
+                    ids: seleccionados.map((emp) => emp.registro_id).join(','),
+                    return_url: 'Kronos.html',
+                });
+                window.location.href = `formatos-lote.html?${params.toString()}`;
+            } catch (error) {
+                alert(`No se pudo generar el formato: ${error.message}`);
+            }
+        }
+
         async function cargarEmpleadosKronos() {
-            cuerpo.innerHTML = '<tr><td colspan="7" style="padding: 12px; text-align: center;">Cargando empleados...</td></tr>';
+            cuerpo.innerHTML = `<tr><td colspan="${selectedFormat ? 8 : 7}" style="padding: 12px; text-align: center;">Cargando empleados...</td></tr>`;
 
             try {
                 const { respuesta, texto } = await getConFallback('/api/obtener-empleados/KRONOS');
                 if (!respuesta.ok) {
-                    cuerpo.innerHTML = '<tr><td colspan="7" style="padding: 12px; text-align: center;">No se pudieron cargar empleados.</td></tr>';
+                    cuerpo.innerHTML = `<tr><td colspan="${selectedFormat ? 8 : 7}" style="padding: 12px; text-align: center;">No se pudieron cargar empleados.</td></tr>`;
                     alert(`Error al cargar empleados (${respuesta.status}): ${texto || 'Sin detalle'}`);
                     return;
                 }
@@ -358,7 +466,7 @@
 
                 renderTabla();
             } catch (error) {
-                cuerpo.innerHTML = '<tr><td colspan="7" style="padding: 12px; text-align: center;">No se pudieron cargar empleados.</td></tr>';
+                cuerpo.innerHTML = `<tr><td colspan="${selectedFormat ? 8 : 7}" style="padding: 12px; text-align: center;">No se pudieron cargar empleados.</td></tr>`;
                 alert('Error de conexión al cargar empleados: ' + error.message);
             }
         }
@@ -418,6 +526,12 @@
         if (btnDescargarExcel) {
             btnDescargarExcel.addEventListener('click', () => descargarExcelEmpleados('KRONOS'));
         }
+
+        document.querySelectorAll('[data-formato]').forEach((button) => {
+            button.addEventListener('click', () => iniciarSeleccionFormato(button.dataset.formato));
+        });
+        document.getElementById('btn-generar-formato').addEventListener('click', generarFormatoSeleccionado);
+        document.getElementById('btn-cancelar-formato').addEventListener('click', cancelarSeleccionFormato);
 
         cuerpo.addEventListener('click', (event) => {
             const btn = event.target.closest('.btn-estatus');
