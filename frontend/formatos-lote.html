@@ -8,37 +8,40 @@
         body {
             margin: 0;
             padding: 20px;
-            background: #e2e8f0;
-            color: #1a202c;
-            font-family: Arial, sans-serif;
+            background: #f1f5f9;
+            color: #1e293b;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
         .toolbar {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
-            gap: 12px;
+            gap: 15px;
             margin: 0 auto 20px;
             max-width: 1000px;
-        }
-
-        .toolbar h1 {
-            flex: 1 1 100%;
-            margin: 0;
-            font-size: 1.25rem;
+            padding: 12px 24px;
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
 
         .toolbar button,
         .toolbar a {
-            padding: 10px 15px;
+            padding: 8px 16px;
             border: 0;
-            border-radius: 5px;
-            background: #3182ce;
+            border-radius: 6px;
+            background: #2563eb;
             color: #fff;
             cursor: pointer;
             font: inherit;
             text-decoration: none;
-            font-weight: bold;
+            font-weight: 600;
+        }
+
+        .toolbar button:hover,
+        .toolbar a:hover {
+            background: #1d4ed8;
         }
 
         .toolbar button:disabled {
@@ -48,8 +51,10 @@
 
         #estado-documentos {
             flex: 1 1 100%;
-            color: #1a202c;
+            color: #b91c1c;
         }
+
+        #estado-documentos:empty { display: none; }
 
         #documentos {
             display: flex;
@@ -122,10 +127,9 @@
 </head>
 <body>
     <header class="toolbar">
-        <h1 id="titulo-formato">Formato automatizado</h1>
         <a id="btn-regresar" href="Cheong%20Woon.html">Regresar</a>
         <button id="btn-imprimir" type="button" disabled>Preparando documentos...</button>
-        <span id="estado-documentos" role="status" aria-live="polite">Cargando datos de empleados...</span>
+        <span id="estado-documentos" role="status" aria-live="polite"></span>
     </header>
     <main id="documentos"></main>
 
@@ -208,13 +212,11 @@
             botonImprimir.textContent = 'No disponible';
         } else {
             document.title = formato.titulo;
-            document.getElementById('titulo-formato').textContent = `${formato.titulo} — vista previa de ${ids.length} documento${ids.length === 1 ? '' : 's'}`;
             ids.forEach(crearDocumento);
 
             Promise.all(promesasCarga).then(() => {
-                estado.textContent = 'Todos los documentos están listos para imprimir o guardar como PDF.';
                 botonImprimir.disabled = false;
-                botonImprimir.textContent = 'Descargar / Imprimir todos';
+                botonImprimir.textContent = 'Imprimir / Guardar PDF';
             }).catch((error) => {
                 estado.textContent = error.message;
                 botonImprimir.textContent = 'No se pudo preparar';

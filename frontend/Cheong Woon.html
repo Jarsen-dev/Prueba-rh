@@ -28,7 +28,7 @@
         .seleccion-formatos { display: none; align-items: center; gap: 10px; margin-left: auto; }
         .modo-seleccion .seleccion-column { display: table-cell; }
         .seleccion-column { display: none; }
-        .seleccion-contador { color: #ddd; }
+        .seleccion-contador { color: #fff; font-size: 1.15rem; font-weight: 700; }
         @media (max-width: 1100px) { .filtros-container { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (max-width: 650px) { .filtros-container { grid-template-columns: 1fr; } .filtro-grupo { width: 100%; } .acciones-container { align-items: stretch; flex-direction: column; } .acciones-menu > summary, .accion-principal, .accion-secundaria { width: 100%; text-align: center; box-sizing: border-box; } .acciones-menu { width: 100%; } .acciones-dropdown { right: 0; } .seleccion-formatos { margin-left: 0; flex-wrap: wrap; } }
         .filtro-input { background: #121212; border: 1px solid #444; color: #fff; padding: 10px 15px; border-radius: 8px; font-size: 0.95rem; transition: all 0.3s ease; outline: none; }
@@ -319,7 +319,7 @@
             document.body.classList.toggle('modo-seleccion', Boolean(selectedFormat));
             seleccionFormatos.style.display = selectedFormat ? 'flex' : 'none';
             seleccionContador.textContent = selectedFormat
-                ? `Documento seleccionado: ${nombresFormatos[selectedFormat]}`
+                ? nombresFormatos[selectedFormat]
                 : 'Selecciona un documento automatizado';
         }
 
