@@ -139,7 +139,7 @@
             </details>
             <button id="btn-descargar-excel" type="button" class="accion-principal">Listado General</button>
             <div id="seleccion-formatos" class="seleccion-formatos">
-                <span id="seleccion-contador" class="seleccion-contador">0 empleados seleccionados</span>
+                <span id="seleccion-contador" class="seleccion-contador">Selecciona un documento automatizado</span>
                 <button id="btn-generar-formato" type="button" class="accion-principal">Generar formato</button>
                 <button id="btn-cancelar-formato" type="button" class="accion-secundaria">Cancelar</button>
             </div>
@@ -182,6 +182,12 @@
         const btnDescargarExcel = document.getElementById('btn-descargar-excel');
         const seleccionFormatos = document.getElementById('seleccion-formatos');
         const seleccionContador = document.getElementById('seleccion-contador');
+        const nombresFormatos = {
+            gafete: 'Gafete',
+            cartacom: 'Carta Compromiso',
+            cartaimss: 'Carta Patronal IMSS',
+            contrato: 'Contrato Laboral',
+        };
         let empleadosCache = [];
         let statusFilter = 'TODOS';
         let searchQuery = '';
@@ -270,8 +276,9 @@
         function actualizarSeleccionFormatos() {
             document.body.classList.toggle('modo-seleccion', Boolean(selectedFormat));
             seleccionFormatos.style.display = selectedFormat ? 'flex' : 'none';
-            const cantidad = selectedRegistroIds.size;
-            seleccionContador.textContent = `${cantidad} empleado${cantidad === 1 ? '' : 's'} seleccionado${cantidad === 1 ? '' : 's'}`;
+            seleccionContador.textContent = selectedFormat
+                ? `Documento seleccionado: ${nombresFormatos[selectedFormat]}`
+                : 'Selecciona un documento automatizado';
         }
 
         function iniciarSeleccionFormato(formato) {

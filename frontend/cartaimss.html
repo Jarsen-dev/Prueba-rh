@@ -83,9 +83,11 @@
                 margin: 0;
                 width: 21.59cm;
                 height: 27.94cm;
-                page-break-after: always;
-                break-after: page;
                 break-inside: avoid;
+            }
+            .page + .page {
+                page-break-before: always;
+                break-before: page;
             }
         }
 
