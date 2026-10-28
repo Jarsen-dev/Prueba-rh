@@ -122,12 +122,13 @@
                     <th style="padding: 12px; text-align: left;">Apellido</th>
                     <th style="padding: 12px;">Fecha Ingreso</th>
                     <th style="padding: 12px;">Área</th>
+                    <th style="padding: 12px;">Turno</th>
                     <th style="padding: 12px;">Estatus</th>
                 </tr>
             </thead>
             <tbody id="cuerpo-tabla-empleados">
                 <tr>
-                    <td colspan="6" style="padding: 12px; text-align: center;">Cargando empleados...</td>
+                    <td colspan="7" style="padding: 12px; text-align: center;">Cargando empleados...</td>
                 </tr>
             </tbody>
         </table>
@@ -184,15 +185,17 @@
                 no_empleado: local.no_empleado || emp.no_empleado || '',
                 fecha_ingreso: local.fecha_ingreso || local.fecha_registro || emp.fecha_ingreso || emp.fecha_registro || '',
                 area: local.area || emp.area || '',
+                turno: local.turno || emp.turno || '',
                 estatus: String(emp.estatus || (local && local.estatus) || 'ACTIVO').toUpperCase(),
             };
         }
 
         function separarNombreApellidos(nombreCompleto) {
             const partes = String(nombreCompleto || '').trim().split(/\s+/).filter(Boolean);
+            const apellidos = partes.splice(-2);
             return {
-                nombre: partes.shift() || '',
-                apellidos: partes.join(' '),
+                nombre: partes.join(' '),
+                apellidos: apellidos.join(' '),
             };
         }
 
@@ -211,7 +214,7 @@
             });
 
             if (!visibles.length) {
-                cuerpo.innerHTML = '<tr><td colspan="6" style="padding: 12px; text-align: center;">No hay empleados que coincidan con el filtro.</td></tr>';
+                cuerpo.innerHTML = '<tr><td colspan="7" style="padding: 12px; text-align: center;">No hay empleados que coincidan con el filtro.</td></tr>';
                 return;
             }
 
@@ -298,6 +301,7 @@
                     <td style="padding: 12px;">${apellidos}</td>
                     <td style="padding: 12px; text-align: center;">${formatearFechaIngreso(displayEmp.fecha_ingreso)}</td>
                     <td style="padding: 12px; text-align: center;">${displayEmp.area || ''}</td>
+                    <td style="padding: 12px; text-align: center;">${displayEmp.turno || ''}</td>
                     <td style="padding: 12px; text-align: center;">
                         <button class="btn-estatus" data-registro-id="${String(displayEmp.registro_id || '').replace(/"/g, '&quot;')}" data-curp="${String(displayEmp.curp || '').replace(/"/g, '&quot;')}" data-nombre="${(displayEmp.nombre || '').replace(/"/g, '&quot;')}" style="background: ${color}; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; opacity: 1;">${estatus}</button>
                     </td>
@@ -306,12 +310,12 @@
         }
 
         async function cargarEmpleadosKronos() {
-            cuerpo.innerHTML = '<tr><td colspan="6" style="padding: 12px; text-align: center;">Cargando empleados...</td></tr>';
+            cuerpo.innerHTML = '<tr><td colspan="7" style="padding: 12px; text-align: center;">Cargando empleados...</td></tr>';
 
             try {
                 const { respuesta, texto } = await getConFallback('/api/obtener-empleados/KRONOS');
                 if (!respuesta.ok) {
-                    cuerpo.innerHTML = '<tr><td colspan="6" style="padding: 12px; text-align: center;">No se pudieron cargar empleados.</td></tr>';
+                    cuerpo.innerHTML = '<tr><td colspan="7" style="padding: 12px; text-align: center;">No se pudieron cargar empleados.</td></tr>';
                     alert(`Error al cargar empleados (${respuesta.status}): ${texto || 'Sin detalle'}`);
                     return;
                 }
@@ -329,6 +333,7 @@
                         empresa: 'KRONOS',
                         puesto: emp.puesto || '',
                         area: emp.area || '',
+                        turno: emp.turno || '',
                         estatus: emp.estatus || 'ACTIVO',
                         fecha_ingreso: emp.fecha_ingreso || '',
                     })));
@@ -336,7 +341,7 @@
 
                 renderTabla();
             } catch (error) {
-                cuerpo.innerHTML = '<tr><td colspan="6" style="padding: 12px; text-align: center;">No se pudieron cargar empleados.</td></tr>';
+                cuerpo.innerHTML = '<tr><td colspan="7" style="padding: 12px; text-align: center;">No se pudieron cargar empleados.</td></tr>';
                 alert('Error de conexión al cargar empleados: ' + error.message);
             }
         }

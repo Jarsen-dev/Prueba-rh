@@ -1280,6 +1280,7 @@ def obtener_ingresos(empresa=None):
                         , COALESCE(NULLIF(UPPER(TRIM(r.estatus)), ''), 'ACTIVO') AS estatus
                         , ingresos_puesto.area
                         , ingresos_puesto.puesto
+                        , ingresos_puesto.turno
                     FROM ingresos_puesto
                     LEFT JOIN registro r ON r.id = ingresos_puesto.registro_id
                     WHERE UPPER(REPLACE(ingresos_puesto.empresa, ' ', '_')) = %s
@@ -1300,6 +1301,7 @@ def obtener_ingresos(empresa=None):
                 'estatus': row[6] or 'ACTIVO',
                 'area': row[7] or '',
                 'puesto': row[8] or '',
+                'turno': row[9] or '',
             }
             for row in rows
         ]
