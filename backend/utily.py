@@ -135,7 +135,7 @@ def incidencias_empleado(registro_id):
         return jsonify({'error': 'Se requieren datos de incidencia válidos.'}), 400
 
     tipo = str(datos.get('tipo') or '').strip()
-    if tipo not in {'entrada-salida', 'vacaciones', 'incapacidad', 'suspension', 'indisciplina'}:
+    if tipo not in {'entrada-salida', 'vacaciones', 'incapacidad', 'suspension', 'carta-suspension', 'indisciplina'}:
         return jsonify({'error': 'El tipo de incidencia no es válido.'}), 400
 
     try:
@@ -148,7 +148,7 @@ def incidencias_empleado(registro_id):
     motivo = str(datos.get('motivo') or '').strip()
     if len(motivo) > 1000:
         return jsonify({'error': 'El motivo no puede superar 1000 caracteres.'}), 400
-    if tipo in {'entrada-salida', 'suspension'} and not motivo:
+    if tipo in {'entrada-salida', 'suspension', 'carta-suspension'} and not motivo:
         return jsonify({'error': 'El motivo de la incidencia es obligatorio.'}), 400
     if tipo == 'indisciplina':
         categoria = str(detalles.get('categoria') or '').strip()
@@ -196,15 +196,15 @@ def incidencias_empleado(registro_id):
         if tipo == 'entrada-salida':
             fecha_inicio = fecha_inicio or datetime.now().date()
             fecha_reingreso = fecha_inicio
-        elif tipo == 'suspension' and (not fecha_inicio or not fecha_reingreso):
-            return jsonify({'error': 'Las fechas de suspensión son obligatorias.'}), 400
+        elif tipo in {'suspension', 'carta-suspension'} and (not fecha_inicio or not fecha_reingreso):
+            return jsonify({'error': 'Las fechas de suspensión o carta compromiso son obligatorias.'}), 400
         elif tipo in {'vacaciones', 'incapacidad'} and (not fecha_inicio or not fecha_reingreso):
             return jsonify({'error': 'Las fechas inicial y final son obligatorias.'}), 400
         if fecha_inicio and fecha_reingreso and fecha_reingreso < fecha_inicio:
             return jsonify({'error': 'La fecha final no puede ser anterior a la inicial.'}), 400
-        if fecha_inicio and fecha_reingreso and tipo in {'suspension', 'vacaciones', 'incapacidad'}:
+        if fecha_inicio and fecha_reingreso and tipo in {'suspension', 'carta-suspension', 'vacaciones', 'incapacidad'}:
             dias = (fecha_reingreso - fecha_inicio).days + 1
-            if tipo == 'suspension':
+            if tipo in {'suspension', 'carta-suspension'}:
                 dias -= 1
             if not 1 <= dias <= 999:
                 return jsonify({'error': 'El periodo debe contener entre 1 y 999 días.'}), 400

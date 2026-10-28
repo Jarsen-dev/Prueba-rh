@@ -144,6 +144,23 @@ class IncidenciasApiTests(unittest.TestCase):
         self.assertEqual(self.cursor.inserted[6], 3)
         self.assertEqual(self.cursor.inserted[0], 1)
 
+    def test_post_persists_commitment_letter_incident(self):
+        with patch.object(utily, 'get_db_connection', return_value=self.connection):
+            response = self.client.post(
+                '/api/empleados/1/incidencias',
+                json={
+                    'tipo': 'carta-suspension',
+                    'motivo': 'Compromiso de puntualidad',
+                    'fecha_inicio': '2026-11-01',
+                    'fecha_reingreso': '2026-11-04',
+                },
+            )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self.cursor.inserted[2], 'carta-suspension')
+        self.assertEqual(self.cursor.inserted[3], 'Compromiso de puntualidad')
+        self.assertEqual(self.cursor.inserted[6], 3)
+
     def test_get_returns_database_incident_history(self):
         with patch.object(utily, 'get_db_connection', return_value=self.connection):
             response = self.client.get('/api/empleados/1/incidencias')

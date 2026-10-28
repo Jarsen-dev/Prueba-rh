@@ -1228,8 +1228,6 @@
                 <div class="photo-actions">
                     <label class="file-label" for="foto-input">SUBIR FOTO</label>
                     <input id="foto-input" class="file-input" type="file" accept="image/*" />
-                    <button class="action-btn" id="btn-descargar-contrato" type="button">DESCARGAR CONTRATO</button>
-                    <button class="action-btn" id="btn-descargar-carta-imss" type="button">DESCARGAR CARTA IMSS</button>
                     <div style="width:100%; max-width:300px; margin:16px auto 0; text-align:left;">
                         <label class="muted" for="contrasena-chatbot">Contraseña del chatbot</label>
                         <input id="contrasena-chatbot" class="editable-control" type="password" readonly autocomplete="off" style="width:100%; margin-top:6px;" />
@@ -1527,7 +1525,7 @@
                                     <button class="incidencia-option" type="button" onclick="abrirIncidencia('suspension')">Suspensión</button>
                                     <button class="incidencia-option" type="button" onclick="abrirIncidencia('entrada-salida')">Entrada/Salida</button>
                                     <button class="incidencia-option" type="button" onclick="abrirIncidencia('indisciplina')">Indisciplina</button>
-                                    <button class="incidencia-option" type="button" onclick="abrirCartaCompromiso()">Carta Compromiso</button>
+                                    <button class="incidencia-option" type="button" onclick="abrirIncidencia('carta-suspension')">Carta Compromiso</button>
                                     <button class="incidencia-option" type="button" onclick="abrirIncidencia('vacaciones')">Vacaciones</button>
                                     <button class="incidencia-option" type="button" onclick="abrirIncidencia('incapacidad')">Incapacidades</button>
                                 </div>
@@ -1556,6 +1554,20 @@
                                     <input id="suspension-archivo" type="file" accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
                                 </div>                            
                                 <button class="action-btn" type="submit" style="display: block; margin-left: auto; width: fit-content; text-decoration: none; color: #28df50; font-weight: bold; font-size: 0.9rem; border: 1px solid #28df50; padding: 8px 16px; border-radius: 5px; background: transparent; cursor: pointer; transition: 0.3s;" onmouseover="this.style.background='#28df50'; this.style.color='white';" onmouseout="this.style.background='transparent'; this.style.color='#28df50';">Guardar Suspensión</button>
+                            </form>
+
+                            <form id="form-carta-suspension" onsubmit="guardarIncidencia(event, 'carta-suspension')" style="display:none;">
+                                <div class="form-group"><label for="carta-suspension-motivo">Motivo:</label><textarea id="carta-suspension-motivo" class="editable-control" rows="3" style="margin-top: 8px;" required></textarea></div>
+                                <div class="form-row" style="display: flex; gap: 10px; margin-top: 15px; margin-bottom: 15px;">
+                                    <div class="form-group" style="max-width: 90px;"><label for="carta-suspension-dias">N° de días:</label><input id="carta-suspension-dias" class="editable-control" type="number" min="1" max="999" readonly required></div>
+                                    <div class="form-group" style="flex: 1;"><label for="carta-suspension-desde">De fecha:</label><input id="carta-suspension-desde" class="editable-control" type="date" required></div>
+                                    <div class="form-group" style="flex: 1;"><label for="carta-suspension-hasta">A fecha:</label><input id="carta-suspension-hasta" class="editable-control" type="date" required></div>
+                                </div>
+                                <div class="form-group" style="margin: 20px 0;">
+                                    <label for="carta-suspension-archivo" style="display: block; width: 100%; box-sizing: border-box; background: #1e1e1e; color: #007bff; border: 1px solid #007bff; padding: 10px 15px; border-radius: 6px; cursor: pointer; text-align: center; transition: 0.3s;">📁 Adjuntar Archivo</label>
+                                    <input id="carta-suspension-archivo" type="file" accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
+                                </div>
+                                <button class="action-btn" type="submit" style="display: block; margin-left: auto; width: fit-content; text-decoration: none; color: #28df50; font-weight: bold; font-size: 0.9rem; border: 1px solid #28df50; padding: 8px 16px; border-radius: 5px; background: transparent; cursor: pointer; transition: 0.3s;" onmouseover="this.style.background='#28df50'; this.style.color='white';" onmouseout="this.style.background='transparent'; this.style.color='#28df50';">Guardar Carta Compromiso</button>
                             </form>
                             
                             <form id="form-entrada-salida" onsubmit="guardarIncidencia(event, 'entrada-salida')" style="display:none;">
@@ -1646,7 +1658,6 @@
         const photoPlaceholder = document.getElementById('photo-placeholder');
         const signaturePreview = document.getElementById('signature-preview');
         const signaturePlaceholder = document.getElementById('signature-placeholder');
-        const btnDescargarContrato = document.getElementById('btn-descargar-contrato');
         const btnEditar = document.getElementById('btn-editar');
         const btnGuardar = document.getElementById('btn-guardar');
         const btnCancelar = document.getElementById('btn-cancelar');
@@ -1891,18 +1902,12 @@
         function syncButtons() {
             const tabActiva = document.querySelector('.tab-btn.active');
             const esInformacion = !tabActiva || tabActiva.dataset.tab === 'informacion';
-            const esKronos = getEmpresaNormalizada() === 'KRONOS';
-
             btnEditar.style.display = esInformacion ? 'inline-flex' : 'none';
             btnGuardar.style.display = esInformacion ? 'inline-flex' : 'none';
             btnCancelar.style.display = esInformacion ? 'inline-flex' : 'none';
 
             if (!esInformacion) {
                 return;
-            }
-
-            if (btnDescargarContrato) {
-                btnDescargarContrato.style.display = esKronos ? 'none' : 'inline-flex';
             }
 
             if (editMode) {
@@ -2538,6 +2543,7 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
         function mapEmployeeIncident(record) {
             const titles = {
                 suspension: 'Suspensión',
+                'carta-suspension': 'Carta Compromiso',
                 'entrada-salida': 'Entrada/Salida',
                 indisciplina: 'Indisciplina',
                 vacaciones: 'Vacaciones',
@@ -2547,7 +2553,7 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
             };
             const startDate = record.fecha_inicio;
             let endDate = record.fecha_reingreso;
-            if (record.type === 'suspension' && endDate) {
+            if (['suspension', 'carta-suspension'].includes(record.type) && endDate) {
                 const returnDate = new Date(`${endDate}T00:00:00`);
                 returnDate.setDate(returnDate.getDate() - 1);
                 endDate = [
@@ -2732,7 +2738,7 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
         }
 
         function bindIncidentControls() {
-            ['suspension', 'vacaciones', 'incapacidad'].forEach((prefix) => {
+            ['suspension', 'carta-suspension', 'vacaciones', 'incapacidad'].forEach((prefix) => {
                 const start = document.getElementById(`${prefix}-desde`);
                 const end = document.getElementById(`${prefix}-hasta`);
                 if (start) start.addEventListener('change', () => updateIncidentDays(prefix));
@@ -2774,9 +2780,9 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
         function abrirIncidencia(tipo) {
             const titles = {
                 suspension: 'Suspensión',
+                'carta-suspension': 'Carta Compromiso',
                 'entrada-salida': 'Entrada/Salida',
                 indisciplina: 'Indisciplina',
-                'carta-suspension': 'Generar Carta Compromiso',
                 vacaciones: 'Vacaciones',
                 incapacidad: 'Incapacidades',
             };
@@ -2787,13 +2793,6 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
             const form = document.getElementById(`form-${tipo}`);
             if (form) form.style.display = 'block';
             document.getElementById('modal-incidencia').style.display = 'flex';
-        }
-
-        function abrirCartaCompromiso() {
-            const destino = registroId
-                ? `cartacom.html?registro_id=${encodeURIComponent(registroId)}`
-                : 'cartacom.html';
-            window.location.href = destino;
         }
 
         function cerrarIncidencia() {
@@ -2815,7 +2814,7 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
 
         async function guardarIncidencia(event, tipo) {
             event.preventDefault();
-            if (['suspension', 'vacaciones', 'incapacidad'].includes(tipo)) updateIncidentDays(tipo);
+            if (['suspension', 'carta-suspension', 'vacaciones', 'incapacidad'].includes(tipo)) updateIncidentDays(tipo);
             const config = {
                 suspension: {
                     title: 'Suspensión',
@@ -2823,6 +2822,13 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
                     desde: document.getElementById('suspension-desde').value,
                     hasta: document.getElementById('suspension-hasta').value,
                     dias: document.getElementById('suspension-dias').value,
+                },
+                'carta-suspension': {
+                    title: 'Carta Compromiso',
+                    motivo: document.getElementById('carta-suspension-motivo').value.trim(),
+                    desde: document.getElementById('carta-suspension-desde').value,
+                    hasta: document.getElementById('carta-suspension-hasta').value,
+                    dias: document.getElementById('carta-suspension-dias').value,
                 },
                 vacaciones: {
                     title: 'Vacaciones',
@@ -2853,7 +2859,7 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
             }[tipo];
 
             if (!config) return;
-            if (['suspension', 'vacaciones', 'incapacidad'].includes(tipo)) {
+            if (['suspension', 'carta-suspension', 'vacaciones', 'incapacidad'].includes(tipo)) {
                 if (config.desde > config.hasta) {
                     alert('La fecha inicial no puede ser posterior a la fecha final.');
                     return;
@@ -2876,7 +2882,7 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
                     ? `${config.tipo === 'entrada' ? 'Entrada' : 'Salida'} a las ${formatIncidentTime(config.hora)}. ${motivo}`
                     : `${motivo}${config.desde ? ` (${formatIncidentDate(config.desde)} a ${formatIncidentDate(config.hasta)})` : ''}`;
                 let fechaReingreso = config.hasta || '';
-                if (tipo === 'suspension' && fechaReingreso) {
+                if (['suspension', 'carta-suspension'].includes(tipo) && fechaReingreso) {
                     const fecha = new Date(`${fechaReingreso}T00:00:00`);
                     fecha.setDate(fecha.getDate() + 1);
                     fechaReingreso = [
@@ -2926,6 +2932,7 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
                 datosIncidencia.set('detalles', JSON.stringify(detalles));
                 const archivoInputId = {
                     suspension: 'suspension-archivo',
+                    'carta-suspension': 'carta-suspension-archivo',
                     'entrada-salida': 'pase-archivo',
                     indisciplina: 'indiciplina-archivo',
                 }[tipo];
@@ -3227,15 +3234,6 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
         cargarEmpleado().catch((error) => {
             statusBox.className = 'error-box';
             statusBox.textContent = 'Error al iniciar expediente: ' + (error && error.message ? error.message : error);
-        });
-
-/*CONTRATO*/
-        document.getElementById('btn-descargar-contrato').addEventListener('click', () => {
-            window.location.href = `contrato.html?id=${encodeURIComponent(registroId)}`;
-        });
-
-        document.getElementById('btn-descargar-carta-imss').addEventListener('click', () => {
-            window.location.href = `cartaimss.html?id=${encodeURIComponent(registroId)}`;
         });
 
     </script>

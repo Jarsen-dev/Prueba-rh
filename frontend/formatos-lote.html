@@ -72,18 +72,12 @@
             overflow: visible;
         }
 
-        .empleado-preview {
-            margin: 0 0 8px;
-            color: #1a202c;
-            font-size: 1rem;
-        }
-
         .documento-empleado iframe {
             display: block;
             width: 100%;
             border: 0;
             background: #fff;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: none;
         }
 
         @media print {
@@ -117,12 +111,9 @@
                 break-after: page;
             }
 
-            .empleado-preview {
-                display: none;
-            }
-
             .documento-empleado iframe {
                 width: 8.5in;
+                height: var(--print-height) !important;
                 box-shadow: none;
             }
         }
@@ -160,20 +151,19 @@
             contenedor.className = 'documento-empleado';
             contenedor.setAttribute('aria-label', `Documento ${indice + 1}`);
 
-            const encabezado = document.createElement('h2');
-            encabezado.className = 'empleado-preview';
-            encabezado.textContent = `Documento ${indice + 1} — Empleado ${registroId}`;
-
             const frame = document.createElement('iframe');
             frame.title = `${formato.titulo}, empleado ${registroId}`;
             frame.loading = 'eager';
-            contenedor.append(encabezado);
             contenedor.append(frame);
             documentos.append(contenedor);
 
             const promesa = new Promise((resolve, reject) => {
+                let esperaFinalizada = false;
                 const timeout = window.setTimeout(
-                    () => reject(new Error(`No cargaron los datos del empleado ${registroId}.`)),
+                    () => {
+                        esperaFinalizada = true;
+                        reject(new Error(`No cargaron los datos del empleado ${registroId}.`));
+                    },
                     20000,
                 );
 
@@ -183,15 +173,34 @@
                         if (!contenido) throw new Error('No se pudo leer el documento generado.');
 
                         const estilo = contenido.createElement('style');
-                        estilo.textContent = '.controls{display:none!important}.page{margin:0!important;box-shadow:none!important;page-break-after:auto!important;break-after:auto!important}.page + .page{page-break-before:always;break-before:page}';
+                        estilo.textContent = `
+                            .controls{display:none!important}
+                            @media screen {
+                                html,body {
+                                    background:#fff!important;
+                                    margin:0!important;
+                                    padding:0!important;
+                                    display:block!important;
+                                    overflow-x:hidden!important;
+                                }
+                                .page {
+                                    box-shadow:none!important;
+                                    margin:0 auto 16px!important;
+                                }
+                            }
+                        `;
                         contenido.head.append(estilo);
+                        const linkRegresar = contenido.getElementById('btn-regresar');
+                        if (linkRegresar) linkRegresar.href = encodeURI(returnUrl);
 
                         const esperarDatos = () => {
+                            if (esperaFinalizada) return;
                             const nombre = contenido.getElementById('lbl-nombre')?.textContent.trim();
-                            if (nombre) {
-                                encabezado.textContent = `Documento ${indice + 1} — ${nombre}`;
+                            if (nombre && !/^_+$/.test(nombre)) {
                                 const paginas = Math.max(1, contenido.querySelectorAll('.page').length);
-                                frame.style.height = `${paginas * 11}in`;
+                                frame.style.height = `${contenido.documentElement.scrollHeight}px`;
+                                frame.style.setProperty('--print-height', `${paginas * 11}in`);
+                                esperaFinalizada = true;
                                 window.clearTimeout(timeout);
                                 resolve();
                                 return;
