@@ -12,9 +12,9 @@ import psycopg2
 import openpyxl
 from flask import Flask, jsonify, request, send_from_directory, send_file
 from io import BytesIO
-import requests
 from dotenv import load_dotenv
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
@@ -53,43 +53,10 @@ def health_check():
     return jsonify({'status': 'ok'}), 200
 
 
-@app.route('/api/incidencias', methods=['POST'])
-def registrar_incidencia_chatbot():
-    datos = request.get_json(silent=True)
-    if not isinstance(datos, dict):
-        return jsonify({'error': 'Se requiere un objeto JSON.'}), 400
-
-    chatbot_url = os.getenv('CHATBOT_INTERNAL_URL', 'http://chatbot:5000').rstrip('/')
-    token = os.getenv('CHATBOT_INTERNAL_TOKEN', '').strip()
-    if not token:
-        return jsonify({
-            'error': 'Configura CHATBOT_INTERNAL_TOKEN para habilitar los avisos automáticos.'
-        }), 503
-
-    try:
-        respuesta = requests.post(
-            f'{chatbot_url}/api/internal/incidencias',
-            json=datos,
-            headers={'X-Internal-Token': token},
-            timeout=30,
-        )
-    except requests.RequestException:
-        print('Error al comunicarse con el chatbot para registrar la incidencia.')
-        return jsonify({'error': 'No se pudo contactar el servicio de WhatsApp.'}), 502
-
-    try:
-        resultado = respuesta.json()
-    except ValueError:
-        print('El chatbot respondió con un formato inesperado al registrar la incidencia.')
-        return jsonify({'error': 'El servicio de WhatsApp respondió con un formato inválido.'}), 502
-
-    return jsonify(resultado), respuesta.status_code
-
-
 def asegurar_tabla_incidencias(cur):
     cur.execute(
         """
-        CREATE TABLE IF NOT EXISTS incidencias_chatbot (
+        CREATE TABLE IF NOT EXISTS incidencias_empleado (
             id BIGSERIAL PRIMARY KEY,
             registro_id INTEGER NOT NULL REFERENCES registro(id) ON DELETE CASCADE,
             no_empleado VARCHAR(50) NOT NULL,
@@ -97,46 +64,45 @@ def asegurar_tabla_incidencias(cur):
             motivo TEXT NOT NULL,
             fecha_inicio DATE,
             fecha_reingreso DATE,
-            consecutivo_indisciplina INTEGER,
-            telefono_colaborador VARCHAR(30),
-            nombre_contacto_emergencia VARCHAR(255),
-            telefono_contacto_emergencia VARCHAR(30),
-            estado_colaborador VARCHAR(20) NOT NULL DEFAULT 'pendiente',
-            respuesta_colaborador_at TIMESTAMP,
-            estado_contacto_emergencia VARCHAR(20) NOT NULL DEFAULT 'pendiente',
-            contacto_programado_at TIMESTAMP,
-            contacto_enviado_at TIMESTAMP,
+            dias SMALLINT CHECK (dias BETWEEN 1 AND 999),
+            opcion VARCHAR(20),
+            hora TIME,
+            motivos JSONB NOT NULL DEFAULT '[]'::jsonb,
+            otro_motivo TEXT,
+            archivo_nombre TEXT,
+            archivo_mime VARCHAR(100),
+            archivo_contenido BYTEA,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """
     )
     cur.execute(
         """
-        SELECT is_nullable
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'incidencias_chatbot'
-          AND column_name = 'telefono_colaborador'
+        CREATE INDEX IF NOT EXISTS idx_incidencias_empleado_registro_created
+        ON incidencias_empleado (registro_id, created_at, id)
         """
     )
-    columna_telefono = cur.fetchone()
-    if columna_telefono and columna_telefono[0] == 'NO':
-        cur.execute(
-            "ALTER TABLE incidencias_chatbot ALTER COLUMN telefono_colaborador DROP NOT NULL"
-        )
 
 
 def serializar_incidencia(row):
+    hora = row[7]
     return {
         'id': row[0],
         'type': row[1],
         'motivo': row[2] or '',
         'fecha_inicio': row[3].isoformat() if row[3] else None,
         'fecha_reingreso': row[4].isoformat() if row[4] else None,
-        'consecutivo_indisciplina': row[5],
-        'estado_contacto_emergencia': row[6],
-        'contacto_programado_at': row[7].isoformat() if row[7] else None,
-        'createdAt': row[8].isoformat() if row[8] else None,
+        'dias': row[5],
+        'opcion': row[6],
+        'hora': (
+            hora.strftime('%H:%M')
+            if hasattr(hora, 'strftime')
+            else str(hora)[:5] if hora else None
+        ),
+        'motivos': row[8] or [],
+        'otro_motivo': row[9] or '',
+        'archivo_nombre': row[10],
+        'createdAt': row[11].isoformat() if row[11] else None,
     }
 
 
@@ -150,9 +116,9 @@ def incidencias_empleado(registro_id):
                     cur.execute(
                         """
                         SELECT id, tipo, motivo, fecha_inicio, fecha_reingreso,
-                               consecutivo_indisciplina, estado_contacto_emergencia,
-                               contacto_programado_at, created_at
-                        FROM incidencias_chatbot
+                               dias, opcion, hora, motivos, otro_motivo, archivo_nombre,
+                               created_at
+                        FROM incidencias_empleado
                         WHERE registro_id = %s
                         ORDER BY created_at ASC, id ASC
                         """,
@@ -164,19 +130,57 @@ def incidencias_empleado(registro_id):
             print(f"Error al consultar incidencias del empleado {registro_id}: {error}")
             return jsonify({'error': 'No se pudieron consultar las incidencias.'}), 500
 
-    datos = request.get_json(silent=True)
+    datos = request.form.to_dict() if request.form else request.get_json(silent=True)
     if not isinstance(datos, dict):
-        return jsonify({'error': 'Se requiere un objeto JSON.'}), 400
+        return jsonify({'error': 'Se requieren datos de incidencia válidos.'}), 400
 
     tipo = str(datos.get('tipo') or '').strip()
-    if tipo not in {'entrada-salida', 'vacaciones', 'incapacidad'}:
-        return jsonify({'error': 'El tipo de incidencia debe registrarse por el flujo correspondiente.'}), 400
+    if tipo not in {'entrada-salida', 'vacaciones', 'incapacidad', 'suspension', 'indisciplina'}:
+        return jsonify({'error': 'El tipo de incidencia no es válido.'}), 400
+
+    try:
+        detalles = json.loads(datos.get('detalles') or '{}')
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Los detalles de la incidencia no tienen un formato válido.'}), 400
+    if not isinstance(detalles, dict):
+        return jsonify({'error': 'Los detalles de la incidencia deben ser un objeto.'}), 400
 
     motivo = str(datos.get('motivo') or '').strip()
     if len(motivo) > 1000:
         return jsonify({'error': 'El motivo no puede superar 1000 caracteres.'}), 400
-    if tipo == 'entrada-salida' and not motivo:
-        return jsonify({'error': 'El motivo de entrada o salida es obligatorio.'}), 400
+    if tipo in {'entrada-salida', 'suspension'} and not motivo:
+        return jsonify({'error': 'El motivo de la incidencia es obligatorio.'}), 400
+    if tipo == 'indisciplina':
+        categoria = str(detalles.get('categoria') or '').strip()
+        otro_motivo = str(detalles.get('otro_motivo') or '').strip()
+        if not categoria or (categoria == 'otro' and not otro_motivo):
+            return jsonify({'error': 'Selecciona un motivo o especifica otro motivo.'}), 400
+        if categoria == 'otro':
+            motivo = otro_motivo
+        else:
+            motivo = categoria
+        detalles['otro_motivo'] = otro_motivo
+
+    opcion = None
+    hora = None
+    motivos = detalles.get('motivos') or []
+    if not isinstance(motivos, list) or not all(isinstance(item, str) for item in motivos):
+        return jsonify({'error': 'La lista de motivos no es válida.'}), 400
+    if tipo == 'entrada-salida':
+        opcion = str(detalles.get('opcion') or '').strip()
+        hora = str(detalles.get('hora') or '').strip()
+        otro_motivo = str(detalles.get('otro_motivo') or '').strip()
+        if opcion not in {'entrada', 'salida'}:
+            return jsonify({'error': 'Selecciona entrada o salida.'}), 400
+        if not motivos and not otro_motivo:
+            return jsonify({'error': 'Selecciona un motivo o especifica otro motivo.'}), 400
+        try:
+            datetime.strptime(hora, '%H:%M')
+        except ValueError:
+            return jsonify({'error': 'La hora de entrada o salida no es válida.'}), 400
+        detalles['otro_motivo'] = otro_motivo
+
+    fecha_inicio = fecha_reingreso = dias = None
 
     def fecha_payload(valor, nombre):
         if not valor:
@@ -192,12 +196,39 @@ def incidencias_empleado(registro_id):
         if tipo == 'entrada-salida':
             fecha_inicio = fecha_inicio or datetime.now().date()
             fecha_reingreso = fecha_inicio
-        elif not fecha_inicio or not fecha_reingreso:
+        elif tipo == 'suspension' and (not fecha_inicio or not fecha_reingreso):
+            return jsonify({'error': 'Las fechas de suspensión son obligatorias.'}), 400
+        elif tipo in {'vacaciones', 'incapacidad'} and (not fecha_inicio or not fecha_reingreso):
             return jsonify({'error': 'Las fechas inicial y final son obligatorias.'}), 400
         if fecha_inicio and fecha_reingreso and fecha_reingreso < fecha_inicio:
             return jsonify({'error': 'La fecha final no puede ser anterior a la inicial.'}), 400
+        if fecha_inicio and fecha_reingreso and tipo in {'suspension', 'vacaciones', 'incapacidad'}:
+            dias = (fecha_reingreso - fecha_inicio).days + 1
+            if tipo == 'suspension':
+                dias -= 1
+            if not 1 <= dias <= 999:
+                return jsonify({'error': 'El periodo debe contener entre 1 y 999 días.'}), 400
     except ValueError as error:
         return jsonify({'error': str(error)}), 400
+
+    detalles['dias'] = dias
+    archivo = request.files.get('archivo')
+    archivo_nombre = archivo_mime = archivo_contenido = None
+    if archivo and archivo.filename:
+        archivo_nombre = secure_filename(archivo.filename)
+        archivo_extension = os.path.splitext(archivo_nombre)[1].lower()
+        tipos_archivo = {
+            '.pdf': 'application/pdf',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+        }
+        if archivo_extension not in tipos_archivo:
+            return jsonify({'error': 'El archivo debe ser PDF, PNG o JPG.'}), 400
+        archivo_contenido = archivo.read(10 * 1024 * 1024 + 1)
+        if len(archivo_contenido) > 10 * 1024 * 1024:
+            return jsonify({'error': 'El archivo no puede superar 10 MB.'}), 413
+        archivo_mime = tipos_archivo[archivo_extension]
 
     try:
         with get_db_connection() as conn:
@@ -205,8 +236,7 @@ def incidencias_empleado(registro_id):
                 asegurar_tabla_incidencias(cur)
                 cur.execute(
                     """
-                    SELECT r.nombre_completo, r.tel_movil, r.nombre_emergencia,
-                           r.telefono_emergencia, ip.no_empleado
+                    SELECT ip.no_empleado
                     FROM registro AS r
                     LEFT JOIN ingresos_puesto AS ip ON ip.registro_id = r.id
                     WHERE r.id = %s
@@ -218,22 +248,21 @@ def incidencias_empleado(registro_id):
                 empleado = cur.fetchone()
                 if not empleado:
                     return jsonify({'error': 'No se encontró al empleado.'}), 404
-                nombre, telefono, nombre_emergencia, telefono_emergencia, no_empleado = empleado
+                no_empleado = empleado[0]
                 if not no_empleado:
                     return jsonify({'error': 'El empleado no tiene un número de empleado registrado.'}), 409
 
                 cur.execute(
                     """
-                    INSERT INTO incidencias_chatbot (
-                        registro_id, no_empleado, tipo, motivo, fecha_inicio,
-                        fecha_reingreso, telefono_colaborador, nombre_contacto_emergencia,
-                        telefono_contacto_emergencia, estado_colaborador,
-                        estado_contacto_emergencia
+                    INSERT INTO incidencias_empleado (
+                        registro_id, no_empleado, tipo, motivo, fecha_inicio, fecha_reingreso,
+                        dias, opcion, hora, motivos, otro_motivo, archivo_nombre,
+                        archivo_mime, archivo_contenido
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'no_aplica', 'no_aplica')
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s)
                     RETURNING id, tipo, motivo, fecha_inicio, fecha_reingreso,
-                              consecutivo_indisciplina, estado_contacto_emergencia,
-                              contacto_programado_at, created_at
+                              dias, opcion, hora, motivos, otro_motivo, archivo_nombre,
+                              created_at
                     """,
                     (
                         registro_id,
@@ -242,9 +271,14 @@ def incidencias_empleado(registro_id):
                         motivo or tipo,
                         fecha_inicio,
                         fecha_reingreso,
-                        telefono,
-                        nombre_emergencia,
-                        telefono_emergencia,
+                        dias,
+                        opcion,
+                        hora or None,
+                        json.dumps(motivos, ensure_ascii=False),
+                        detalles.get('otro_motivo') or None,
+                        archivo_nombre,
+                        archivo_mime,
+                        archivo_contenido,
                     ),
                 )
                 incidencia = serializar_incidencia(cur.fetchone())
@@ -263,11 +297,9 @@ def eliminar_incidencia_empleado(registro_id, incidencia_id):
                 asegurar_tabla_incidencias(cur)
                 cur.execute(
                     """
-                    DELETE FROM incidencias_chatbot
+                    DELETE FROM incidencias_empleado
                     WHERE id = %s
                       AND registro_id = %s
-                      AND tipo NOT IN ('suspension', 'indisciplina')
-                      AND estado_contacto_emergencia != 'pendiente'
                     RETURNING id
                     """,
                     (incidencia_id, registro_id),
@@ -276,12 +308,39 @@ def eliminar_incidencia_empleado(registro_id, incidencia_id):
             conn.commit()
         if not eliminada:
             return jsonify({
-                'error': 'La incidencia no existe o no se puede eliminar porque forma parte de un aviso de WhatsApp.'
+                'error': 'La incidencia no existe o no se puede eliminar.'
             }), 409
         return jsonify({'ok': True}), 200
     except psycopg2.Error as error:
         print(f"Error al eliminar incidencia {incidencia_id}: {error}")
         return jsonify({'error': 'No se pudo eliminar la incidencia.'}), 500
+
+
+@app.route('/api/empleados/<int:registro_id>/incidencias/<int:incidencia_id>/archivo', methods=['GET'])
+def descargar_archivo_incidencia(registro_id, incidencia_id):
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT archivo_nombre, archivo_mime, archivo_contenido
+                    FROM incidencias_empleado
+                    WHERE id = %s AND registro_id = %s
+                    """,
+                    (incidencia_id, registro_id),
+                )
+                archivo = cur.fetchone()
+        if not archivo or not archivo[2]:
+            return jsonify({'error': 'El archivo de la incidencia no existe.'}), 404
+        return send_file(
+            BytesIO(bytes(archivo[2])),
+            as_attachment=True,
+            download_name=secure_filename(archivo[0] or 'archivo-incidencia'),
+            mimetype=archivo[1] or 'application/octet-stream',
+        )
+    except psycopg2.Error as error:
+        print(f"Error al consultar el archivo de incidencia {incidencia_id}: {error}")
+        return jsonify({'error': 'No se pudo consultar el archivo de la incidencia.'}), 500
 
 
 DEFAULT_DOCS_ROOT = os.getenv(
@@ -2286,6 +2345,29 @@ def api_datos_grafica():
 
 # ===== ENDPOINTS PARA PERSONAL DE RECLUTAMIENTO =====
 
+def _ensure_reclutamiento_schema(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS personal_reclutamiento (
+            id SERIAL PRIMARY KEY,
+            nombre VARCHAR(100) NOT NULL UNIQUE,
+            team INT DEFAULT 1,
+            fecha_registro DATE DEFAULT CURRENT_DATE,
+            telefono VARCHAR(50)
+        )
+    """)
+    for stmt in (
+        "ALTER TABLE personal_reclutamiento ADD COLUMN IF NOT EXISTS team INT DEFAULT 1",
+        "ALTER TABLE personal_reclutamiento ADD COLUMN IF NOT EXISTS telefono VARCHAR(50)",
+        "ALTER TABLE personal_reclutamiento ALTER COLUMN telefono TYPE VARCHAR(50)",
+        "ALTER TABLE encuesta_reclutamiento ADD COLUMN IF NOT EXISTS nombre_reclutador VARCHAR(255)",
+        "ALTER TABLE encuesta_reclutamiento ADD COLUMN IF NOT EXISTS sub_fuente VARCHAR(50)",
+    ):
+        try:
+            cur.execute(stmt)
+        except Exception:
+            pass
+
+
 @app.route('/api/ingresos-por-team', methods=['GET'])
 def obtener_ingresos_por_team():
     """Obtiene los reclutamientos por team para el mes solicitado."""
@@ -2297,40 +2379,12 @@ def obtener_ingresos_por_team():
 
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS personal_reclutamiento (
-                        id SERIAL PRIMARY KEY,
-                        nombre VARCHAR(100) NOT NULL UNIQUE,
-                        team INT DEFAULT 1,
-                        fecha_registro DATE DEFAULT CURRENT_DATE,
-                        telefono VARCHAR(50)
-                    )
-                """)
-                cur.execute("""
-                    ALTER TABLE personal_reclutamiento
-                    ADD COLUMN IF NOT EXISTS team INT DEFAULT 1
-                """)
-                cur.execute("""
-                    ALTER TABLE personal_reclutamiento
-                    ADD COLUMN IF NOT EXISTS telefono VARCHAR(50)
-                """)
-                cur.execute("""
-                    ALTER TABLE personal_reclutamiento
-                    ALTER COLUMN telefono TYPE VARCHAR(50)
-                """)
-                cur.execute("""
-                    ALTER TABLE encuesta_reclutamiento
-                    ADD COLUMN IF NOT EXISTS nombre_reclutador VARCHAR(255)
-                """)
-                cur.execute("""
-                    ALTER TABLE encuesta_reclutamiento
-                    ADD COLUMN IF NOT EXISTS sub_fuente VARCHAR(50)
-                """)
+                _ensure_reclutamiento_schema(cur)
                 cur.execute("""
                     SELECT p.id, p.nombre, COALESCE(p.team, 1), COUNT(e.id)
                     FROM personal_reclutamiento p
                     LEFT JOIN encuesta_reclutamiento e
-                      ON LOWER(TRIM(e.nombre_reclutador)) = LOWER(TRIM(p.nombre))
+                      ON LOWER(TRIM(COALESCE(e.nombre_reclutador, ''))) = LOWER(TRIM(p.nombre))
                      AND (
                          UPPER(TRIM(COALESCE(e.fuente, ''))) IN ('FACEBOOK', 'RECLU CW')
                          OR (
@@ -2465,35 +2519,16 @@ def manejar_reclutadores():
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                # Asegurar que la tabla exista
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS personal_reclutamiento (
-                        id SERIAL PRIMARY KEY,
-                        nombre VARCHAR(100) NOT NULL UNIQUE,
-                        team INT DEFAULT 1,
-                        fecha_registro DATE DEFAULT CURRENT_DATE,
-                        telefono VARCHAR(50)
-                    )
-                """)
-                # Asegurar columna team por si la tabla ya existía sin ella
-                cur.execute("""
-                    ALTER TABLE personal_reclutamiento 
-                    ADD COLUMN IF NOT EXISTS team INT DEFAULT 1
-                """)
-                cur.execute("""
-                    ALTER TABLE personal_reclutamiento
-                    ADD COLUMN IF NOT EXISTS telefono VARCHAR(50)
-                """)
-                cur.execute("""
-                    ALTER TABLE personal_reclutamiento
-                    ALTER COLUMN telefono TYPE VARCHAR(50)
-                """)
+                _ensure_reclutamiento_schema(cur)
 
                 if request.method == 'POST':
                     datos = request.get_json(silent=True) or {}
                     nombre = str(datos.get('nombre', '')).strip()
                     telefono = str(datos.get('telefono', '')).strip()
-                    team = int(datos.get('team', 1))
+                    try:
+                        team = int(datos.get('team', 1))
+                    except (TypeError, ValueError):
+                        return jsonify({'error': 'El team debe ser un número válido.'}), 400
 
                     if not nombre:
                         return jsonify({'error': 'El nombre del reclutador es obligatorio.'}), 400
@@ -2508,8 +2543,10 @@ def manejar_reclutadores():
                             telefono = COALESCE(NULLIF(EXCLUDED.telefono, ''), personal_reclutamiento.telefono)
                         RETURNING id, nombre, team
                     """, (nombre, team, telefono))
-                    
+
                     row = cur.fetchone()
+                    if row is None:
+                        return jsonify({'error': 'No se pudo guardar el reclutador.'}), 500
                     conn.commit()
                     return jsonify({
                         'id': row[0],
@@ -2518,7 +2555,6 @@ def manejar_reclutadores():
                         'activo': True,
                     }), 201
 
-                # Método GET (Listar todos)
                 cur.execute("""
                     SELECT id, nombre, COALESCE(team, 1) as team, telefono
                     FROM personal_reclutamiento

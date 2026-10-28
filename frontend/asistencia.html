@@ -291,13 +291,9 @@
     </header>
 
     <main>
-        <!-- 2 BOTONES PRINCIPALES -->
         <div class="metrics-container">
             <button class="metric-card-asistencia" type="button" data-modal="modal-control-accesos">
                 <h3>Control de Accesos</h3>
-            </button>
-            <button class="metric-card-asistencia" type="button" onclick="abrirModalIncidencia()">
-                <h3>Registrar Incidencia</h3>
             </button>
             <div class="metric-card-incidencias formatos-menu" tabindex="0">
                 <h3>Formatos Imprimibles</h3>
@@ -306,67 +302,6 @@
                     <a class="formato-option" href="https://drive.google.com/file/d/1MjIXgFLUJAO25hNfZb0IzTFwIW4YLvU5/view?usp=sharing">Entrada/Salida</a>
                     <a class="formato-option" href="https://drive.google.com/file/d/1gWuv28J-7WjbfsaOdUMSIb0Mbb6KHRqO/view?usp=sharing">Indisciplina</a>
                 </div>
-            </div>
-        </div>
-
-        <div id="modal-incidencia" class="modal-overlay">
-            <div class="modal-content" style="max-width: 700px;">
-                <button class="close-modal-x" type="button" onclick="cerrarModalIncidencia()">✖</button>
-                <h3>Registrar incidencia y notificar</h3>
-                <p>Se notificará al colaborador al registrar. Si no confirma la recepción, el contacto de emergencia será notificado después de 24 horas.</p>
-                <form onsubmit="event.preventDefault(); registrarIncidencia(this);">
-                    <div class="form-group">
-                        <label for="incidencia-tipo">Tipo de incidencia:</label>
-                        <select id="incidencia-tipo" class="form-control" onchange="actualizarCamposIncidencia()" required>
-                            <option value="suspension">Suspensión</option>
-                            <option value="indisciplina">Indisciplina</option>
-                            <option value="carta_compromiso">Carta compromiso</option>
-                            <option value="baja_confirmada">Baja confirmada</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="incidencia-num-empleado">Número de empleado:</label>
-                        <input id="incidencia-num-empleado" class="form-control" type="text" maxlength="50" required>
-                    </div>
-                    <div id="incidencia-categoria-wrapper" class="form-group" style="display: none;">
-                        <label for="incidencia-categoria">Motivo de indisciplina:</label>
-                        <select id="incidencia-categoria" class="form-control" onchange="actualizarCamposIncidencia()">
-                            <option value="">Selecciona un motivo</option>
-                            <option>Salidas sin permiso del area</option>
-                            <option>Llegadas tarde al area del trabajo</option>
-                            <option>Defectos</option>
-                            <option>No uso de equipo de seguridad</option>
-                            <option>Desobedecer ordenes</option>
-                            <option>Jugar en linea</option>
-                            <option>Falta injustificada</option>
-                            <option>Fumar sin permiso o en area no permitida</option>
-                            <option>Uso del celular dentro del area</option>
-                            <option>Tardar al regresar del comedor o del baño</option>
-                            <option>Falta de respeto o acoso a compañero</option>
-                            <option>Salir con comida a lineas</option>
-                            <option value="otro motivo">Otro motivo</option>
-                        </select>
-                    </div>
-                    <div id="incidencia-motivo-wrapper" class="form-group">
-                        <label id="incidencia-motivo-label" for="incidencia-motivo">Motivo:</label>
-                        <textarea id="incidencia-motivo" class="form-control" rows="3" maxlength="1000"></textarea>
-                    </div>
-                    <div id="incidencia-fechas" style="display: none;">
-                        <div class="form-group">
-                            <label for="incidencia-fecha-inicio">Fecha de inicio de suspensión:</label>
-                            <input id="incidencia-fecha-inicio" class="form-control" type="date">
-                        </div>
-                        <div class="form-group">
-                            <label for="incidencia-fecha-reingreso">Fecha de reingreso:</label>
-                            <input id="incidencia-fecha-reingreso" class="form-control" type="date">
-                        </div>
-                    </div>
-                    <p id="incidencia-resultado" role="status" aria-live="polite"></p>
-                    <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                        <button class="btn btn-secondary" type="button" onclick="cerrarModalIncidencia()">Cancelar</button>
-                        <button id="incidencia-submit" class="btn btn-success" type="submit">Registrar y enviar</button>
-                    </div>
-                </form>
             </div>
         </div>
 
@@ -1072,95 +1007,6 @@
             document.getElementById('info-semana').textContent = `📅 Rango: ${formatoLunes} al ${formatoViernes}`;
         }
 
-        function abrirModalIncidencia() {
-            document.getElementById('modal-incidencia').style.display = 'flex';
-            document.getElementById('incidencia-resultado').textContent = '';
-            actualizarCamposIncidencia();
-        }
-
-        function cerrarModalIncidencia() {
-            document.getElementById('modal-incidencia').style.display = 'none';
-        }
-
-        function actualizarCamposIncidencia() {
-            const tipo = document.getElementById('incidencia-tipo').value;
-            const categoria = document.getElementById('incidencia-categoria').value;
-            const esIndisciplina = tipo === 'indisciplina';
-            const esSuspension = tipo === 'suspension';
-            const requiereMotivo = tipo === 'suspension' || tipo === 'baja_confirmada';
-            const esOtroMotivo = esIndisciplina && categoria === 'otro motivo';
-
-            document.getElementById('incidencia-categoria-wrapper').style.display = esIndisciplina ? 'block' : 'none';
-            document.getElementById('incidencia-fechas').style.display = esSuspension ? 'block' : 'none';
-            document.getElementById('incidencia-motivo-wrapper').style.display = requiereMotivo || esOtroMotivo ? 'block' : 'none';
-
-            const motivo = document.getElementById('incidencia-motivo');
-            motivo.required = requiereMotivo || esOtroMotivo;
-            document.getElementById('incidencia-categoria').required = esIndisciplina;
-            document.getElementById('incidencia-fecha-inicio').required = esSuspension;
-            document.getElementById('incidencia-fecha-reingreso').required = esSuspension;
-            document.getElementById('incidencia-motivo-label').textContent =
-                tipo === 'baja_confirmada' ? 'Motivo de baja:' : 'Motivo de suspensión:';
-        }
-
-        async function registrarIncidencia(formulario) {
-            const boton = document.getElementById('incidencia-submit');
-            const salida = document.getElementById('incidencia-resultado');
-            const tipo = document.getElementById('incidencia-tipo').value;
-            const categoria = document.getElementById('incidencia-categoria').value;
-            let motivo = document.getElementById('incidencia-motivo').value.trim();
-
-            if (tipo === 'indisciplina' && categoria !== 'otro motivo') {
-                motivo = categoria;
-            }
-
-            const datos = {
-                tipo,
-                no_empleado: document.getElementById('incidencia-num-empleado').value.trim(),
-                categoria,
-                motivo,
-                fecha_inicio: document.getElementById('incidencia-fecha-inicio').value,
-                fecha_reingreso: document.getElementById('incidencia-fecha-reingreso').value,
-            };
-            boton.disabled = true;
-            salida.textContent = 'Registrando incidencia y enviando el aviso...';
-
-            try {
-                const respuesta = await fetch('/api/incidencias', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(datos),
-                });
-                const resultado = await respuesta.json();
-                if (!respuesta.ok) {
-                    const detalle = resultado.incidencia_id
-                        ? `${resultado.error} No vuelvas a registrar la misma incidencia; el aviso debe verificarse con soporte.`
-                        : resultado.error || 'No se pudo registrar la incidencia.';
-                    throw new Error(detalle);
-                }
-
-                let mensaje = `Aviso enviado a ${resultado.nombre_empleado}.`;
-                if (tipo === 'baja_confirmada') {
-                    mensaje += ' No se envía aviso al contacto de emergencia para este tipo de incidencia.';
-                } else if (resultado.contacto_emergencia_programado) {
-                    mensaje += ' El aviso al contacto de emergencia se enviará en 24 horas si no hay confirmación.';
-                } else {
-                    mensaje += ' No hay un teléfono de emergencia válido registrado; no fue posible programar ese aviso.';
-                }
-                if (resultado.consecutivo_indisciplina) {
-                    mensaje += ` Reporte de indisciplina número ${resultado.consecutivo_indisciplina}.`;
-                }
-                salida.textContent = mensaje;
-                formulario.reset();
-                actualizarCamposIncidencia();
-            } catch (error) {
-                salida.textContent = error.message || 'No se pudo registrar la incidencia.';
-            } finally {
-                boton.disabled = false;
-            }
-        }
-
-        actualizarCamposIncidencia();
     </script>
 </body>
 </html>

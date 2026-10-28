@@ -1553,7 +1553,7 @@
                                 </div>
                                 <div class="form-group" style="margin: 20px 0;">
                                     <label for="suspension-archivo" style="display: block; width: 100%; box-sizing: border-box; background: #1e1e1e; color: #007bff; border: 1px solid #007bff; padding: 10px 15px; border-radius: 6px; cursor: pointer; text-align: center; transition: 0.3s;">📁 Adjuntar Archivo</label>
-                                    <input id="suspension-archivo" type="file" accept=".pdf,.png,.jpg,.jpeg" style="display: none;" required>
+                                    <input id="suspension-archivo" type="file" accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
                                 </div>                            
                                 <button class="action-btn" type="submit" style="display: block; margin-left: auto; width: fit-content; text-decoration: none; color: #28df50; font-weight: bold; font-size: 0.9rem; border: 1px solid #28df50; padding: 8px 16px; border-radius: 5px; background: transparent; cursor: pointer; transition: 0.3s;" onmouseover="this.style.background='#28df50'; this.style.color='white';" onmouseout="this.style.background='transparent'; this.style.color='#28df50';">Guardar Suspensión</button>
                             </form>
@@ -1569,7 +1569,7 @@
                                 <div class="form-group" style="margin-top: 2px; margin-bottom: 5px;"><label for="pase-otro-motivo">Otro Motivo:</label><textarea id="pase-otro-motivo" class="editable-control" rows="2" style="margin-top: 8px;"></textarea></div>
                                 <div class="form-group" style="margin: 15px 0;">
                                     <label for="pase-archivo" style="display: block; width: 100%; box-sizing: border-box; background: #1e1e1e; color: #007bff; border: 1px solid #007bff; padding: 10px 15px; border-radius: 6px; cursor: pointer; text-align: center; transition: 0.3s;">📁 Adjuntar Archivo</label>
-                                    <input id="pase-archivo" type="file" accept=".pdf,.png,.jpg,.jpeg" style="display: none;" required>
+                                    <input id="pase-archivo" type="file" accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
                                 </div>                           
                                 <button class="action-btn" type="submit" style="display: block; margin-left: auto; width: fit-content; text-decoration: none; color: #28df50; font-weight: bold; font-size: 0.9rem; border: 1px solid #28df50; padding: 8px 16px; border-radius: 5px; background: transparent; cursor: pointer; transition: 0.3s;" onmouseover="this.style.background='#28df50'; this.style.color='white';" onmouseout="this.style.background='transparent'; this.style.color='#28df50';">Guardar</button>
                             </form>
@@ -1579,7 +1579,7 @@
                                 <div id="disciplina-otro-motivo-group" class="form-group" style="display: none;"><textarea id="disciplina-otro-motivo" class="editable-control" rows="2" placeholder="Escribe el otro motivo"></textarea></div>
                                 <div class="form-group" style="margin: 20px 0;">
                                     <label for="indiciplina-archivo" style="display: block; width: 100%; box-sizing: border-box; background: #1e1e1e; color: #007bff; border: 1px solid #007bff; padding: 10px 15px; border-radius: 6px; cursor: pointer; text-align: center; transition: 0.3s;">📁 Adjuntar Archivo</label>
-                                    <input id="indiciplina-archivo" type="file" accept=".pdf,.png,.jpg,.jpeg" style="display: none;" required>
+                                    <input id="indiciplina-archivo" type="file" accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
                                 </div>                         
                                 <button class="action-btn" type="submit" style="display: block; margin-left: auto; width: fit-content; text-decoration: none; color: #28df50; font-weight: bold; font-size: 0.9rem; border: 1px solid #28df50; padding: 8px 16px; border-radius: 5px; background: transparent; cursor: pointer; transition: 0.3s;" onmouseover="this.style.background='#28df50'; this.style.color='white';" onmouseout="this.style.background='transparent'; this.style.color='#28df50';">Guardar</button>
                             </form>
@@ -2573,7 +2573,7 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
                 incidentDates,
                 suspendedDates: record.type === 'suspension' ? incidentDates : [],
                 createdAt: record.createdAt,
-                emergencyPending: record.estado_contacto_emergencia === 'pendiente',
+                attachmentName: record.archivo_nombre || '',
             };
         }
 
@@ -2592,7 +2592,7 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
         }
 
         async function deleteEmployeeIncident(incidenciaId) {
-            if (!window.confirm('¿Deseas eliminar esta notificación?')) return;
+            if (!window.confirm('¿Deseas eliminar este registro de incidencia?')) return;
             try {
                 const respuesta = await fetch(
                     `/api/empleados/${encodeURIComponent(registroId)}/incidencias/${encodeURIComponent(incidenciaId)}`,
@@ -2680,15 +2680,13 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
                 const item = document.createElement('div');
                 item.className = 'notification-item';
                 item.classList.add(`type-${incident.type === 'carta-suspension' ? 'carta-compromiso' : incident.type}`);
-                if (!incident.emergencyPending && !['suspension', 'indisciplina'].includes(incident.type)) {
-                    const deleteButton = document.createElement('button');
-                    deleteButton.className = 'notification-delete';
-                    deleteButton.type = 'button';
-                    deleteButton.setAttribute('aria-label', 'Eliminar notificación');
-                    deleteButton.textContent = '✕';
-                    deleteButton.addEventListener('click', () => deleteEmployeeIncident(incident.id));
-                    item.appendChild(deleteButton);
-                }
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'notification-delete';
+                deleteButton.type = 'button';
+                deleteButton.setAttribute('aria-label', 'Eliminar registro de incidencia');
+                deleteButton.textContent = '✕';
+                deleteButton.addEventListener('click', () => deleteEmployeeIncident(incident.id));
+                item.appendChild(deleteButton);
                 const titleRow = document.createElement('div');
                 titleRow.className = 'notification-title-row';
                 const title = document.createElement('strong');
@@ -2701,6 +2699,14 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
                 const dateMatch = detailText.match(/^(.*?)(?: \(([^)]+)\))$/);
                 detail.textContent = dateMatch ? dateMatch[1] : detailText;
                 item.append(titleRow, detail);
+                if (incident.attachmentName) {
+                    const attachment = document.createElement('a');
+                    attachment.className = 'notification-detail';
+                    attachment.textContent = `Archivo: ${incident.attachmentName}`;
+                    attachment.href = `/api/empleados/${encodeURIComponent(registroId)}/incidencias/${encodeURIComponent(incident.id)}/archivo`;
+                    attachment.download = incident.attachmentName;
+                    item.appendChild(attachment);
+                }
                 if (dateMatch) {
                     const dates = document.createElement('strong');
                     dates.className = 'notification-dates';
@@ -2869,7 +2875,22 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
                 const detalle = tipo === 'entrada-salida'
                     ? `${config.tipo === 'entrada' ? 'Entrada' : 'Salida'} a las ${formatIncidentTime(config.hora)}. ${motivo}`
                     : `${motivo}${config.desde ? ` (${formatIncidentDate(config.desde)} a ${formatIncidentDate(config.hasta)})` : ''}`;
-                if (tipo === 'suspension' || tipo === 'indisciplina') {
+                let fechaReingreso = config.hasta || '';
+                if (tipo === 'suspension' && fechaReingreso) {
+                    const fecha = new Date(`${fechaReingreso}T00:00:00`);
+                    fecha.setDate(fecha.getDate() + 1);
+                    fechaReingreso = [
+                        fecha.getFullYear(),
+                        String(fecha.getMonth() + 1).padStart(2, '0'),
+                        String(fecha.getDate()).padStart(2, '0'),
+                    ].join('-');
+                }
+
+                let motivoIncidencia = tipo === 'entrada-salida' ? detalle : (motivo || config.title);
+                const categoriaIndisciplina = tipo === 'indisciplina'
+                    ? document.getElementById('disciplina-motivo').value
+                    : '';
+                if (tipo === 'indisciplina') {
                     const motivosIndisciplina = {
                         'SALIDAS SIN PERMISO DEL AREA': 'salidas sin permiso del area',
                         'LLEGADAS TARDE AL AREA DE TRABAJO': 'llegadas tarde al area del trabajo',
@@ -2885,55 +2906,43 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
                         'SALIR CON COMIDA A LINEAS': 'salir con comida a lineas',
                         otro: 'otro motivo',
                     };
-                    const datosNotificacion = {
-                        tipo,
-                        no_empleado: fields['no-empleado'].value.trim(),
-                        motivo,
-                    };
-
-                    if (tipo === 'suspension') {
-                        const fechaReingreso = new Date(`${config.hasta}T00:00:00`);
-                        fechaReingreso.setDate(fechaReingreso.getDate() + 1);
-                        datosNotificacion.fecha_inicio = config.desde;
-                        datosNotificacion.fecha_reingreso = [
-                            fechaReingreso.getFullYear(),
-                            String(fechaReingreso.getMonth() + 1).padStart(2, '0'),
-                            String(fechaReingreso.getDate()).padStart(2, '0'),
-                        ].join('-');
-                    } else {
-                        const categoria = document.getElementById('disciplina-motivo').value;
-                        datosNotificacion.categoria = motivosIndisciplina[categoria];
-                        datosNotificacion.motivo = categoria === 'otro' ? config.otro : datosNotificacion.categoria;
-                    }
-
-                    const respuesta = await fetch('/api/incidencias', {
+                    motivoIncidencia = categoriaIndisciplina === 'otro'
+                        ? config.otro
+                        : (motivosIndisciplina[categoriaIndisciplina] || motivo);
+                }
+                const detalles = {
+                    dias: config.dias ? Number(config.dias) : null,
+                    opcion: config.tipo || '',
+                    hora: config.hora || '',
+                    motivos: config.motivos || [],
+                    otro_motivo: config.otro || '',
+                    categoria: categoriaIndisciplina,
+                };
+                const datosIncidencia = new FormData();
+                datosIncidencia.set('tipo', tipo);
+                datosIncidencia.set('motivo', motivoIncidencia);
+                datosIncidencia.set('fecha_inicio', config.desde || '');
+                datosIncidencia.set('fecha_reingreso', fechaReingreso);
+                datosIncidencia.set('detalles', JSON.stringify(detalles));
+                const archivoInputId = {
+                    suspension: 'suspension-archivo',
+                    'entrada-salida': 'pase-archivo',
+                    indisciplina: 'indiciplina-archivo',
+                }[tipo];
+                const archivo = archivoInputId
+                    ? document.getElementById(archivoInputId).files[0]
+                    : null;
+                if (archivo) datosIncidencia.set('archivo', archivo);
+                const respuesta = await fetch(
+                    `/api/empleados/${encodeURIComponent(registroId)}/incidencias`,
+                    {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(datosNotificacion),
-                    });
-                    const resultado = await respuesta.json();
-                    if (!respuesta.ok) {
-                        throw new Error(resultado.error || 'No se pudo enviar el aviso de WhatsApp.');
-                    }
-                } else {
-                    const datosIncidencia = {
-                        tipo,
-                        motivo: tipo === 'entrada-salida' ? detalle : (motivo || config.title),
-                        fecha_inicio: config.desde || '',
-                        fecha_reingreso: config.hasta || '',
-                    };
-                    const respuesta = await fetch(
-                        `/api/empleados/${encodeURIComponent(registroId)}/incidencias`,
-                        {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(datosIncidencia),
-                        },
-                    );
-                    const resultado = await respuesta.json();
-                    if (!respuesta.ok) {
-                        throw new Error(resultado.error || 'No se pudo guardar la incidencia.');
-                    }
+                        body: datosIncidencia,
+                    },
+                );
+                const resultado = await respuesta.json();
+                if (!respuesta.ok) {
+                    throw new Error(resultado.error || 'No se pudo guardar la incidencia.');
                 }
             } catch (error) {
                 alert(error.message || 'No se pudo guardar la incidencia.');

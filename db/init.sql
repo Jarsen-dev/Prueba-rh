@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS chatbot_credenciales (
     updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS incidencias_chatbot (
+CREATE TABLE IF NOT EXISTS incidencias_empleado (
     id                              BIGSERIAL PRIMARY KEY,
     registro_id                     INTEGER NOT NULL REFERENCES registro(id) ON DELETE CASCADE,
     no_empleado                     VARCHAR(50) NOT NULL,
@@ -76,17 +76,19 @@ CREATE TABLE IF NOT EXISTS incidencias_chatbot (
     motivo                          TEXT NOT NULL,
     fecha_inicio                    DATE,
     fecha_reingreso                 DATE,
-    consecutivo_indisciplina        INTEGER,
-    telefono_colaborador            VARCHAR(30),
-    nombre_contacto_emergencia      VARCHAR(255),
-    telefono_contacto_emergencia    VARCHAR(30),
-    estado_colaborador              VARCHAR(20) NOT NULL DEFAULT 'pendiente',
-    respuesta_colaborador_at        TIMESTAMP,
-    estado_contacto_emergencia      VARCHAR(20) NOT NULL DEFAULT 'pendiente',
-    contacto_programado_at          TIMESTAMP,
-    contacto_enviado_at             TIMESTAMP,
+    dias                            SMALLINT CHECK (dias BETWEEN 1 AND 999),
+    opcion                          VARCHAR(20),
+    hora                            TIME,
+    motivos                         JSONB NOT NULL DEFAULT '[]'::jsonb,
+    otro_motivo                     TEXT,
+    archivo_nombre                  TEXT,
+    archivo_mime                    VARCHAR(100),
+    archivo_contenido               BYTEA,
     created_at                      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_incidencias_empleado_registro_created
+    ON incidencias_empleado (registro_id, created_at, id);
 
 CREATE TABLE IF NOT EXISTS usuarios_acceso (
     id                      SERIAL PRIMARY KEY,
