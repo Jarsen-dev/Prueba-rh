@@ -32,6 +32,12 @@ class AccessUserPermissionsTests(unittest.TestCase):
             ['admin', 'reclutamiento'],
         )
 
+    def test_admin_permission_is_case_insensitive(self):
+        self.assertEqual(
+            utily.normalizar_permisos([' Admin ', 'RECLUTAMIENTO']),
+            ['admin', 'reclutamiento'],
+        )
+
     def test_create_rejects_only_the_removed_permission(self):
         client = utily.app.test_client()
         response = client.post(

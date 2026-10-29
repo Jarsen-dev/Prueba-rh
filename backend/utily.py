@@ -623,7 +623,10 @@ def normalizar_permisos(permisos):
     permitidos = {'admin', 'reclutamiento', 'notificaciones'}
     if not isinstance(permisos, list):
         return []
-    permisos_normalizados = ['admin' if permiso == 'recursos_humanos' else permiso for permiso in permisos]
+    permisos_normalizados = [
+        'admin' if permiso.strip().lower() == 'recursos_humanos' else permiso.strip().lower()
+        for permiso in permisos if isinstance(permiso, str)
+    ]
     return list(dict.fromkeys(permiso for permiso in permisos_normalizados if permiso in permitidos))
 
 

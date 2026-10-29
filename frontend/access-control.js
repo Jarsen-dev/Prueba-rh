@@ -24,7 +24,10 @@
     function normalizePermissions(permissions) {
         const allowed = new Set(['admin', 'reclutamiento', 'notificaciones']);
         if (!Array.isArray(permissions)) return [];
-        return [...new Set(permissions.map((permission) => permission === 'recursos_humanos' ? 'admin' : permission)
+        return [...new Set(permissions
+            .filter((permission) => typeof permission === 'string')
+            .map((permission) => permission.trim().toLowerCase())
+            .map((permission) => permission === 'recursos_humanos' ? 'admin' : permission)
             .filter((permission) => allowed.has(permission)))];
     }
 
@@ -102,9 +105,7 @@
     try {
         const accessUser = JSON.parse(sessionStorage.getItem('accesoUsuario') || '{}');
         const permissions = normalizePermissions(accessUser.permisos);
-        const hasPermission = requiredPermission === 'reclutamiento'
-            ? permissions.includes('admin') || permissions.includes('reclutamiento')
-            : permissions.includes(requiredPermission);
+        const hasPermission = permissions.includes('admin') || permissions.includes(requiredPermission);
         if (!hasPermission) {
             window.location.replace('portalrh.html');
         }
