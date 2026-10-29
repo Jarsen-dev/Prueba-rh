@@ -1,9 +1,5 @@
 ## Portal de Acceso
-Pantalla de Bienvenida `main.html`:
-
-✓ Muestra el panel central con los nuevos ingresos organizados por semana.
-
-✓ Muestra la lista de cumpleañeros del mes para seguimiento interno.
+El inicio del portal abre directamente `portalrh.html`, sin menú de navegación.
 
 ## Acceso y Seguridad `portalrh.html / access-control.js`:
 

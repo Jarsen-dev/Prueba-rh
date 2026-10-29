@@ -120,5 +120,5 @@ El historial interno del expediente de empleado se guarda en la tabla `incidenci
 ## Limitaciones conocidas
 
 - El login de `portalrh.html` es una validación fija en el cliente (`admin` / `123`), sin backend ni sesión real — cualquiera puede saltarlo navegando directo a `iniciorh.html`. No se corrigió en esta reorganización; queda pendiente.
-- `main.html` y `cheong-woon.html` llaman a `/api/datos-grafica` y `/api/baja-empleado` respectivamente, pero esos endpoints todavía no están implementados en el backend.
+- `cheong-woon.html` llama a `/api/baja-empleado`, endpoint que todavía no está implementado en el backend.
 - No hay HTTPS ni dominio configurado — nginx sirve solo HTTP en el puerto 3001. Si el servidor ya tiene un reverse proxy compartido (nginx/Traefik) para el otro proyecto, este stack puede integrarse detrás de él apuntando ese proxy a `localhost:3001`.
