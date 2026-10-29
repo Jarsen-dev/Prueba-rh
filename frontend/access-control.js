@@ -104,7 +104,19 @@
 
     try {
         const accessUser = JSON.parse(sessionStorage.getItem('accesoUsuario') || '{}');
-        const permissions = normalizePermissions(accessUser.permisos);
+        const currentUser = AccessControlUsers.list().find((user) => (
+            accessUser.id && user.id === accessUser.id
+        ) || (
+            accessUser.usuario
+            && user.usuario.toLowerCase() === String(accessUser.usuario).trim().toLowerCase()
+        ));
+        if (!currentUser) {
+            window.location.replace('portalrh.html');
+            return;
+        }
+
+        sessionStorage.setItem('accesoUsuario', JSON.stringify(currentUser));
+        const permissions = normalizePermissions(currentUser.permisos);
         const hasPermission = permissions.includes('admin') || permissions.includes(requiredPermission);
         if (!hasPermission) {
             window.location.replace('portalrh.html');
