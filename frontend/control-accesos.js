@@ -1,53 +1,75 @@
 let usuariosRegistrados = [];
-let usuarioSeleccionado = null;
-let edicionUsuarioActiva = false;
+let usuarioEnEdicion = null;
 
-function cambiarPestanaAcceso(pestana) {
-    const buttons = document.querySelectorAll('#modal-control-accesos .access-tab-btn');
-    const contents = document.querySelectorAll('#modal-control-accesos .access-tab-content');
-    buttons.forEach((button) => button.classList.remove('active'));
-    contents.forEach((content) => content.classList.remove('active'));
-
-    const index = pestana === 'nuevo' ? 0 : 1;
-    buttons[index].classList.add('active');
-    contents[index].classList.add('active');
+function mostrarMensajeAcceso(elementId, mensaje, tipo = '') {
+    const elemento = document.getElementById(elementId);
+    elemento.textContent = mensaje;
+    elemento.className = `access-feedback${tipo ? ` ${tipo}` : ''}`;
 }
 
-function obtenerPermisos(nombre) {
-    return Array.from(document.querySelectorAll(`input[name="${nombre}"]:checked`)).map((input) => input.value);
+function obtenerNombreAsignacion(permisos) {
+    const nombres = {
+        admin: 'Admin',
+        reclutamiento: 'Reclutamiento',
+        notificaciones: 'Notificaciones',
+    };
+    return permisos.map((permiso) => nombres[permiso] || permiso).join(', ');
 }
 
-function toggleCamposEdicion() {
-    const permisos = obtenerPermisos('edit-permisos');
-    document.getElementById('edit-grupo-notif').style.display = permisos.includes('notificaciones') ? 'block' : 'none';
+function crearCelda(texto) {
+    const cell = document.createElement('td');
+    cell.textContent = texto;
+    return cell;
 }
 
-function toggleCamposAdicionales() {
-    const tieneNotificaciones = document.getElementById('chk-notificaciones').checked;
-    document.getElementById('seccion-campos-notificacion').style.display = tieneNotificaciones ? 'block' : 'none';
+function crearBotonAcceso(texto, accion, clase = '') {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = texto;
+    button.dataset.accion = accion;
+    if (clase) button.className = clase;
+    return button;
 }
 
 function renderUsuariosRegistrados() {
     const tbody = document.getElementById('tabla-usuarios-registrados-body');
-    tbody.textContent = '';
+    tbody.replaceChildren();
+
+    if (!usuariosRegistrados.length) {
+        const row = document.createElement('tr');
+        const emptyCell = crearCelda('Aún no hay usuarios registrados.');
+        emptyCell.colSpan = 3;
+        row.appendChild(emptyCell);
+        tbody.appendChild(row);
+        return;
+    }
+
     usuariosRegistrados.forEach((usuario) => {
         const row = document.createElement('tr');
-        const userCell = document.createElement('td');
-        const userButton = document.createElement('button');
-        userButton.type = 'button';
-        userButton.className = 'btn-texto';
-        userButton.textContent = usuario.usuario;
-        userButton.addEventListener('click', () => abrirModalEditarUsuario(usuario.id));
-        userCell.appendChild(userButton);
+        row.dataset.usuarioId = usuario.id;
+        row.append(
+            crearCelda(usuario.usuario),
+            crearCelda(obtenerNombreAsignacion(usuario.permisos))
+        );
 
-        const passwordCell = document.createElement('td');
-        const passwordInput = document.createElement('input');
-        passwordInput.type = 'password';
-        passwordInput.className = 'form-control-table';
-        passwordInput.value = '********';
-        passwordInput.disabled = true;
-        passwordCell.appendChild(passwordInput);
-        row.append(userCell, passwordCell);
+        const actionCell = document.createElement('td');
+        if (usuarioEnEdicion === usuario.id) {
+            const passwordInput = document.createElement('input');
+            passwordInput.type = 'password';
+            passwordInput.className = 'form-control';
+            passwordInput.autocomplete = 'new-password';
+            passwordInput.placeholder = 'Nueva contraseña';
+            passwordInput.required = true;
+            passwordInput.dataset.field = 'new-password';
+            passwordInput.setAttribute('aria-label', `Nueva contraseña para ${usuario.usuario}`);
+
+            const saveButton = crearBotonAcceso('Guardar', 'save-password');
+            const cancelButton = crearBotonAcceso('Cancelar', 'cancel-edit', 'cancel-edit');
+            actionCell.append(passwordInput, saveButton, cancelButton);
+        } else {
+            actionCell.appendChild(crearBotonAcceso('Editar', 'edit-password'));
+        }
+        row.appendChild(actionCell);
         tbody.appendChild(row);
     });
 }
@@ -57,114 +79,82 @@ function cargarUsuariosRegistrados() {
     renderUsuariosRegistrados();
 }
 
-function guardarNuevoUsuario(form) {
+function guardarNuevoUsuario(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const feedbackId = 'access-create-feedback';
     const payload = {
         usuario: document.getElementById('acceso-usuario').value.trim(),
         password: document.getElementById('acceso-password').value.trim(),
-        permisos: obtenerPermisos('permisos'),
-        nombre_notificacion: document.getElementById('notif-nombre').value.trim(),
-        telefono_notificacion: document.getElementById('notif-telefono').value.trim(),
+        permisos: [document.getElementById('acceso-asignacion').value],
     };
 
     try {
         window.AccessControlUsers.create(payload);
         form.reset();
-        toggleCamposAdicionales();
         cargarUsuariosRegistrados();
-        cambiarPestanaAcceso('registrados');
+        mostrarMensajeAcceso(feedbackId, 'El acceso se guardó correctamente.', 'success');
+        mostrarMensajeAcceso('access-users-feedback', '');
     } catch (error) {
-        alert(error.message);
+        mostrarMensajeAcceso(feedbackId, error.message, 'error');
     }
 }
 
-function establecerModoEdicion(activo) {
-    edicionUsuarioActiva = activo;
-    document.querySelectorAll('#modal-editar-usuario input, #modal-editar-usuario select').forEach((input) => {
-        input.disabled = !activo;
-    });
-    document.getElementById('edit-password').required = activo;
-    document.getElementById('btn-editar-usuario').style.display = activo ? 'none' : 'inline-block';
-    document.getElementById('btn-guardar-usuario').style.display = activo ? 'inline-block' : 'none';
-}
-
-function abrirModalEditarUsuario(usuarioId) {
-    usuarioSeleccionado = usuariosRegistrados.find((usuario) => usuario.id === usuarioId) || null;
-    if (!usuarioSeleccionado) return;
-
-    document.getElementById('edit-usuario').value = usuarioSeleccionado.usuario;
-    document.getElementById('edit-password').value = usuarioSeleccionado.password;
-    document.getElementById('edit-nombre').value = usuarioSeleccionado.nombre_notificacion || '';
-    document.getElementById('edit-telefono').value = usuarioSeleccionado.telefono_notificacion || '';
-    document.querySelectorAll('input[name="edit-permisos"]').forEach((input) => {
-        input.checked = usuarioSeleccionado.permisos.includes(input.value);
-    });
-    toggleCamposEdicion();
-    establecerModoEdicion(false);
-    document.getElementById('modal-editar-usuario').style.display = 'flex';
-}
-
-function habilitarEdicionUsuario() {
-    establecerModoEdicion(true);
-}
-
-function cerrarModalEditarUsuario() {
-    document.getElementById('modal-editar-usuario').style.display = 'none';
-    usuarioSeleccionado = null;
-    edicionUsuarioActiva = false;
-}
-
-function actualizarUsuarioRegistrado() {
-    if (!usuarioSeleccionado || !edicionUsuarioActiva) return;
-    const payload = {
-        usuario: document.getElementById('edit-usuario').value.trim(),
-        password: document.getElementById('edit-password').value.trim(),
-        permisos: obtenerPermisos('edit-permisos'),
-        nombre_notificacion: document.getElementById('edit-nombre').value.trim(),
-        telefono_notificacion: document.getElementById('edit-telefono').value.trim(),
-    };
+function guardarNuevaContrasena(row) {
+    const usuarioId = row.dataset.usuarioId;
+    const usuario = usuariosRegistrados.find((item) => item.id === usuarioId);
+    const password = row.querySelector('[data-field="new-password"]').value.trim();
+    if (!usuario || !password) {
+        mostrarMensajeAcceso('access-users-feedback', 'Escribe una nueva contraseña.', 'error');
+        return;
+    }
 
     try {
-        window.AccessControlUsers.update(usuarioSeleccionado.id, payload);
+        window.AccessControlUsers.update(usuario.id, {
+            usuario: usuario.usuario,
+            password,
+            permisos: usuario.permisos,
+            nombre_notificacion: usuario.nombre_notificacion,
+            telefono_notificacion: usuario.telefono_notificacion,
+        });
+        usuarioEnEdicion = null;
         cargarUsuariosRegistrados();
-        cerrarModalEditarUsuario();
+        mostrarMensajeAcceso('access-users-feedback', 'La contraseña se actualizó correctamente.', 'success');
+        mostrarMensajeAcceso('access-create-feedback', '');
     } catch (error) {
-        alert(error.message);
-    }
-}
-
-function eliminarUsuarioRegistrado() {
-    if (!usuarioSeleccionado || !confirm('¿Está seguro de eliminar este usuario?')) return;
-    try {
-        window.AccessControlUsers.remove(usuarioSeleccionado.id);
-        cargarUsuariosRegistrados();
-        cerrarModalEditarUsuario();
-    } catch (error) {
-        alert(error.message);
-    }
-}
-
-function togglePasswordVisibility(iconElement) {
-    const passwordInput = iconElement.previousElementSibling;
-    if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        iconElement.classList.remove('fa-eye-slash');
-        iconElement.classList.add('fa-eye');
-    } else {
-        passwordInput.type = 'password';
-        iconElement.classList.remove('fa-eye');
-        iconElement.classList.add('fa-eye-slash');
+        mostrarMensajeAcceso('access-users-feedback', error.message, 'error');
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('btn-control-accesos').addEventListener('click', () => {
-        document.getElementById('modal-control-accesos').style.display = 'flex';
-    });
+    const form = document.getElementById('form-nuevo-acceso');
+    const tbody = document.getElementById('tabla-usuarios-registrados-body');
 
-    document.querySelectorAll('.close-modal-access').forEach((button) => {
-        button.addEventListener('click', () => {
-            button.closest('.control-access-overlay').style.display = 'none';
-        });
+    form.addEventListener('submit', guardarNuevoUsuario);
+    tbody.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-accion]');
+        if (!button) return;
+
+        const row = button.closest('tr[data-usuario-id]');
+        if (!row) return;
+
+        switch (button.dataset.accion) {
+            case 'edit-password':
+                usuarioEnEdicion = row.dataset.usuarioId;
+                mostrarMensajeAcceso('access-users-feedback', '');
+                renderUsuariosRegistrados();
+                tbody.querySelector('[data-field="new-password"]').focus();
+                break;
+            case 'cancel-edit':
+                usuarioEnEdicion = null;
+                renderUsuariosRegistrados();
+                break;
+            case 'save-password':
+                guardarNuevaContrasena(row);
+                break;
+            default:
+                break;
+        }
     });
 
     cargarUsuariosRegistrados();
