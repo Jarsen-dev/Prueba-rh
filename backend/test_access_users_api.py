@@ -15,16 +15,22 @@ class AccessUserPermissionsTests(unittest.TestCase):
     def test_removed_attendance_permission_is_not_accepted(self):
         self.assertEqual(
             utily.normalizar_permisos(['recursos_humanos', 'control_asistencias', 'notificaciones']),
-            ['recursos_humanos', 'notificaciones'],
+            ['admin', 'notificaciones'],
         )
 
-    def test_legacy_attendance_permission_is_not_returned_to_clients(self):
+    def test_legacy_permissions_are_mapped_to_admin_for_clients(self):
         usuario = utily.usuario_acceso_dict(
             (7, 'usuario', 'hash', ['recursos_humanos', 'control_asistencias'], 'Almacen', '5551234')
         )
 
-        self.assertEqual(usuario['permisos'], ['recursos_humanos'])
+        self.assertEqual(usuario['permisos'], ['admin'])
         self.assertNotIn('area_responsable', usuario)
+
+    def test_admin_permission_is_accepted_without_duplicates(self):
+        self.assertEqual(
+            utily.normalizar_permisos(['admin', 'recursos_humanos', 'reclutamiento']),
+            ['admin', 'reclutamiento'],
+        )
 
     def test_create_rejects_only_the_removed_permission(self):
         client = utily.app.test_client()

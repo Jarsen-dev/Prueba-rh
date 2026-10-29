@@ -22,8 +22,10 @@
     }
 
     function normalizePermissions(permissions) {
-        const allowed = ['recursos_humanos', 'reclutamiento', 'notificaciones'];
-        return Array.isArray(permissions) ? permissions.filter((permission) => allowed.includes(permission)) : [];
+        const allowed = new Set(['admin', 'reclutamiento', 'notificaciones']);
+        if (!Array.isArray(permissions)) return [];
+        return [...new Set(permissions.map((permission) => permission === 'recursos_humanos' ? 'admin' : permission)
+            .filter((permission) => allowed.has(permission)))];
     }
 
     function normalizeUser(data, existing = {}) {
@@ -86,10 +88,10 @@
     };
 
     const requiredPermissions = {
-        'iniciorh.html': 'recursos_humanos',
-        'Ingreso.html': 'recursos_humanos',
-        'Cheong Woon.html': 'recursos_humanos',
-        'Kronos.html': 'recursos_humanos',
+        'iniciorh.html': 'admin',
+        'Ingreso.html': 'admin',
+        'Cheong Woon.html': 'admin',
+        'Kronos.html': 'admin',
         'InicioReclu.html': 'reclutamiento',
     };
 
@@ -99,8 +101,11 @@
 
     try {
         const accessUser = JSON.parse(sessionStorage.getItem('accesoUsuario') || '{}');
-        const permissions = Array.isArray(accessUser.permisos) ? accessUser.permisos : [];
-        if (!permissions.includes(requiredPermission)) {
+        const permissions = normalizePermissions(accessUser.permisos);
+        const hasPermission = requiredPermission === 'reclutamiento'
+            ? permissions.includes('admin') || permissions.includes('reclutamiento')
+            : permissions.includes(requiredPermission);
+        if (!hasPermission) {
             window.location.replace('portalrh.html');
         }
     } catch (_) {

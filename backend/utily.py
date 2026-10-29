@@ -620,10 +620,11 @@ def asegurar_tabla_usuarios_acceso(cur):
 
 
 def normalizar_permisos(permisos):
-    permitidos = {'recursos_humanos', 'reclutamiento', 'notificaciones'}
+    permitidos = {'admin', 'reclutamiento', 'notificaciones'}
     if not isinstance(permisos, list):
         return []
-    return [permiso for permiso in permisos if permiso in permitidos]
+    permisos_normalizados = ['admin' if permiso == 'recursos_humanos' else permiso for permiso in permisos]
+    return list(dict.fromkeys(permiso for permiso in permisos_normalizados if permiso in permitidos))
 
 
 def usuario_acceso_dict(row):
