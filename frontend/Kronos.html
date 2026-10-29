@@ -126,9 +126,7 @@
             <details class="acciones-menu" id="menu-formatos-automatizados">
                 <summary>Formatos Automatizados</summary>
                 <div class="acciones-dropdown">
-                    <button type="button" data-formato="gafete">Gafete</button>
                     <button type="button" data-formato="cartacom">Carta Compromiso</button>
-                    <button type="button" data-formato="cartaimss">Carta Patronal IMSS</button>
                     <button type="button" data-formato="contrato">Contrato Laboral</button>
                 </div>
             </details>
@@ -186,9 +184,7 @@
         const seleccionFormatos = document.getElementById('seleccion-formatos');
         const seleccionContador = document.getElementById('seleccion-contador');
         const nombresFormatos = {
-            gafete: 'Gafete',
             cartacom: 'Carta Compromiso',
-            cartaimss: 'Carta Patronal IMSS',
             contrato: 'Contrato Laboral',
         };
         let empleadosCache = [];
@@ -417,21 +413,6 @@
             }
 
             try {
-                if (selectedFormat === 'gafete') {
-                    const datosParaGafetes = await Promise.all(seleccionados.map(async (emp) => {
-                        const { respuesta, texto } = await getConFallback(`/obtener-empleado/${encodeURIComponent(emp.registro_id)}`);
-                        if (!respuesta.ok) {
-                            throw new Error(`No se pudo cargar el empleado ${emp.no_empleado || emp.registro_id}: ${texto || respuesta.status}`);
-                        }
-                        return { ...emp, ...JSON.parse(texto || '{}') };
-                    }));
-                    const returnUrl = 'Kronos.html';
-                    localStorage.setItem('gafeteBatchData', JSON.stringify(datosParaGafetes));
-                    localStorage.setItem('gafeteReturnUrl', returnUrl);
-                    window.location.href = 'maingafette.html?batch=1&return_url=Kronos.html';
-                    return;
-                }
-
                 const params = new URLSearchParams({
                     tipo: selectedFormat,
                     ids: seleccionados.map((emp) => emp.registro_id).join(','),
