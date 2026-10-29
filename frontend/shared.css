@@ -149,3 +149,7 @@ header {
 .recruitment-limited .nav-links a[href="Ingreso.html"] {
     display: none !important;
 }
+
+.recruitment-limited .nav-links a[href="InicioReclu.html"] {
+    order: -1;
+}
