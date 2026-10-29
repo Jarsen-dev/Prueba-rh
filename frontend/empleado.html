@@ -20,6 +20,7 @@
         })();
     </script>
     <title>Expediente Digital</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
             --amarillo: #f8fb30;
@@ -34,6 +35,21 @@
         }
 
         * { box-sizing: border-box; }
+        .chatbot-password-field { position: relative; margin-top: 6px; }
+        .chatbot-password-field input { width: 100%; padding-right: 42px; }
+        .chatbot-password-toggle {
+            position: absolute;
+            top: 50%;
+            right: 12px;
+            transform: translateY(-50%);
+            padding: 4px;
+            border: 0;
+            background: transparent;
+            color: #9ca3af;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .chatbot-password-toggle:disabled { cursor: default; opacity: 0.5; }
         .recruitment-limited #btn-eliminar-empleado,
         .recruitment-limited .tab-btn[data-tab="informacion"],
         .recruitment-limited .tab-btn[data-tab="asistencia"],
@@ -1260,8 +1276,12 @@
                     <input id="foto-input" class="file-input" type="file" accept="image/*" />
                     <div class="chatbot-password-actions" style="width:100%; max-width:300px; margin:16px auto 0; text-align:left;">
                         <label class="muted" for="contrasena-chatbot">Contraseña del chatbot</label>
-                        <input id="contrasena-chatbot" class="editable-control" type="password" readonly autocomplete="off" style="width:100%; margin-top:6px;" />
-                        <button id="btn-ver-contrasena-chatbot" class="secondary-btn" type="button" style="margin-top:8px;">Mostrar contraseña</button>
+                        <div class="chatbot-password-field">
+                            <input id="contrasena-chatbot" class="editable-control" type="password" readonly autocomplete="off" />
+                            <button id="btn-ver-contrasena-chatbot" class="chatbot-password-toggle" type="button" aria-label="Mostrar contraseña" title="Mostrar contraseña" disabled>
+                                <i class="far fa-eye-slash" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div id="photo-upload-status" style="width:100%; max-width:300px; margin:10px auto 0; min-height:20px; text-align:center; font-size:0.9rem; color:var(--grisc);"></div>
@@ -1695,6 +1715,7 @@
         const fechaIngresoEl = document.getElementById('fecha-ingreso');
         const contrasenaChatbotEl = document.getElementById('contrasena-chatbot');
         const btnVerContrasenaChatbot = document.getElementById('btn-ver-contrasena-chatbot');
+        const iconoContrasenaChatbot = btnVerContrasenaChatbot.querySelector('i');
         const photoUploadStatus = document.getElementById('photo-upload-status');
         const DEFAULT_NEW_EMPLOYEE_PHOTO = 'https://lh3.googleusercontent.com/d/1RT7QfchCrWT7c2djbse7tuayVQNbRCHn=w400';
 
@@ -1734,7 +1755,10 @@
             btnVerContrasenaChatbot.addEventListener('click', () => {
                 const mostrar = contrasenaChatbotEl.type === 'password';
                 contrasenaChatbotEl.type = mostrar ? 'text' : 'password';
-                btnVerContrasenaChatbot.textContent = mostrar ? 'Ocultar contraseña' : 'Mostrar contraseña';
+                btnVerContrasenaChatbot.setAttribute('aria-label', mostrar ? 'Ocultar contraseña' : 'Mostrar contraseña');
+                btnVerContrasenaChatbot.title = mostrar ? 'Ocultar contraseña' : 'Mostrar contraseña';
+                iconoContrasenaChatbot.classList.toggle('fa-eye', mostrar);
+                iconoContrasenaChatbot.classList.toggle('fa-eye-slash', !mostrar);
             });
         }
 
