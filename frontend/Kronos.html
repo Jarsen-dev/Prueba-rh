@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="access-control.js?v=admin-permissions-2"></script>
+    <script src="access-control.js?v=recruitment-docs"></script>
     <link rel="stylesheet" href="shared.css">
     <title>Listado de Personal: Kronos</title>
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js'></script>
     <style>
+        .recruitment-limited .admin-only { display: none !important; }
+
 /* FILTROS*/
         .filtros-container {
             display: grid;
@@ -126,11 +128,11 @@
             <details class="acciones-menu" id="menu-formatos-automatizados">
                 <summary>Formatos Automatizados</summary>
                 <div class="acciones-dropdown">
-                    <button type="button" data-formato="cartacom">Carta Compromiso</button>
+                    <button type="button" class="admin-only" data-formato="cartacom">Carta Compromiso</button>
                     <button type="button" data-formato="contrato">Contrato Laboral</button>
                 </div>
             </details>
-            <details class="acciones-menu">
+            <details class="acciones-menu admin-only">
                 <summary>Formatos para Imprimir</summary>
                 <div class="acciones-dropdown">
                     <a href="https://drive.google.com/file/d/1IMw93o8y56e423HZoKVJNnE5z5b26e5A/view?usp=sharing" target="_blank" rel="noopener noreferrer">Suspensión</a>
@@ -138,7 +140,7 @@
                     <a href="https://drive.google.com/file/d/1gWuv28J-7WjbfsaOdUMSIb0Mbb6KHRqO/view?usp=sharing" target="_blank" rel="noopener noreferrer">Indisciplina</a>
                 </div>
             </details>
-            <button id="btn-descargar-excel" type="button" class="accion-principal">Listado General</button>
+            <button id="btn-descargar-excel" type="button" class="accion-principal admin-only">Listado General</button>
             <div id="seleccion-formatos" class="seleccion-formatos">
                 <span id="seleccion-contador" class="seleccion-contador">Selecciona un documento automatizado</span>
                 <button id="btn-generar-formato" type="button" class="accion-principal">Generar formato</button>
@@ -181,6 +183,12 @@
         const fechaHastaInput = document.getElementById('filtro-fecha-hasta');
         const btnLimpiarFiltros = document.getElementById('btn-limpiar-filtros');
         const btnDescargarExcel = document.getElementById('btn-descargar-excel');
+        const accessUser = JSON.parse(sessionStorage.getItem('accesoUsuario') || '{}');
+        const accessPermissions = Array.isArray(accessUser.permisos)
+            ? accessUser.permisos.map((permission) => String(permission).trim().toLowerCase())
+            : [];
+        const isRecruitmentLimited = accessPermissions.includes('reclutamiento') && !accessPermissions.includes('admin');
+        document.body.classList.toggle('recruitment-limited', isRecruitmentLimited);
         const seleccionFormatos = document.getElementById('seleccion-formatos');
         const seleccionContador = document.getElementById('seleccion-contador');
         const nombresFormatos = {
@@ -281,6 +289,7 @@
         }
 
         function iniciarSeleccionFormato(formato) {
+            if (isRecruitmentLimited && formato === 'cartacom') return;
             selectedFormat = formato;
             selectedRegistroIds.clear();
             document.getElementById('menu-formatos-automatizados').open = false;
@@ -333,6 +342,7 @@
         }
 
         async function descargarExcelEmpleados(empresa) {
+            if (isRecruitmentLimited) return;
             for (const baseUrl of API_BASES) {
                 try {
                     const respuesta = await fetch(`${baseUrl}/api/exportar-empleados/${encodeURIComponent(empresa)}?todos=1`);
@@ -382,6 +392,9 @@
             const estatus = displayEmp.estatus;
             const color = estatus === 'ACTIVO' ? '#28a745' : '#dc3545';
             const linkEmpleado = `empleado.html?registro_id=${encodeURIComponent(displayEmp.registro_id || '')}&nombre=${encodeURIComponent(displayEmp.nombre || '')}`;
+            const estatusHtml = isRecruitmentLimited
+                ? `<span style="display:inline-block;background:${color};color:white;padding:5px 10px;border-radius:4px;">${estatus}</span>`
+                : `<button class="btn-estatus" data-registro-id="${String(displayEmp.registro_id || '').replace(/"/g, '&quot;')}" data-curp="${String(displayEmp.curp || '').replace(/"/g, '&quot;')}" data-nombre="${(displayEmp.nombre || '').replace(/"/g, '&quot;')}" style="background: ${color}; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; opacity: 1;">${estatus}</button>`;
             return `
                 <tr>
                     <td class="seleccion-column" style="padding: 12px; text-align: center;"><input class="seleccion-empleado" type="checkbox" value="${String(displayEmp.registro_id || '')}" ${displayEmp.registro_id ? '' : 'disabled'} /></td>
@@ -391,9 +404,7 @@
                     <td style="padding: 12px; text-align: center;">${formatearFechaIngreso(displayEmp.fecha_ingreso)}</td>
                     <td style="padding: 12px; text-align: center;">${displayEmp.area || ''}</td>
                     <td style="padding: 12px; text-align: center;">${displayEmp.turno || ''}</td>
-                    <td style="padding: 12px; text-align: center;">
-                        <button class="btn-estatus" data-registro-id="${String(displayEmp.registro_id || '').replace(/"/g, '&quot;')}" data-curp="${String(displayEmp.curp || '').replace(/"/g, '&quot;')}" data-nombre="${(displayEmp.nombre || '').replace(/"/g, '&quot;')}" style="background: ${color}; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; opacity: 1;">${estatus}</button>
-                    </td>
+                    <td style="padding: 12px; text-align: center;">${estatusHtml}</td>
                 </tr>
             `;
         }
@@ -406,6 +417,7 @@
         }
 
         async function generarFormatoSeleccionado() {
+            if (isRecruitmentLimited && selectedFormat === 'cartacom') return;
             const seleccionados = getSeleccionadosParaFormato();
             if (!seleccionados.length) {
                 alert('Selecciona al menos un empleado para generar el formato.');
@@ -463,6 +475,7 @@
         }
 
         async function toggleEstatus(btn) {
+            if (isRecruitmentLimited) return;
             const current = (btn.innerText || '').trim().toUpperCase();
             const nuevo = current === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
             const identidad = {
@@ -515,7 +528,9 @@
         }
 
         if (btnDescargarExcel) {
-            btnDescargarExcel.addEventListener('click', () => descargarExcelEmpleados('KRONOS'));
+            btnDescargarExcel.addEventListener('click', () => {
+                if (!isRecruitmentLimited) descargarExcelEmpleados('KRONOS');
+            });
         }
 
         document.querySelectorAll('[data-formato]').forEach((button) => {

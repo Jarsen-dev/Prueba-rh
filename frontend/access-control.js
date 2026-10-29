@@ -93,9 +93,10 @@
     const pagePermissions = {
         'iniciorh.html': ['admin', 'reclutamiento'],
         'Ingreso.html': ['admin'],
-        'Cheong Woon.html': ['admin'],
-        'Kronos.html': ['admin'],
+        'Cheong Woon.html': ['admin', 'reclutamiento'],
+        'Kronos.html': ['admin', 'reclutamiento'],
         'InicioReclu.html': ['admin', 'reclutamiento'],
+        'empleado.html': ['admin', 'reclutamiento'],
     };
 
     const pageName = window.location.pathname.split('/').pop() || '';
