@@ -91,7 +91,7 @@
     };
 
     const pagePermissions = {
-        'iniciorh.html': ['admin', 'reclutamiento'],
+        'iniciorh.html': ['admin'],
         'Ingreso.html': ['admin'],
         'Cheong Woon.html': ['admin', 'reclutamiento'],
         'Kronos.html': ['admin', 'reclutamiento'],
@@ -121,6 +121,23 @@
         const hasPermission = permissions.some((permission) => allowedPermissions.includes(permission));
         if (!hasPermission) {
             window.location.replace('portalrh.html');
+            return;
+        }
+
+        const filterNavigation = () => {
+            document.querySelectorAll('.nav-links a[href]').forEach((link) => {
+                const target = new URL(link.href, window.location.href);
+                const targetPage = decodeURIComponent(target.pathname.split('/').pop() || '');
+                const targetPermissions = pagePermissions[targetPage];
+                if (targetPermissions && !permissions.some((permission) => targetPermissions.includes(permission))) {
+                    link.style.display = 'none';
+                }
+            });
+        };
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', filterNavigation, { once: true });
+        } else {
+            filterNavigation();
         }
     } catch (_) {
         window.location.replace('portalrh.html');
