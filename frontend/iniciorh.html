@@ -310,9 +310,9 @@
         .control-access-modal .permiso-item label { color: #fff; font-size: 0.9rem; cursor: pointer; margin-bottom: 0; }
         .control-access-modal .notif-campos-extra { display: none; background: #141414; border: 1px solid #007bff; border-radius: 8px; padding: 15px; margin-top: 15px; }
         .control-access-modal .table-responsive { width: 100%; overflow-x: auto; margin: 15px 0; }
-        .control-access-modal .asistencia-status-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
-        .control-access-modal .asistencia-status-table th { color: #aaa; border-bottom: 1px solid #333; padding: 0 20px 14px; font-weight: 600; }
-        .control-access-modal .asistencia-status-table td { padding: 16px 20px; border-bottom: 1px solid #252525; color: #fff; }
+        .control-access-modal .access-users-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
+        .control-access-modal .access-users-table th { color: #aaa; border-bottom: 1px solid #333; padding: 0 20px 14px; font-weight: 600; }
+        .control-access-modal .access-users-table td { padding: 16px 20px; border-bottom: 1px solid #252525; color: #fff; }
         .control-access-modal .form-control-table { width: 100%; box-sizing: border-box; background: #141414; border: 1px solid #444; color: #fff; padding: 8px 12px; border-radius: 4px; font-size: 0.9rem; }
         .control-access-modal .form-control-table:disabled { background: transparent; border-color: transparent; color: #fff; }
         .control-access-modal .btn-texto { background: transparent; border: none; color: #007bff; font-weight: bold; cursor: pointer; font-size: 0.9rem; padding: 0; text-align: left; }
@@ -345,7 +345,6 @@
             <a href="Ingreso.html">Ingresos</a>
             <a href="Cheong Woon.html">Cheong Woon</a>
             <a href="Kronos.html">Kronos</a>
-            <a href="asistencia.html">Asistencia</a>
         </nav>
         <div class="header-right">
             <a href="portalrh.html" class="btn-logout">Cerrar Sesión</a>
@@ -437,7 +436,6 @@
                         <div class="permisos-grid">
                             <div class="permiso-item"><input type="checkbox" id="chk-rrhh" name="permisos" value="recursos_humanos"><label for="chk-rrhh">Recursos Humanos</label></div>
                             <div class="permiso-item"><input type="checkbox" id="chk-reclutamiento" name="permisos" value="reclutamiento"><label for="chk-reclutamiento">Reclutamiento</label></div>
-                            <div class="permiso-item"><input type="checkbox" id="chk-asistencias" name="permisos" value="control_asistencias" onchange="toggleCamposAdicionales()"><label for="chk-asistencias">Control de Asistencias</label></div>
                             <div class="permiso-item"><input type="checkbox" id="chk-notificaciones" name="permisos" value="notificaciones" onchange="toggleCamposAdicionales()"><label for="chk-notificaciones">Notificaciones</label></div>
                         </div>
                         <div id="seccion-campos-notificacion" class="notif-campos-extra">
@@ -452,21 +450,6 @@
                                 </div>
                             </div>
                         </div>
-                        <div id="seccion-area-responsable" class="notif-campos-extra">
-                            <div class="form-group" style="margin-bottom: 0;">
-                                <label for="area-responsable">Área Responsable:</label>
-                                <select id="area-responsable" class="form-control">
-                                    <option value="">Selecciona un área</option>
-                                    <option value="Almacen">Almacen</option>
-                                    <option value="EPS">EPS</option>
-                                    <option value="Ensamble">Ensamble</option>
-                                    <option value="Calidad">Calidad</option>
-                                    <option value="Compras">Compras</option>
-                                    <option value="Embarques">Embarques</option>
-                                    <option value="Corte">Corte</option>
-                                </select>
-                            </div>
-                        </div>
                     </div>
                     <div style="text-align: right; margin-top: 20px;">
                         <button type="submit" class="btn btn-success">Guardar Acceso</button>
@@ -475,7 +458,7 @@
             </div>
             <div id="tab-usuarios-registrados" class="access-tab-content">
                 <div class="table-responsive">
-                    <table class="asistencia-status-table">
+                    <table class="access-users-table">
                         <thead><tr><th>Usuario</th><th>Contraseña</th></tr></thead>
                         <tbody id="tabla-usuarios-registrados-body"></tbody>
                     </table>
@@ -514,25 +497,11 @@
                         </div>
                     </div>
                 </div>
-                <div id="edit-grupo-area" style="display: none; background: #141414; border: 1px dashed #007bff; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
-                    <label style="color: #007bff; font-weight: bold; font-size: 0.9rem; display: block; margin-bottom: 10px;">Área Responsable</label>
-                    <select id="edit-area-responsable" class="form-control">
-                        <option value="">Selecciona un área</option>
-                        <option value="Almacen">Almacen</option>
-                        <option value="EPS">EPS</option>
-                        <option value="Ensamble">Ensamble</option>
-                        <option value="Calidad">Calidad</option>
-                        <option value="Compras">Compras</option>
-                        <option value="Embarques">Embarques</option>
-                        <option value="Corte">Corte</option>
-                    </select>
-                </div>
                 <div class="permisos-recuadro" style="margin-top: 0;">
                     <label style="font-weight: bold; color: #fff; font-size: 0.95rem; display: block; margin-bottom: 5px;">Permisos de Páginas:</label>
                     <div class="permisos-grid">
                         <div class="permiso-item"><input type="checkbox" id="edit-chk-rrhh" name="edit-permisos" value="recursos_humanos"><label for="edit-chk-rrhh">Recursos Humanos</label></div>
                         <div class="permiso-item"><input type="checkbox" id="edit-chk-reclutamiento" name="edit-permisos" value="reclutamiento"><label for="edit-chk-reclutamiento">Reclutamiento</label></div>
-                        <div class="permiso-item"><input type="checkbox" id="edit-chk-asistencias" name="edit-permisos" value="control_asistencias" onchange="toggleCamposEdicion()"><label for="edit-chk-asistencias">Control de Asistencias</label></div>
                         <div class="permiso-item"><input type="checkbox" id="edit-chk-notificaciones" name="edit-permisos" value="notificaciones" onchange="toggleCamposEdicion()"><label for="edit-chk-notificaciones">Notificaciones</label></div>
                     </div>
                 </div>

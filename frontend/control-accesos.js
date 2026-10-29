@@ -17,17 +17,14 @@ function obtenerPermisos(nombre) {
     return Array.from(document.querySelectorAll(`input[name="${nombre}"]:checked`)).map((input) => input.value);
 }
 
-function toggleCamposAdicionales() {
-    const tieneNotificaciones = document.getElementById('chk-notificaciones').checked;
-    const tieneAsistencias = document.getElementById('chk-asistencias').checked;
-    document.getElementById('seccion-campos-notificacion').style.display = tieneNotificaciones ? 'block' : 'none';
-    document.getElementById('seccion-area-responsable').style.display = tieneAsistencias ? 'block' : 'none';
-}
-
 function toggleCamposEdicion() {
     const permisos = obtenerPermisos('edit-permisos');
     document.getElementById('edit-grupo-notif').style.display = permisos.includes('notificaciones') ? 'block' : 'none';
-    document.getElementById('edit-grupo-area').style.display = permisos.includes('control_asistencias') ? 'block' : 'none';
+}
+
+function toggleCamposAdicionales() {
+    const tieneNotificaciones = document.getElementById('chk-notificaciones').checked;
+    document.getElementById('seccion-campos-notificacion').style.display = tieneNotificaciones ? 'block' : 'none';
 }
 
 function renderUsuariosRegistrados() {
@@ -65,7 +62,6 @@ function guardarNuevoUsuario(form) {
         usuario: document.getElementById('acceso-usuario').value.trim(),
         password: document.getElementById('acceso-password').value.trim(),
         permisos: obtenerPermisos('permisos'),
-        area_responsable: document.getElementById('area-responsable').value,
         nombre_notificacion: document.getElementById('notif-nombre').value.trim(),
         telefono_notificacion: document.getElementById('notif-telefono').value.trim(),
     };
@@ -99,7 +95,6 @@ function abrirModalEditarUsuario(usuarioId) {
     document.getElementById('edit-password').value = usuarioSeleccionado.password;
     document.getElementById('edit-nombre').value = usuarioSeleccionado.nombre_notificacion || '';
     document.getElementById('edit-telefono').value = usuarioSeleccionado.telefono_notificacion || '';
-    document.getElementById('edit-area-responsable').value = usuarioSeleccionado.area_responsable || '';
     document.querySelectorAll('input[name="edit-permisos"]').forEach((input) => {
         input.checked = usuarioSeleccionado.permisos.includes(input.value);
     });
@@ -124,7 +119,6 @@ function actualizarUsuarioRegistrado() {
         usuario: document.getElementById('edit-usuario').value.trim(),
         password: document.getElementById('edit-password').value.trim(),
         permisos: obtenerPermisos('edit-permisos'),
-        area_responsable: document.getElementById('edit-area-responsable').value,
         nombre_notificacion: document.getElementById('edit-nombre').value.trim(),
         telefono_notificacion: document.getElementById('edit-telefono').value.trim(),
     };

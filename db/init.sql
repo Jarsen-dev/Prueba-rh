@@ -95,7 +95,6 @@ CREATE TABLE IF NOT EXISTS usuarios_acceso (
     usuario                 VARCHAR(100) NOT NULL UNIQUE,
     password_hash           TEXT NOT NULL,
     permisos                JSONB NOT NULL DEFAULT '[]'::jsonb,
-    area_responsable        VARCHAR(100),
     nombre_notificacion     VARCHAR(150),
     telefono_notificacion   VARCHAR(30),
     created_at              TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

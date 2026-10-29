@@ -611,7 +611,6 @@ def asegurar_tabla_usuarios_acceso(cur):
             usuario VARCHAR(100) NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
             permisos JSONB NOT NULL DEFAULT '[]'::jsonb,
-            area_responsable VARCHAR(100),
             nombre_notificacion VARCHAR(150),
             telefono_notificacion VARCHAR(30),
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -622,7 +621,7 @@ def asegurar_tabla_usuarios_acceso(cur):
 
 
 def normalizar_permisos(permisos):
-    permitidos = {'recursos_humanos', 'reclutamiento', 'control_asistencias', 'notificaciones'}
+    permitidos = {'recursos_humanos', 'reclutamiento', 'notificaciones'}
     if not isinstance(permisos, list):
         return []
     return [permiso for permiso in permisos if permiso in permitidos]
@@ -633,10 +632,9 @@ def usuario_acceso_dict(row):
     return {
         'id': row[0],
         'usuario': row[1],
-        'permisos': permisos,
-        'area_responsable': row[4] or '',
-        'nombre_notificacion': row[5] or '',
-        'telefono_notificacion': row[6] or '',
+        'permisos': normalizar_permisos(permisos),
+        'nombre_notificacion': row[4] or '',
+        'telefono_notificacion': row[5] or '',
     }
 
 
@@ -648,7 +646,7 @@ def listar_usuarios_acceso():
                 asegurar_tabla_usuarios_acceso(cur)
                 cur.execute(
                     """
-                    SELECT id, usuario, password_hash, permisos, area_responsable,
+                    SELECT id, usuario, password_hash, permisos,
                            nombre_notificacion, telefono_notificacion
                     FROM usuarios_acceso
                     ORDER BY usuario
@@ -671,10 +669,6 @@ def crear_usuario_acceso():
     if not usuario or not password or not permisos:
         return jsonify({'error': 'Usuario, contraseña y al menos un permiso son obligatorios.'}), 400
 
-    area_responsable = str(datos.get('area_responsable', '')).strip() if 'control_asistencias' in permisos else ''
-    if 'control_asistencias' in permisos and not area_responsable:
-        return jsonify({'error': 'El área responsable es obligatoria para Control de Asistencias.'}), 400
-
     nombre_notificacion = str(datos.get('nombre_notificacion', '')).strip() if 'notificaciones' in permisos else ''
     telefono_notificacion = str(datos.get('telefono_notificacion', '')).strip() if 'notificaciones' in permisos else ''
     if 'notificaciones' in permisos and (not nombre_notificacion or not telefono_notificacion):
@@ -687,13 +681,13 @@ def crear_usuario_acceso():
                 cur.execute(
                     """
                     INSERT INTO usuarios_acceso (
-                        usuario, password_hash, permisos, area_responsable,
+                        usuario, password_hash, permisos,
                         nombre_notificacion, telefono_notificacion
-                    ) VALUES (%s, %s, %s::jsonb, %s, %s, %s)
-                    RETURNING id, usuario, password_hash, permisos, area_responsable,
+                    ) VALUES (%s, %s, %s::jsonb, %s, %s)
+                    RETURNING id, usuario, password_hash, permisos,
                               nombre_notificacion, telefono_notificacion
                     """,
-                    (usuario, generate_password_hash(password), json.dumps(permisos), area_responsable,
+                    (usuario, generate_password_hash(password), json.dumps(permisos),
                      nombre_notificacion, telefono_notificacion),
                 )
                 creado = usuario_acceso_dict(cur.fetchone())
@@ -715,10 +709,6 @@ def actualizar_usuario_acceso(usuario_id):
     if not usuario or not permisos:
         return jsonify({'error': 'Usuario y al menos un permiso son obligatorios.'}), 400
 
-    area_responsable = str(datos.get('area_responsable', '')).strip() if 'control_asistencias' in permisos else ''
-    if 'control_asistencias' in permisos and not area_responsable:
-        return jsonify({'error': 'El área responsable es obligatoria para Control de Asistencias.'}), 400
-
     nombre_notificacion = str(datos.get('nombre_notificacion', '')).strip() if 'notificaciones' in permisos else ''
     telefono_notificacion = str(datos.get('telefono_notificacion', '')).strip() if 'notificaciones' in permisos else ''
     if 'notificaciones' in permisos and (not nombre_notificacion or not telefono_notificacion):
@@ -732,24 +722,24 @@ def actualizar_usuario_acceso(usuario_id):
                     cur.execute(
                         """UPDATE usuarios_acceso
                            SET usuario = %s, password_hash = %s, permisos = %s::jsonb,
-                               area_responsable = %s, nombre_notificacion = %s,
+                               nombre_notificacion = %s,
                                telefono_notificacion = %s, updated_at = CURRENT_TIMESTAMP
                            WHERE id = %s
-                           RETURNING id, usuario, password_hash, permisos, area_responsable,
+                           RETURNING id, usuario, password_hash, permisos,
                                      nombre_notificacion, telefono_notificacion""",
-                        (usuario, generate_password_hash(password), json.dumps(permisos), area_responsable,
+                        (usuario, generate_password_hash(password), json.dumps(permisos),
                          nombre_notificacion, telefono_notificacion, usuario_id),
                     )
                 else:
                     cur.execute(
                         """UPDATE usuarios_acceso
-                           SET usuario = %s, permisos = %s::jsonb, area_responsable = %s,
+                          SET usuario = %s, permisos = %s::jsonb,
                                nombre_notificacion = %s, telefono_notificacion = %s,
                                updated_at = CURRENT_TIMESTAMP
                            WHERE id = %s
-                           RETURNING id, usuario, password_hash, permisos, area_responsable,
+                          RETURNING id, usuario, password_hash, permisos,
                                      nombre_notificacion, telefono_notificacion""",
-                        (usuario, json.dumps(permisos), area_responsable, nombre_notificacion,
+                        (usuario, json.dumps(permisos), nombre_notificacion,
                          telefono_notificacion, usuario_id),
                     )
                 actualizado = cur.fetchone()
@@ -793,7 +783,7 @@ def iniciar_sesion_acceso():
             with conn.cursor() as cur:
                 asegurar_tabla_usuarios_acceso(cur)
                 cur.execute(
-                    """SELECT id, usuario, password_hash, permisos, area_responsable,
+                    """SELECT id, usuario, password_hash, permisos,
                               nombre_notificacion, telefono_notificacion
                        FROM usuarios_acceso WHERE usuario = %s LIMIT 1""",
                     (usuario,),

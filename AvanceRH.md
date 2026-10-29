@@ -77,11 +77,6 @@ Identificaciones `maingafette.html`:
 
 ✓ Creación automática de Contratos de Trabajo, Cartas IMSS y Cartas Compromiso tomando los datos guardados del colaborador sin necesidad de llenado manual.
 
-## Control de Asistencia e Incidencias
-Monitoreo `asistencia.html`:
-
-✓ Visualización y consulta de checadas y puntualidad del personal por fecha, área y turno.
-
 ## Kiosco Interactivo y Bot de WhatsApp
 Servidor de WhatsApp `bot.py`:
 
