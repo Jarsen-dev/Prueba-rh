@@ -1,5 +1,6 @@
 let usuariosRegistrados = [];
 let usuarioEnEdicion = null;
+let datosFormularioAntesDeEditar = null;
 
 function mostrarMensajeAcceso(elementId, mensaje, tipo = '') {
     const elemento = document.getElementById(elementId);
@@ -54,18 +55,7 @@ function renderUsuariosRegistrados() {
 
         const actionCell = document.createElement('td');
         if (usuarioEnEdicion === usuario.id) {
-            const passwordInput = document.createElement('input');
-            passwordInput.type = 'password';
-            passwordInput.className = 'form-control';
-            passwordInput.autocomplete = 'new-password';
-            passwordInput.placeholder = 'Nueva contraseña';
-            passwordInput.required = true;
-            passwordInput.dataset.field = 'new-password';
-            passwordInput.setAttribute('aria-label', `Nueva contraseña para ${usuario.usuario}`);
-
-            const saveButton = crearBotonAcceso('Guardar', 'save-password');
-            const cancelButton = crearBotonAcceso('Cancelar', 'cancel-edit', 'cancel-edit');
-            actionCell.append(passwordInput, saveButton, cancelButton);
+            actionCell.appendChild(crearBotonAcceso('Eliminar', 'delete-access', 'delete-access-button'));
         } else {
             actionCell.appendChild(crearBotonAcceso('Editar', 'edit-password'));
         }
@@ -79,18 +69,100 @@ function cargarUsuariosRegistrados() {
     renderUsuariosRegistrados();
 }
 
+function establecerModoEdicion(usuario) {
+    const form = document.getElementById('form-nuevo-acceso');
+    const userInput = document.getElementById('acceso-usuario');
+    const passwordInput = document.getElementById('acceso-password');
+    const permissionSelect = document.getElementById('acceso-asignacion');
+    const isEditing = Boolean(usuario);
+
+    document.getElementById('access-form-title').textContent = isEditing ? 'Cambiar contraseña' : 'Asignar acceso';
+    document.getElementById('acceso-password-label').textContent = isEditing ? 'Nueva contraseña' : 'Contraseña';
+    document.getElementById('access-submit-button').textContent = isEditing ? 'Guardar cambios' : 'Guardar Acceso';
+    document.getElementById('access-cancel-button').hidden = !isEditing;
+    userInput.readOnly = isEditing;
+    permissionSelect.disabled = isEditing;
+    passwordInput.placeholder = isEditing ? 'Escribe la nueva contraseña' : '';
+    passwordInput.value = '';
+    passwordInput.required = true;
+
+    if (usuario) {
+        userInput.value = usuario.usuario;
+        permissionSelect.value = usuario.permisos.find((permiso) => ['admin', 'reclutamiento'].includes(permiso)) || '';
+    } else {
+        userInput.value = datosFormularioAntesDeEditar?.usuario || '';
+        permissionSelect.value = datosFormularioAntesDeEditar?.permiso || '';
+        passwordInput.value = datosFormularioAntesDeEditar?.password || '';
+        passwordInput.required = true;
+        datosFormularioAntesDeEditar = null;
+    }
+}
+
+function iniciarEdicionUsuario(usuarioId) {
+    const usuario = usuariosRegistrados.find((item) => item.id === usuarioId);
+    if (!usuario) {
+        mostrarMensajeAcceso('access-users-feedback', 'No se encontró el usuario seleccionado.', 'error');
+        return;
+    }
+
+    if (!usuarioEnEdicion) {
+        datosFormularioAntesDeEditar = {
+            usuario: document.getElementById('acceso-usuario').value,
+            password: document.getElementById('acceso-password').value,
+            permiso: document.getElementById('acceso-asignacion').value,
+        };
+    }
+
+    usuarioEnEdicion = usuario.id;
+    establecerModoEdicion(usuario);
+    mostrarMensajeAcceso('access-create-feedback', '');
+    mostrarMensajeAcceso('access-users-feedback', '');
+    renderUsuariosRegistrados();
+    document.getElementById('acceso-password').focus();
+    document.getElementById('form-nuevo-acceso').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelarEdicionUsuario() {
+    usuarioEnEdicion = null;
+    establecerModoEdicion(null);
+    renderUsuariosRegistrados();
+    mostrarMensajeAcceso('access-create-feedback', '');
+}
+
 function guardarNuevoUsuario(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const feedbackId = 'access-create-feedback';
-    const payload = {
-        usuario: document.getElementById('acceso-usuario').value.trim(),
-        password: document.getElementById('acceso-password').value.trim(),
-        permisos: [document.getElementById('acceso-asignacion').value],
-    };
+    const password = document.getElementById('acceso-password').value.trim();
+    const permission = document.getElementById('acceso-asignacion').value;
 
     try {
-        window.AccessControlUsers.create(payload);
+        if (usuarioEnEdicion) {
+            const usuario = usuariosRegistrados.find((item) => item.id === usuarioEnEdicion);
+            if (!usuario) throw new Error('No se encontró el usuario seleccionado.');
+            if (!password) throw new Error('Escribe una nueva contraseña.');
+            window.AccessControlUsers.update(usuario.id, {
+                usuario: usuario.usuario,
+                password,
+                permisos: usuario.permisos,
+                nombre_notificacion: usuario.nombre_notificacion,
+                telefono_notificacion: usuario.telefono_notificacion,
+            });
+            usuarioEnEdicion = null;
+            datosFormularioAntesDeEditar = null;
+            form.reset();
+            establecerModoEdicion(null);
+            cargarUsuariosRegistrados();
+            mostrarMensajeAcceso(feedbackId, 'La contraseña se actualizó correctamente.', 'success');
+            mostrarMensajeAcceso('access-users-feedback', '');
+            return;
+        }
+
+        window.AccessControlUsers.create({
+            usuario: document.getElementById('acceso-usuario').value.trim(),
+            password,
+            permisos: [permission],
+        });
         form.reset();
         cargarUsuariosRegistrados();
         mostrarMensajeAcceso(feedbackId, 'El acceso se guardó correctamente.', 'success');
@@ -100,26 +172,20 @@ function guardarNuevoUsuario(event) {
     }
 }
 
-function guardarNuevaContrasena(row) {
-    const usuarioId = row.dataset.usuarioId;
+function eliminarUsuarioAcceso(usuarioId) {
     const usuario = usuariosRegistrados.find((item) => item.id === usuarioId);
-    const password = row.querySelector('[data-field="new-password"]').value.trim();
-    if (!usuario || !password) {
-        mostrarMensajeAcceso('access-users-feedback', 'Escribe una nueva contraseña.', 'error');
-        return;
-    }
+    if (!usuario || !window.confirm(`¿Eliminar el acceso de ${usuario.usuario}?`)) return;
 
     try {
-        window.AccessControlUsers.update(usuario.id, {
-            usuario: usuario.usuario,
-            password,
-            permisos: usuario.permisos,
-            nombre_notificacion: usuario.nombre_notificacion,
-            telefono_notificacion: usuario.telefono_notificacion,
-        });
-        usuarioEnEdicion = null;
+        window.AccessControlUsers.remove(usuario.id);
+        if (usuarioEnEdicion === usuario.id) {
+            usuarioEnEdicion = null;
+            datosFormularioAntesDeEditar = null;
+            document.getElementById('form-nuevo-acceso').reset();
+            establecerModoEdicion(null);
+        }
         cargarUsuariosRegistrados();
-        mostrarMensajeAcceso('access-users-feedback', 'La contraseña se actualizó correctamente.', 'success');
+        mostrarMensajeAcceso('access-users-feedback', 'El acceso se eliminó correctamente.', 'success');
         mostrarMensajeAcceso('access-create-feedback', '');
     } catch (error) {
         mostrarMensajeAcceso('access-users-feedback', error.message, 'error');
@@ -131,6 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tbody = document.getElementById('tabla-usuarios-registrados-body');
 
     form.addEventListener('submit', guardarNuevoUsuario);
+    document.getElementById('access-cancel-button').addEventListener('click', cancelarEdicionUsuario);
     tbody.addEventListener('click', (event) => {
         const button = event.target.closest('button[data-accion]');
         if (!button) return;
@@ -140,17 +207,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         switch (button.dataset.accion) {
             case 'edit-password':
-                usuarioEnEdicion = row.dataset.usuarioId;
-                mostrarMensajeAcceso('access-users-feedback', '');
-                renderUsuariosRegistrados();
-                tbody.querySelector('[data-field="new-password"]').focus();
+                iniciarEdicionUsuario(row.dataset.usuarioId);
                 break;
-            case 'cancel-edit':
-                usuarioEnEdicion = null;
-                renderUsuariosRegistrados();
-                break;
-            case 'save-password':
-                guardarNuevaContrasena(row);
+            case 'delete-access':
+                eliminarUsuarioAcceso(row.dataset.usuarioId);
                 break;
             default:
                 break;
@@ -158,4 +218,5 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     cargarUsuariosRegistrados();
+    establecerModoEdicion(null);
 });

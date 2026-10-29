@@ -261,7 +261,8 @@
             cursor: pointer;
             font-weight: 600;
         }
-        .access-users-table .cancel-edit { margin-left: 6px; background: #444; border-color: #555; }
+        .access-users-table .delete-access-button { background: #a92b36; border-color: #a92b36; }
+        .access-cancel-button { margin-left: 8px; padding: 8px 14px; border: 1px solid #555; border-radius: 6px; background: #444; color: #fff; cursor: pointer; }
         .access-feedback { min-height: 1.2em; margin: 12px 0 0; color: #aaa; }
         .access-feedback.error { color: #ff6b6b; }
         .access-feedback.success { color: #55c878; }
@@ -351,7 +352,7 @@
     </main>
     <section class="access-control-section" aria-label="Control de accesos">
         <div class="access-management-card">
-            <h2>Asignar acceso</h2>
+            <h2 id="access-form-title">Asignar acceso</h2>
             <form id="form-nuevo-acceso">
                 <div class="form-row">
                     <div class="form-group">
@@ -359,7 +360,7 @@
                         <input type="text" id="acceso-usuario" class="form-control" autocomplete="off" required>
                     </div>
                     <div class="form-group">
-                        <label for="acceso-password">Contraseña</label>
+                        <label id="acceso-password-label" for="acceso-password">Contraseña</label>
                         <input type="password" id="acceso-password" class="form-control" autocomplete="new-password" required>
                     </div>
                     <div class="form-group">
@@ -371,7 +372,8 @@
                         </select>
                     </div>
                 </div>
-                <button type="submit" class="access-save-button">Guardar Acceso</button>
+                <button id="access-submit-button" type="submit" class="access-save-button">Guardar Acceso</button>
+                <button id="access-cancel-button" type="button" class="access-cancel-button" hidden>Cancelar</button>
                 <p id="access-create-feedback" class="access-feedback" role="status" aria-live="polite"></p>
             </form>
         </div>
@@ -389,7 +391,7 @@
         </div>
     </section>
     <script src="data-manager.js"></script>
-    <script src="control-accesos.js?v=inline-access-ui"></script>
+    <script src="control-accesos.js?v=access-edit-top-form"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             var calendarEl = document.getElementById('calendar');
