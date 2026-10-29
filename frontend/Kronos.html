@@ -540,6 +540,13 @@
         document.querySelectorAll('[data-formato]').forEach((button) => {
             button.addEventListener('click', () => iniciarSeleccionFormato(button.dataset.formato));
         });
+        if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+            document.querySelectorAll('.acciones-menu').forEach((menu) => {
+                menu.addEventListener('pointerenter', () => { menu.open = true; });
+                menu.addEventListener('pointerleave', () => { menu.open = false; });
+                menu.querySelector('summary').addEventListener('click', (event) => event.preventDefault());
+            });
+        }
         document.getElementById('btn-generar-formato').addEventListener('click', generarFormatoSeleccionado);
         document.getElementById('btn-cancelar-formato').addEventListener('click', cancelarSeleccionFormato);
 
