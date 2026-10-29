@@ -20,8 +20,9 @@
         .acciones-menu > summary, .accion-principal, .accion-secundaria { list-style: none; background: #121212; border: 1px solid #444; color: #fff; padding: 10px 15px; border-radius: 8px; font-size: 0.95rem; cursor: pointer; font-family: inherit; }
         .acciones-menu > summary::-webkit-details-marker { display: none; }
         .acciones-menu > summary::after { content: " ▾"; }
-        .acciones-dropdown { display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; min-width: 230px; padding: 8px; background: #1e1e1e; border: 1px solid #007bff; border-radius: 8px; box-shadow: 0 8px 18px rgba(0,0,0,0.35); }
+        .acciones-dropdown { display: none; position: absolute; top: 100%; left: 0; z-index: 20; min-width: 230px; padding: 8px; background: #1e1e1e; border: 1px solid #007bff; border-radius: 8px; box-shadow: 0 8px 18px rgba(0,0,0,0.35); }
         .acciones-menu[open] .acciones-dropdown { display: grid; gap: 6px; }
+        .acciones-menu:hover .acciones-dropdown, .acciones-menu:focus-within .acciones-dropdown { display: grid; gap: 6px; }
         .acciones-dropdown button { text-align: left; background: transparent; border: 0; color: #fff; padding: 9px 10px; border-radius: 5px; cursor: pointer; font: inherit; }
         .acciones-dropdown button:hover, .acciones-dropdown a:hover { background: #2c2c2c; }
         .acciones-dropdown a { display: block; color: #fff; padding: 9px 10px; border-radius: 5px; text-decoration: none; }
