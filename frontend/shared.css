@@ -145,3 +145,7 @@ header {
 .btn-secondary:hover {
     background: #555;
 }
+.recruitment-limited .nav-links a[href="iniciorh.html"],
+.recruitment-limited .nav-links a[href="Ingreso.html"] {
+    display: none !important;
+}

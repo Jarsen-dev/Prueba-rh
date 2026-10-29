@@ -99,7 +99,7 @@
         'empleado.html': ['admin', 'reclutamiento'],
     };
 
-    const pageName = window.location.pathname.split('/').pop() || '';
+    const pageName = decodeURIComponent(window.location.pathname.split('/').pop() || '');
     const allowedPermissions = pagePermissions[pageName];
     if (!allowedPermissions) return;
 
@@ -118,6 +118,10 @@
 
         sessionStorage.setItem('accesoUsuario', JSON.stringify(currentUser));
         const permissions = normalizePermissions(currentUser.permisos);
+        document.documentElement.classList.toggle(
+            'recruitment-limited',
+            permissions.includes('reclutamiento') && !permissions.includes('admin')
+        );
         const hasPermission = permissions.some((permission) => allowedPermissions.includes(permission));
         if (!hasPermission) {
             window.location.replace('portalrh.html');
