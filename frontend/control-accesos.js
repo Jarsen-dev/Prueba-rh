@@ -55,7 +55,10 @@ function renderUsuariosRegistrados() {
 
         const actionCell = document.createElement('td');
         if (usuarioEnEdicion === usuario.id) {
-            actionCell.appendChild(crearBotonAcceso('Eliminar', 'delete-access', 'delete-access-button'));
+            actionCell.append(
+                crearBotonAcceso('Eliminar', 'delete-access', 'delete-access-button'),
+                crearBotonAcceso('Cancelar', 'cancel-edit', 'cancel-edit')
+            );
         } else {
             actionCell.appendChild(crearBotonAcceso('Editar', 'edit-password'));
         }
@@ -79,7 +82,6 @@ function establecerModoEdicion(usuario) {
     document.getElementById('access-form-title').textContent = isEditing ? 'Cambiar contraseña' : 'Asignar acceso';
     document.getElementById('acceso-password-label').textContent = isEditing ? 'Nueva contraseña' : 'Contraseña';
     document.getElementById('access-submit-button').textContent = isEditing ? 'Guardar cambios' : 'Guardar Acceso';
-    document.getElementById('access-cancel-button').hidden = !isEditing;
     userInput.readOnly = isEditing;
     permissionSelect.disabled = isEditing;
     passwordInput.placeholder = isEditing ? 'Escribe la nueva contraseña' : '';
@@ -197,7 +199,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const tbody = document.getElementById('tabla-usuarios-registrados-body');
 
     form.addEventListener('submit', guardarNuevoUsuario);
-    document.getElementById('access-cancel-button').addEventListener('click', cancelarEdicionUsuario);
     tbody.addEventListener('click', (event) => {
         const button = event.target.closest('button[data-accion]');
         if (!button) return;
@@ -211,6 +212,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
             case 'delete-access':
                 eliminarUsuarioAcceso(row.dataset.usuarioId);
+                break;
+            case 'cancel-edit':
+                cancelarEdicionUsuario();
                 break;
             default:
                 break;

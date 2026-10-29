@@ -246,6 +246,8 @@
         }
         .access-management-card .form-row { display: flex; gap: 15px; }
         .access-management-card .form-row > .form-group { flex: 1; min-width: 0; }
+        .access-management-card .form-row > .access-form-actions { flex: 0 0 auto; display: flex; align-self: flex-end; align-items: flex-end; margin-bottom: 15px; }
+        .access-form-actions .access-save-button { min-height: 38px; white-space: nowrap; }
         .access-users-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
         .access-users-table th { color: #aaa; border-bottom: 1px solid #333; padding: 0 16px 12px; font-weight: 600; }
         .access-users-table td { padding: 12px 16px; border-bottom: 1px solid #252525; color: #fff; }
@@ -262,7 +264,7 @@
             font-weight: 600;
         }
         .access-users-table .delete-access-button { background: #a92b36; border-color: #a92b36; }
-        .access-cancel-button { margin-left: 8px; padding: 8px 14px; border: 1px solid #555; border-radius: 6px; background: #444; color: #fff; cursor: pointer; }
+        .access-users-table .cancel-edit { margin-left: 6px; background: #444; border-color: #555; }
         .access-feedback { min-height: 1.2em; margin: 12px 0 0; color: #aaa; }
         .access-feedback.error { color: #ff6b6b; }
         .access-feedback.success { color: #55c878; }
@@ -272,8 +274,10 @@
             #calendar { min-height: 560px; }
             .agenda-column { min-height: 500px; }
         }
-        @media (max-width: 600px) {
-            .access-management-card .form-row { flex-direction: column; gap: 0; }
+        @media (max-width: 800px) {
+            .access-management-card .form-row { flex-wrap: wrap; }
+            .access-management-card .form-row > .form-group { flex-basis: calc(50% - 8px); }
+            .access-management-card .form-row > .access-form-actions { flex-basis: 100%; }
         }
 
     </style>
@@ -371,9 +375,10 @@
                             <option value="reclutamiento">Reclutamiento</option>
                         </select>
                     </div>
+                    <div class="access-form-actions">
+                        <button id="access-submit-button" type="submit" class="access-save-button">Guardar Acceso</button>
+                    </div>
                 </div>
-                <button id="access-submit-button" type="submit" class="access-save-button">Guardar Acceso</button>
-                <button id="access-cancel-button" type="button" class="access-cancel-button" hidden>Cancelar</button>
                 <p id="access-create-feedback" class="access-feedback" role="status" aria-live="polite"></p>
             </form>
         </div>
