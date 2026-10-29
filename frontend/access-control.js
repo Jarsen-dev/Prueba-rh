@@ -90,17 +90,17 @@
         },
     };
 
-    const requiredPermissions = {
-        'iniciorh.html': 'admin',
-        'Ingreso.html': 'admin',
-        'Cheong Woon.html': 'admin',
-        'Kronos.html': 'admin',
-        'InicioReclu.html': 'reclutamiento',
+    const pagePermissions = {
+        'iniciorh.html': ['admin', 'reclutamiento'],
+        'Ingreso.html': ['admin'],
+        'Cheong Woon.html': ['admin'],
+        'Kronos.html': ['admin'],
+        'InicioReclu.html': ['admin', 'reclutamiento'],
     };
 
     const pageName = window.location.pathname.split('/').pop() || '';
-    const requiredPermission = requiredPermissions[pageName];
-    if (!requiredPermission) return;
+    const allowedPermissions = pagePermissions[pageName];
+    if (!allowedPermissions) return;
 
     try {
         const accessUser = JSON.parse(sessionStorage.getItem('accesoUsuario') || '{}');
@@ -117,7 +117,7 @@
 
         sessionStorage.setItem('accesoUsuario', JSON.stringify(currentUser));
         const permissions = normalizePermissions(currentUser.permisos);
-        const hasPermission = permissions.includes('admin') || permissions.includes(requiredPermission);
+        const hasPermission = permissions.some((permission) => allowedPermissions.includes(permission));
         if (!hasPermission) {
             window.location.replace('portalrh.html');
         }
