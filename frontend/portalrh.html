@@ -89,29 +89,6 @@
             background: #1d4ed8; color: #fff;
         }
 
-        .system-destination {
-            display: none;
-            margin: 16px 0 6px;
-            text-align: left;
-        }
-
-        .system-destination label {
-            display: block;
-            margin-bottom: 6px;
-            font-size: 0.9rem;
-            color: #ddd;
-        }
-
-        .system-destination select {
-            width: 100%;
-            padding: 12px;
-            box-sizing: border-box;
-            border: 1px solid #555;
-            border-radius: 5px;
-            background: #3e3e3e;
-            color: #fff;
-        }
-
         /* ÍCONOS GENERALES */
         .input-group {
             position: relative;
@@ -171,14 +148,6 @@
                     <input type="password" id="pass" placeholder="Contraseña" required>
                     <i class="far fa-eye-slash toggle-password" onclick="togglePasswordVisibility(this)"></i>
                 </div>
-                <div id="system-destination" class="system-destination">
-                    <label for="system-destination-select">Acceso:</label>
-                    <select id="system-destination-select">
-                        <option value="">Selecciona un acceso</option>
-                        <option value="iniciorh.html">RH</option>
-                        <option value="InicioReclu.html">Reclutamiento</option>
-                    </select>
-                </div>
                 <button type="submit">Ingresar</button>
             </form>
 
@@ -201,14 +170,8 @@
 
             const usuarioRegistrado = await window.AccessControlUsers.authenticate(u, p);
             if (usuarioRegistrado) {
-                const tieneAccesoSistema = Array.isArray(usuarioRegistrado.permisos) && usuarioRegistrado.permisos.includes('sistemas');
-                const accesos = tieneAccesoSistema
-                    ? destinations
-                    : destinations.filter(([permission]) => usuarioRegistrado.permisos.includes(permission));
-                const destinoSeleccionado = document.getElementById('system-destination-select')?.value || '';
-                const redirect = tieneAccesoSistema
-                    ? (destinoSeleccionado ? destinations.find(([, path]) => path === destinoSeleccionado) : destinations[0])
-                    : accesos[0];
+                const permisos = Array.isArray(usuarioRegistrado.permisos) ? usuarioRegistrado.permisos : [];
+                const redirect = destinations.find(([permission]) => permisos.includes(permission));
                 if (!redirect) {
                     errorMsg.textContent = 'El usuario no tiene acceso a una página asignada.';
                     errorMsg.style.display = 'block';
@@ -227,79 +190,7 @@
 
         (function configurarLogin() {
             sessionStorage.removeItem('accesoUsuario');
-            const user = document.getElementById('user');
-            const pass = document.getElementById('pass');
             const form = document.getElementById('loginForm');
-            const systemDestination = document.getElementById('system-destination');
-            const destinationSelect = document.getElementById('system-destination-select');
-
-            function llenarDestinos(destinos) {
-                const seleccionado = destinationSelect.value;
-                destinationSelect.textContent = '';
-                const defaultOption = document.createElement('option');
-                defaultOption.value = '';
-                defaultOption.textContent = 'Selecciona un acceso';
-                destinationSelect.appendChild(defaultOption);
-
-                destinos.forEach(([label, path]) => {
-                    const option = document.createElement('option');
-                    option.value = path;
-                    option.textContent = label;
-                    destinationSelect.appendChild(option);
-                });
-
-                if (destinos.some(([, path]) => path === seleccionado)) {
-                    destinationSelect.value = seleccionado;
-                }
-            }
-
-            async function actualizarSelectorSistemas() {
-                const usuario = String(user.value || '').trim();
-                const password = String(pass.value || '').trim();
-                const destinosSistemas = [
-                    ['RH', 'iniciorh.html'],
-                    ['Reclutamiento', 'InicioReclu.html'],
-                ];
-
-                systemDestination.style.display = 'none';
-                llenarDestinos([]);
-
-                if (!usuario || !password) return;
-
-                const usuarioRegistrado = await window.AccessControlUsers.authenticate(usuario, password);
-                if (!usuarioRegistrado) return;
-
-                const tieneAccesoSistema = Array.isArray(usuarioRegistrado.permisos) && usuarioRegistrado.permisos.includes('sistemas');
-                const accesos = tieneAccesoSistema
-                    ? destinosSistemas
-                    : destinosSistemas.filter(([label]) => {
-                        const permission = {
-                            RH: 'recursos_humanos',
-                            Reclutamiento: 'reclutamiento',
-                        }[label];
-                        return usuarioRegistrado.permisos.includes(permission);
-                    });
-
-                if (accesos.length <= 1) return;
-                systemDestination.style.display = 'block';
-                llenarDestinos(accesos);
-            }
-
-            function intentarIngresarConEnter(event) {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    verificarAcceso();
-                }
-            }
-
-            if (user) {
-                user.addEventListener('keydown', intentarIngresarConEnter);
-                user.addEventListener('input', actualizarSelectorSistemas);
-            }
-            if (pass) {
-                pass.addEventListener('keydown', intentarIngresarConEnter);
-                pass.addEventListener('input', actualizarSelectorSistemas);
-            }
             if (form) {
                 form.addEventListener('submit', function(event) {
                     event.preventDefault();

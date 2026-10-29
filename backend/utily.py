@@ -2,7 +2,6 @@ import os
 import re
 import json
 import base64
-import hmac
 import tempfile
 import traceback
 import mimetypes
@@ -795,29 +794,6 @@ def iniciar_sesion_acceso():
         return jsonify(usuario_acceso_dict(encontrado))
     except Exception as error:
         return jsonify({'error': str(error)}), 500
-
-
-@app.route('/api/auth/system', methods=['POST'])
-def autenticar_sistema():
-    datos = request.get_json(silent=True) or {}
-    usuario = str(datos.get('usuario', '')).strip()
-    password = str(datos.get('password', ''))
-    usuario_configurado = os.getenv('SYSTEM_USER', 'admin')
-    password_configurada = os.getenv('SYSTEM_PASSWORD', '')
-
-    if not password_configurada:
-        return jsonify({'error': 'SYSTEM_PASSWORD no está configurada en el backend.'}), 503
-
-    if not (
-        hmac.compare_digest(usuario, usuario_configurado)
-        and hmac.compare_digest(password, password_configurada)
-    ):
-        return jsonify({'error': 'Usuario o contraseña incorrectos.'}), 401
-
-    return jsonify({
-        'usuario': usuario_configurado,
-        'permisos': ['sistemas'],
-    }), 200
 
 
 def obtener_columnas(cur, tabla):

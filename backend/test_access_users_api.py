@@ -4,6 +4,14 @@ import utily
 
 
 class AccessUserPermissionsTests(unittest.TestCase):
+    def test_legacy_system_authentication_endpoint_is_removed(self):
+        response = utily.app.test_client().post(
+            '/api/auth/system',
+            json={'usuario': 'admin', 'password': 'legacy-password'},
+        )
+
+        self.assertEqual(response.status_code, 404)
+
     def test_removed_attendance_permission_is_not_accepted(self):
         self.assertEqual(
             utily.normalizar_permisos(['recursos_humanos', 'control_asistencias', 'notificaciones']),
