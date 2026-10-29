@@ -11,12 +11,12 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
-        .metrics-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px; padding: 25px 20px 0 20px; }
+        .metrics-container { display: grid; grid-template-columns: 1fr; gap: 30px; padding: 25px 20px 0 20px; }
         
-        .metric-card-asistencia, .metric-card-incidencias { background: #1e1e1e; border: 1px solid #007bff; padding: 20px; border-radius: 8px; cursor: pointer; transition: 0.3s; text-align: center; }
-        .metric-card-asistencia:hover, .metric-card-incidencias:hover { background: #007bff; }
-        .metric-card-asistencia:hover h3, .metric-card-incidencias:hover h3 { color: #fff; }
-        .metric-card-asistencia h3, .metric-card-incidencias h3 { color: #007bff; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; }
+        .metric-card-incidencias { background: #1e1e1e; border: 1px solid #007bff; padding: 20px; border-radius: 8px; cursor: pointer; transition: 0.3s; text-align: center; }
+        .metric-card-incidencias:hover { background: #007bff; }
+        .metric-card-incidencias:hover h3 { color: #fff; }
+        .metric-card-incidencias h3 { color: #007bff; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; }
 
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(3px); justify-content: center; align-items: center; z-index: 1000; }
         
@@ -25,9 +25,6 @@
 
         .close-modal-x { background: transparent; border: none; color: #ffffff; font-size: 1.2rem; position: absolute; top: 25px; right: 30px; cursor: pointer; }
         .close-modal-x:hover { color: #aaa; }
-        .close-modal { background: #333; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
-        .close-modal:hover { background: #444; }
-
         .half-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; padding: 20px; }
         .half-card { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 25px; color: #fff; text-align: center; }
         .half-card h3 { margin-top: 0; font-size: 1.1rem; margin-bottom: 10px; }
@@ -44,10 +41,6 @@
 
         .form-control-table { background: #141414; border: 1px solid #444; color: #fff; padding: 8px 12px; border-radius: 4px; font-size: 0.9rem; width: 100%; box-sizing: border-box; }
         .form-control-table:disabled { background: transparent; border-color: transparent; color: #fff; }
-
-        .password-box { position: relative; display: inline-flex; align-items: center; width: 100%; }
-        .password-box input { width: 100%; padding-right: 30px; }
-        .password-box .toggle-password { position: absolute; right: 8px; cursor: pointer; color: #aaa; font-size: 0.85rem; }
 
         .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase; }
         .badge.registrada { background-color: rgba(40, 167, 69, 0.2); color: #28a745; border: 1px solid rgba(40, 167, 69, 0.4); }
@@ -165,78 +158,6 @@
             margin-bottom: 10px;
         }
 
-        /* Pestañas de Navegación Interna (Control de Accesos) */
-        .access-tabs { display: flex; gap: 10px; border-bottom: 1px solid #444; margin-bottom: 20px;}
-        .access-tab-btn {
-            background: transparent;
-            border: none;
-            color: #aaa;
-            padding: 10px 20px;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 0.95rem;
-            border-bottom: 2px solid transparent;
-            transition: 0.3s;
-        }
-        .access-tab-btn.active {
-            color: #007bff;
-            border-bottom: 2px solid #007bff;
-        }
-        .access-tab-content {
-            display: none;
-        }
-        .access-tab-content.active {
-            display: block;
-        }
-
-        /* Estilos específicos para el nuevo panel de Control de Accesos */
-        .permisos-recuadro {
-            background: #1e1e1e;
-            border-radius: 8px;
-            padding: 20px;
-            margin-top: 20px;
-            margin-bottom: 20px;
-        }
-        .permisos-grid {
-            display: grid;
-            gap: 10px;
-            margin-top: 10px;
-        }
-        .permiso-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 15px;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-        .permiso-item input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-            accent-color: #007bff;
-        }
-        .permiso-item label {
-            color: #fff;
-            font-size: 0.9rem;
-            cursor: pointer;
-            margin-bottom: 0;
-        }
-
-        .notif-campos-extra {
-            display: none;
-            background: #141414;
-            border: 1px solid #007bff;
-            border-radius: 8px;
-            padding: 15px;
-            margin-top: 15px;
-            animation: fadeIn 0.3s ease;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
         /* Estilo estético para inputs de archivos tipo botón */
         .file-upload-wrapper { position: relative; display: inline-block; width: 100%; }
         .file-upload-wrapper input[type="file"] { display: none; }
@@ -262,9 +183,6 @@
         .btn-danger:hover { background: #dc3545; color: white; }
         .btn-secondary { background: #444; color: #fff; border: 1px solid #555; }
         .btn-secondary:hover { background: #555; }
-
-        .btn-texto { background: transparent; border: none; color: #007bff; font-weight: bold; cursor: pointer; font-size: 0.9rem; padding: 0; text-align: left; }
-        .btn-texto:hover { text-decoration: underline; }
 
         .tags-container { margin-top: 10px; max-height: 150px; overflow-y: auto; }
         .correo-list { list-style: none; padding: 0; margin: 5px 0 0 0; }
@@ -292,9 +210,6 @@
 
     <main>
         <div class="metrics-container">
-            <button class="metric-card-asistencia" type="button" data-modal="modal-control-accesos">
-                <h3>Control de Accesos</h3>
-            </button>
             <div class="metric-card-incidencias formatos-menu" tabindex="0">
                 <h3>Formatos Imprimibles</h3>
                 <div class="formatos-dropdown">
@@ -302,181 +217,6 @@
                     <a class="formato-option" href="https://drive.google.com/file/d/1MjIXgFLUJAO25hNfZb0IzTFwIW4YLvU5/view?usp=sharing">Entrada/Salida</a>
                     <a class="formato-option" href="https://drive.google.com/file/d/1gWuv28J-7WjbfsaOdUMSIb0Mbb6KHRqO/view?usp=sharing">Indisciplina</a>
                 </div>
-            </div>
-        </div>
-
-        <!-- ========================================== -->
-        <!-- BOTÓN 1: CONTROL DE ACCESOS                -->
-        <!-- ========================================== -->
-        <div id="modal-control-accesos" class="modal-overlay">
-            <div class="modal-content">
-                <button class="close-modal-x close-modal" type="button">✖</button>
-
-                <!-- PESTAÑAS DE NAVEGACIÓN -->
-                <div class="access-tabs" style="display: flex; justify-content: center;">
-                    <button type="button" class="access-tab-btn active" onclick="cambiarPestanaAcceso('nuevo')">Nuevo Usuario</button>
-                    <button type="button" class="access-tab-btn" onclick="cambiarPestanaAcceso('registrados')">Usuarios Registrados</button>
-                </div>
-
-                <!-- PESTAÑA 1: NUEVO USUARIO -->
-                <div id="tab-nuevo-usuario" class="access-tab-content active">
-                    <form onsubmit="event.preventDefault(); guardarNuevoUsuario(this);">
-                        <!-- Credenciales principales -->
-                        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-                            <div class="form-group flex-1">
-                                <label for="acceso-usuario">Usuario:</label>
-                                <input type="text" id="acceso-usuario" class="form-control" placeholder="Ingrese el usuario" required>
-                            </div>
-                            <div class="form-group flex-1">
-                                <label for="acceso-password">Contraseña:</label>
-                                <div class="password-box">
-                                    <input type="password" id="acceso-password" class="form-control password-input" placeholder="Ingrese la contraseña" required>
-                                    <i class="far fa-eye-slash toggle-password" onclick="togglePasswordVisibility(this)"></i>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Recuadro inferior con las opciones y checkboxes -->
-                        <div class="permisos-recuadro">
-                            <label style="font-weight: bold; color: #fff; font-size: 0.95rem; display: block; margin-bottom: 5px;">Asignar Permisos de Páginas:</label>
-                            
-                            <div class="permisos-grid">
-                                <div class="permiso-item">
-                                    <input type="checkbox" id="chk-rrhh" name="permisos" value="recursos_humanos">
-                                    <label for="chk-rrhh">Recursos Humanos</label>
-                                </div>
-                                <div class="permiso-item">
-                                    <input type="checkbox" id="chk-reclutamiento" name="permisos" value="reclutamiento">
-                                    <label for="chk-reclutamiento">Reclutamiento</label>
-                                </div>
-                                <div class="permiso-item">
-                                    <input type="checkbox" id="chk-asistencias" name="permisos" value="control_asistencias" onchange="toggleCamposAdicionales()">
-                                    <label for="chk-asistencias">Control de Asistencias</label>
-                                </div>
-                                <div class="permiso-item">
-                                    <input type="checkbox" id="chk-notificaciones" name="permisos" value="notificaciones" onchange="toggleCamposAdicionales()">
-                                    <label for="chk-notificaciones">Notificaciones</label>
-                                </div>
-                            </div>
-
-                            <!-- Opciones adicionales si se marca Notificaciones (Nombre y Teléfono debajo del usuario y contraseña ya puestos) -->
-                            <div id="seccion-campos-notificacion" class="notif-campos-extra">
-                                <div style="display: flex; gap: 15px;">
-                                    <div class="form-group flex-1" style="margin-bottom: 0;">
-                                        <label for="notif-nombre">Nombre:</label>
-                                        <input type="text" id="notif-nombre" class="form-control">
-                                    </div>
-                                    <div class="form-group flex-1" style="margin-bottom: 0;">
-                                        <label for="notif-telefono">Número de Teléfono:</label>
-                                        <input type="text" id="notif-telefono" class="form-control">
-                                    </div>
-                                </div>
-                            </div>
-                            <div id="seccion-area-responsable" class="notif-campos-extra">
-                                <div class="form-group" style="margin-bottom: 0;">
-                                    <label for="area-responsable">Área Responsable:</label>
-                                    <select id="area-responsable" class="form-control">
-                                        <option value="">Selecciona un área</option>
-                                        <option value="Almacen">Almacen</option>
-                                        <option value="EPS">EPS</option>
-                                        <option value="Ensamble">Ensamble</option>
-                                        <option value="Calidad">Calidad</option>
-                                        <option value="Compras">Compras</option>
-                                        <option value="Embarques">Embarques</option>
-                                        <option value="Corte">Corte</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style="text-align: right; margin-top: 20px;">
-                            <button type="submit" class="btn btn-success">Guardar Acceso</button>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- PESTAÑA 2: USUARIOS REGISTRADOS -->
-                <div id="tab-usuarios-registrados" class="access-tab-content">
-                    
-                    <div class="table-responsive">
-                        <table class="asistencia-status-table">
-                            <thead>
-                                <tr>
-                                    <th>Usuario</th>
-                                    <th>Contraseña</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tabla-usuarios-registrados-body"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-
-        <!-- MODAL AUXILIAR PARA EDITAR / GUARDAR / ELIMINAR USUARIO REGISTRADO -->
-        <div id="modal-editar-usuario" class="modal-overlay">
-            <div class="modal-content" style="max-width: 600px;">
-                <button class="close-modal-x" type="button" onclick="cerrarModalEditarUsuario()">✖</button>
-                <h3>Editar Datos de Usuario</h3>
-                <form onsubmit="event.preventDefault(); actualizarUsuarioRegistrado();">
-                    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-                        <div class="form-group flex-1">
-                            <label for="edit-usuario">Usuario:</label>
-                            <input type="text" id="edit-usuario" class="form-control" required>
-                        </div>
-                        <div class="form-group flex-1">
-                            <label for="edit-password">Contraseña:</label>
-                            <div class="password-box">
-                                <input type="password" id="edit-password" class="form-control password-input" required>
-                                <i class="far fa-eye-slash toggle-password" onclick="togglePasswordVisibility(this)"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="edit-grupo-notif" style="display: none; background: #141414; border: 1px dashed #007bff; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
-                        <label style="color: #007bff; font-weight: bold; font-size: 0.9rem; display: block; margin-bottom: 10px;">Datos de Notificaciones</label>
-                        <div style="display: flex; gap: 15px;">
-                            <div class="form-group flex-1" style="margin-bottom: 0;">
-                                <label for="edit-nombre">Nombre:</label>
-                                <input type="text" id="edit-nombre" class="form-control">
-                            </div>
-                            <div class="form-group flex-1" style="margin-bottom: 0;">
-                                <label for="edit-telefono">Número de Teléfono:</label>
-                                <input type="text" id="edit-telefono" class="form-control">
-                            </div>
-                        </div>
-                    </div>
-                    <div id="edit-grupo-area" style="display: none; background: #141414; border: 1px dashed #007bff; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
-                        <label style="color: #007bff; font-weight: bold; font-size: 0.9rem; display: block; margin-bottom: 10px;">Área Responsable</label>
-                        <select id="edit-area-responsable" class="form-control">
-                            <option value="">Selecciona un área</option>
-                            <option value="Almacen">Almacen</option>
-                            <option value="EPS">EPS</option>
-                            <option value="Ensamble">Ensamble</option>
-                            <option value="Calidad">Calidad</option>
-                            <option value="Compras">Compras</option>
-                            <option value="Embarques">Embarques</option>
-                            <option value="Corte">Corte</option>
-                        </select>
-                    </div>
-                    <div class="permisos-recuadro" style="margin-top: 0;">
-                        <label style="font-weight: bold; color: #fff; font-size: 0.95rem; display: block; margin-bottom: 5px;">Permisos de Páginas:</label>
-                        <div class="permisos-grid">
-                            <div class="permiso-item"><input type="checkbox" id="edit-chk-rrhh" name="edit-permisos" value="recursos_humanos"><label for="edit-chk-rrhh">Recursos Humanos</label></div>
-                            <div class="permiso-item"><input type="checkbox" id="edit-chk-reclutamiento" name="edit-permisos" value="reclutamiento"><label for="edit-chk-reclutamiento">Reclutamiento</label></div>
-                            <div class="permiso-item"><input type="checkbox" id="edit-chk-asistencias" name="edit-permisos" value="control_asistencias" onchange="toggleCamposEdicion()"><label for="edit-chk-asistencias">Control de Asistencias</label></div>
-                            <div class="permiso-item"><input type="checkbox" id="edit-chk-notificaciones" name="edit-permisos" value="notificaciones" onchange="toggleCamposEdicion()"><label for="edit-chk-notificaciones">Notificaciones</label></div>
-                        </div>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px;">
-                        <button type="button" class="btn btn-danger" onclick="eliminarUsuarioRegistrado()">Eliminar Usuario</button>
-                        <div style="display: flex; gap: 10px;">
-                            <button type="button" class="btn btn-secondary" onclick="cerrarModalEditarUsuario()">Cancelar</button>
-                            <button id="btn-editar-usuario" type="button" class="btn btn-primary" onclick="habilitarEdicionUsuario()">Editar datos</button>
-                            <button id="btn-guardar-usuario" type="submit" class="btn btn-success" style="display: none;">Guardar Cambios</button>
-                        </div>
-                    </div>
-                </form>
             </div>
         </div>
 
@@ -536,180 +276,6 @@
             "1002": { nombre: "María López", area: "Calidad", puesto: "Inspectora" },
             "1003": { nombre: "Pedro Gómez", area: "Almacen", puesto: "Montacarguista" }
         };
-
-        document.querySelectorAll('.metric-card-asistencia').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const target = document.getElementById(btn.getAttribute('data-modal'));
-                if (target) target.style.display = 'flex';
-            });
-        });
-
-        document.querySelectorAll('.close-modal').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const modal = btn.closest('.modal-overlay');
-                if (modal) modal.style.display = 'none';
-            });
-        });
-
-        // Cambiar entre pestañas en Control de Accesos
-        function cambiarPestanaAcceso(pestana) {
-            document.querySelectorAll('.access-tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.access-tab-content').forEach(content => content.classList.remove('active'));
-
-            if (pestana === 'nuevo') {
-                document.querySelector('.access-tab-btn:nth-child(1)').classList.add('active');
-                document.getElementById('tab-nuevo-usuario').classList.add('active');
-            } else {
-                document.querySelector('.access-tab-btn:nth-child(2)').classList.add('active');
-                document.getElementById('tab-usuarios-registrados').classList.add('active');
-            }
-        }
-
-        let usuariosRegistrados = [];
-        let usuarioSeleccionado = null;
-        let edicionUsuarioActiva = false;
-
-        function obtenerPermisos(nombre) {
-            return Array.from(document.querySelectorAll(`input[name="${nombre}"]:checked`)).map((input) => input.value);
-        }
-
-        function toggleCamposAdicionales() {
-            const tieneNotificaciones = document.getElementById('chk-notificaciones').checked;
-            const tieneAsistencias = document.getElementById('chk-asistencias').checked;
-            document.getElementById('seccion-campos-notificacion').style.display = tieneNotificaciones ? 'block' : 'none';
-            document.getElementById('seccion-area-responsable').style.display = tieneAsistencias ? 'block' : 'none';
-        }
-
-        function toggleCamposEdicion() {
-            const permisos = obtenerPermisos('edit-permisos');
-            document.getElementById('edit-grupo-notif').style.display = permisos.includes('notificaciones') ? 'block' : 'none';
-            document.getElementById('edit-grupo-area').style.display = permisos.includes('control_asistencias') ? 'block' : 'none';
-        }
-
-        function renderUsuariosRegistrados() {
-            const tbody = document.getElementById('tabla-usuarios-registrados-body');
-            tbody.textContent = '';
-            usuariosRegistrados.forEach((usuario) => {
-                const row = document.createElement('tr');
-                const userCell = document.createElement('td');
-                const userButton = document.createElement('button');
-                userButton.type = 'button';
-                userButton.className = 'btn-texto';
-                userButton.textContent = usuario.usuario;
-                userButton.addEventListener('click', () => abrirModalEditarUsuario(usuario.id));
-                userCell.appendChild(userButton);
-
-                const passwordCell = document.createElement('td');
-                const passwordInput = document.createElement('input');
-                passwordInput.type = 'password';
-                passwordInput.className = 'form-control form-control-table';
-                passwordInput.value = '********';
-                passwordInput.disabled = true;
-                passwordCell.appendChild(passwordInput);
-                row.append(userCell, passwordCell);
-                tbody.appendChild(row);
-            });
-        }
-
-        function cargarUsuariosRegistrados() {
-            usuariosRegistrados = window.AccessControlUsers.list();
-            renderUsuariosRegistrados();
-        }
-
-        function guardarNuevoUsuario(form) {
-            const permisos = obtenerPermisos('permisos');
-            const payload = {
-                usuario: document.getElementById('acceso-usuario').value.trim(),
-                password: document.getElementById('acceso-password').value.trim(),
-                permisos,
-                area_responsable: document.getElementById('area-responsable').value,
-                nombre_notificacion: document.getElementById('notif-nombre').value.trim(),
-                telefono_notificacion: document.getElementById('notif-telefono').value.trim(),
-            };
-
-            try {
-                window.AccessControlUsers.create(payload);
-                form.reset();
-                toggleCamposAdicionales();
-                cargarUsuariosRegistrados();
-                renderEnvioAsistenciaArea();
-                cambiarPestanaAcceso('registrados');
-            } catch (error) {
-                alert(error.message);
-            }
-        }
-
-        function establecerModoEdicion(activo) {
-            edicionUsuarioActiva = activo;
-            document.querySelectorAll('#modal-editar-usuario input, #modal-editar-usuario select').forEach((input) => {
-                input.disabled = !activo;
-            });
-            document.getElementById('edit-password').required = activo;
-            document.getElementById('btn-editar-usuario').style.display = activo ? 'none' : 'inline-block';
-            document.getElementById('btn-guardar-usuario').style.display = activo ? 'inline-block' : 'none';
-        }
-
-        function abrirModalEditarUsuario(usuarioId) {
-            usuarioSeleccionado = usuariosRegistrados.find((usuario) => usuario.id === usuarioId) || null;
-            if (!usuarioSeleccionado) return;
-
-            document.getElementById('edit-usuario').value = usuarioSeleccionado.usuario;
-            document.getElementById('edit-password').value = usuarioSeleccionado.password;
-            document.getElementById('edit-nombre').value = usuarioSeleccionado.nombre_notificacion || '';
-            document.getElementById('edit-telefono').value = usuarioSeleccionado.telefono_notificacion || '';
-            document.getElementById('edit-area-responsable').value = usuarioSeleccionado.area_responsable || '';
-            document.querySelectorAll('input[name="edit-permisos"]').forEach((input) => {
-                input.checked = usuarioSeleccionado.permisos.includes(input.value);
-            });
-            toggleCamposEdicion();
-            establecerModoEdicion(false);
-            document.getElementById('modal-editar-usuario').style.display = 'flex';
-        }
-
-        function habilitarEdicionUsuario() {
-            establecerModoEdicion(true);
-        }
-
-        function cerrarModalEditarUsuario() {
-            document.getElementById('modal-editar-usuario').style.display = 'none';
-            usuarioSeleccionado = null;
-            edicionUsuarioActiva = false;
-        }
-
-        function actualizarUsuarioRegistrado() {
-            if (!usuarioSeleccionado || !edicionUsuarioActiva) return;
-            const payload = {
-                usuario: document.getElementById('edit-usuario').value.trim(),
-                password: document.getElementById('edit-password').value.trim(),
-                permisos: obtenerPermisos('edit-permisos'),
-                area_responsable: document.getElementById('edit-area-responsable').value,
-                nombre_notificacion: document.getElementById('edit-nombre').value.trim(),
-                telefono_notificacion: document.getElementById('edit-telefono').value.trim(),
-            };
-
-            try {
-                window.AccessControlUsers.update(usuarioSeleccionado.id, payload);
-                cargarUsuariosRegistrados();
-                renderEnvioAsistenciaArea();
-                cerrarModalEditarUsuario();
-            } catch (error) {
-                alert(error.message);
-            }
-        }
-
-        function eliminarUsuarioRegistrado() {
-            if (!usuarioSeleccionado || !confirm('¿Está seguro de eliminar este usuario?')) return;
-            try {
-            window.AccessControlUsers.remove(usuarioSeleccionado.id);
-            cargarUsuariosRegistrados();
-            renderEnvioAsistenciaArea();
-                cerrarModalEditarUsuario();
-            } catch (error) {
-                alert(error.message);
-            }
-        }
-
-        cargarUsuariosRegistrados();
 
         function actualizarFechaHoy() {
             const fechaEl = document.getElementById('current-date');
@@ -921,19 +487,6 @@
 
         function cerrarModalJustificar() {
             document.getElementById('modal-justificar-falta').style.display = 'none';
-        }
-
-        function togglePasswordVisibility(iconElement) {
-            const passwordBox = iconElement.previousElementSibling;
-            if (passwordBox.getAttribute('type') === 'password') {
-                passwordBox.setAttribute('type', 'text');
-                iconElement.classList.remove('fa-eye-slash');
-                iconElement.classList.add('fa-eye');
-            } else {
-                passwordBox.setAttribute('type', 'password');
-                iconElement.classList.remove('fa-eye');
-                iconElement.classList.add('fa-eye-slash');
-            }
         }
 
         function agregarCorreoAuto() {

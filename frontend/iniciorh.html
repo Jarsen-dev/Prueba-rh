@@ -6,20 +6,19 @@
     <title>Control Interno RH</title>
     <script src="access-control.js"></script>
     <link rel="stylesheet" href="shared.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/css/all.min.css">
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js'></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
 
-        .dashboard-calendar { padding: 20px; display: flex; gap: 20px; height: 570px; }
+        .dashboard-calendar { padding: 20px; display: flex; gap: 20px; height: 680px; box-sizing: border-box; }
+        .agenda-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
         .agenda-header {
             position: sticky;
             top: 0;
             z-index: 3;
             background: transparent;
             padding-bottom: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
         }
 
         .agenda-create-btn {
@@ -37,8 +36,8 @@
 
         .agenda-create-btn:hover { background: #007bff; color: white; }
 
-        #calendar { flex: 2; background: #2c2c2c; padding: 15px; border-radius: 8px; }
-        #agenda { flex: 1; background: #2c2c2c; padding: 15px; border-radius: 8px; overflow-y: auto; }
+        #calendar { flex: 2; min-width: 0; background: #2c2c2c; padding: 15px; border-radius: 8px; }
+        #agenda { flex: 1; min-height: 0; background: #2c2c2c; padding: 15px; border-radius: 8px; overflow-y: auto; }
         
         .fc { color: #fff; }
         .fc .fc-toolbar-title { text-transform: uppercase !important; }
@@ -220,6 +219,118 @@
             border: 1px solid #555;
         }
 
+        .access-control-section { padding: 0 20px 20px; }
+        .access-control-card {
+            width: 100%;
+            background: #1e1e1e;
+            border: 1px solid #007bff;
+            padding: 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.3s;
+            text-align: center;
+        }
+        .access-control-card:hover { background: #007bff; }
+        .access-control-card h3 {
+            color: #007bff;
+            margin: 0;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .access-control-card:hover h3 { color: #fff; }
+        .control-access-overlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(3px);
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+        .control-access-modal {
+            position: relative;
+            width: 95%;
+            max-width: 1200px;
+            max-height: 92vh;
+            overflow-y: auto;
+            box-sizing: border-box;
+            padding: 40px 50px;
+            background: #282828;
+            border: 1px solid #333;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            color: #fff;
+        }
+        .control-access-modal h3 { margin-top: 0; color: #fff; font-size: 1.4rem; margin-bottom: 25px; }
+        .control-access-modal .close-modal-x {
+            position: absolute;
+            top: 25px;
+            right: 30px;
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+        .control-access-modal .access-tabs { display: flex; justify-content: center; gap: 10px; border-bottom: 1px solid #444; margin-bottom: 20px; }
+        .control-access-modal .access-tab-btn {
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: #aaa;
+            padding: 10px 20px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+        .control-access-modal .access-tab-btn.active { color: #007bff; border-bottom-color: #007bff; }
+        .control-access-modal .access-tab-content { display: none; }
+        .control-access-modal .access-tab-content.active { display: block; }
+        .control-access-modal .form-group { margin-bottom: 15px; }
+        .control-access-modal .form-group label { display: block; color: #aaa; font-size: 0.85rem; margin-bottom: 5px; }
+        .control-access-modal .form-control {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            background: #141414;
+            border: 1px solid #444;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 0.9rem;
+        }
+        .control-access-modal .password-box { position: relative; display: inline-flex; align-items: center; width: 100%; }
+        .control-access-modal .password-box input { padding-right: 30px; }
+        .control-access-modal .password-box .toggle-password { position: absolute; right: 8px; color: #aaa; cursor: pointer; font-size: 0.85rem; }
+        .control-access-modal .permisos-recuadro { background: #1e1e1e; border-radius: 8px; padding: 20px; margin: 20px 0; }
+        .control-access-modal .permisos-grid { display: grid; gap: 10px; margin-top: 10px; }
+        .control-access-modal .permiso-item { display: flex; align-items: center; gap: 10px; padding: 10px 15px; border-radius: 6px; cursor: pointer; }
+        .control-access-modal .permiso-item input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: #007bff; }
+        .control-access-modal .permiso-item label { color: #fff; font-size: 0.9rem; cursor: pointer; margin-bottom: 0; }
+        .control-access-modal .notif-campos-extra { display: none; background: #141414; border: 1px solid #007bff; border-radius: 8px; padding: 15px; margin-top: 15px; }
+        .control-access-modal .table-responsive { width: 100%; overflow-x: auto; margin: 15px 0; }
+        .control-access-modal .asistencia-status-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
+        .control-access-modal .asistencia-status-table th { color: #aaa; border-bottom: 1px solid #333; padding: 0 20px 14px; font-weight: 600; }
+        .control-access-modal .asistencia-status-table td { padding: 16px 20px; border-bottom: 1px solid #252525; color: #fff; }
+        .control-access-modal .form-control-table { width: 100%; box-sizing: border-box; background: #141414; border: 1px solid #444; color: #fff; padding: 8px 12px; border-radius: 4px; font-size: 0.9rem; }
+        .control-access-modal .form-control-table:disabled { background: transparent; border-color: transparent; color: #fff; }
+        .control-access-modal .btn-texto { background: transparent; border: none; color: #007bff; font-weight: bold; cursor: pointer; font-size: 0.9rem; padding: 0; text-align: left; }
+        .control-access-modal .btn-success { background: transparent; color: #28a745; border: 1px solid #28a745; }
+        .control-access-modal .btn-danger { background: transparent; color: #dc3545; border: 1px solid #dc3545; }
+        .control-access-modal .btn-secondary { background: #444; color: #fff; border: 1px solid #555; }
+
+        @media (max-width: 800px) {
+            .dashboard-calendar { height: auto; flex-direction: column; }
+            #calendar { min-height: 560px; }
+            .agenda-column { min-height: 500px; }
+        }
+        @media (max-width: 600px) {
+            .control-access-modal { padding: 36px 20px 24px; }
+            .control-access-modal .access-credentials,
+            .control-access-modal .access-extra-row { flex-direction: column; }
+        }
+
     </style>
 </head>
 <body>
@@ -242,57 +353,202 @@
     </header>
     <main class="dashboard-calendar">
         <div id='calendar'></div>
-        <div id='agenda'>
-            <div class="agenda-header">
-                <h3>Agenda del Mes</h3>
-                <button type="button" id="btn-abrir-evento" class="agenda-create-btn">Crear nuevo evento</button>
-            </div>
-            <div id="lista-eventos"></div>
-            <div id="evento-personalizado" class="evento-crear" style="display:none;">
-                <h3>Programar actividad</h3>
-                <button type="button" id="btn-abrir-evento-old" style="display:none;">Crear nuevo evento</button>
-            </div>
-            <div id="modal-evento" class="modal-overlay">
-                <div class="modal-panel">
-                    <h3>Crear evento</h3>
-                    <label>Tipo de evento</label>
-                    <div class="tipo-evento-options">
-                        <button type="button" class="tipo-option active" data-tipo="cumpleanos">Cumpleaños</button>
-                        <button type="button" class="tipo-option" data-tipo="evento">Evento</button>
-                    </div>
-                    <label id="evento-titulo-label" for="evento-titulo">Título</label>
-                    <input id="evento-titulo" type="text" placeholder="Nombre de la junta o evento">
-                    <div id="campos-fecha-evento">
-                        <label>Fecha</label>
-                        <div style="display:flex; gap:8px; margin-bottom:12px;">
-                        <select id="evento-dia" style="flex:1; padding:10px; background:#121212; color:#fff; border:1px solid #444; border-radius:5px;">
-                            <option value="">Día</option>
-                        </select>
-                        <select id="evento-mes" style="flex:1; padding:10px; background:#121212; color:#fff; border:1px solid #444; border-radius:5px;">
-                            <option value="">Mes</option>
-                        </select>
+        <div class="agenda-column">
+            <button type="button" id="btn-abrir-evento" class="agenda-create-btn">Crear nuevo evento</button>
+            <div id='agenda'>
+                <div class="agenda-header">
+                    <h3>Agenda del Mes</h3>
+                </div>
+                <div id="lista-eventos"></div>
+                <div id="evento-personalizado" class="evento-crear" style="display:none;">
+                    <h3>Programar actividad</h3>
+                    <button type="button" id="btn-abrir-evento-old" style="display:none;">Crear nuevo evento</button>
+                </div>
+                <div id="modal-evento" class="modal-overlay">
+                    <div class="modal-panel">
+                        <h3>Crear evento</h3>
+                        <label>Tipo de evento</label>
+                        <div class="tipo-evento-options">
+                            <button type="button" class="tipo-option active" data-tipo="cumpleanos">Cumpleaños</button>
+                            <button type="button" class="tipo-option" data-tipo="evento">Evento</button>
                         </div>
-                    </div>
-                    <div id="campos-hora-evento">
-                        <label for="evento-inicio">Hora inicial</label>
-                        <input id="evento-inicio" type="time">
-                        <label for="evento-fin">Hora final</label>
-                        <input id="evento-fin" type="time">
-                    </div>
-                    <div id="campo-asistentes">
-                        <label for="evento-asistentes">Quiénes ingresarán</label>
-                        <textarea id="evento-asistentes" placeholder="Agrega los nombres separados"></textarea>
-                    </div>
-                    <div class="modal-actions">
-                        <button type="button" class="btn-secondary" id="btn-cancelar-evento">Cancelar</button>
-                        <button type="button" class="btn-secondary btn-small" id="btn-eliminar-evento" style="display:none;">Eliminar</button>
-                        <button type="button" class="btn-primary" id="btn-confirmar-evento">Confirmar evento</button>
+                        <label id="evento-titulo-label" for="evento-titulo">Título</label>
+                        <input id="evento-titulo" type="text" placeholder="Nombre de la junta o evento">
+                        <div id="campos-fecha-evento">
+                            <label>Fecha</label>
+                            <div style="display:flex; gap:8px; margin-bottom:12px;">
+                                <select id="evento-dia" style="flex:1; padding:10px; background:#121212; color:#fff; border:1px solid #444; border-radius:5px;">
+                                    <option value="">Día</option>
+                                </select>
+                                <select id="evento-mes" style="flex:1; padding:10px; background:#121212; color:#fff; border:1px solid #444; border-radius:5px;">
+                                    <option value="">Mes</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="campos-hora-evento">
+                            <label for="evento-inicio">Hora inicial</label>
+                            <input id="evento-inicio" type="time">
+                            <label for="evento-fin">Hora final</label>
+                            <input id="evento-fin" type="time">
+                        </div>
+                        <div id="campo-asistentes">
+                            <label for="evento-asistentes">Quiénes ingresarán</label>
+                            <textarea id="evento-asistentes" placeholder="Agrega los nombres separados"></textarea>
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" class="btn-secondary" id="btn-cancelar-evento">Cancelar</button>
+                            <button type="button" class="btn-secondary btn-small" id="btn-eliminar-evento" style="display:none;">Eliminar</button>
+                            <button type="button" class="btn-primary" id="btn-confirmar-evento">Confirmar evento</button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </main>
+    <section class="access-control-section">
+        <button type="button" class="access-control-card" id="btn-control-accesos">
+            <h3>Control de Accesos</h3>
+        </button>
+    </section>
+    <div id="modal-control-accesos" class="control-access-overlay">
+        <div class="control-access-modal">
+            <button class="close-modal-x close-modal-access" type="button" aria-label="Cerrar">✖</button>
+            <div class="access-tabs">
+                <button type="button" class="access-tab-btn active" onclick="cambiarPestanaAcceso('nuevo')">Nuevo Usuario</button>
+                <button type="button" class="access-tab-btn" onclick="cambiarPestanaAcceso('registrados')">Usuarios Registrados</button>
+            </div>
+            <div id="tab-nuevo-usuario" class="access-tab-content active">
+                <form onsubmit="event.preventDefault(); guardarNuevoUsuario(this);">
+                    <div class="access-credentials" style="display: flex; gap: 15px; margin-bottom: 15px;">
+                        <div class="form-group" style="flex: 1;">
+                            <label for="acceso-usuario">Usuario:</label>
+                            <input type="text" id="acceso-usuario" class="form-control" placeholder="Ingrese el usuario" required>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label for="acceso-password">Contraseña:</label>
+                            <div class="password-box">
+                                <input type="password" id="acceso-password" class="form-control password-input" placeholder="Ingrese la contraseña" required>
+                                <i class="far fa-eye-slash toggle-password" onclick="togglePasswordVisibility(this)"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permisos-recuadro">
+                        <label style="font-weight: bold; color: #fff; font-size: 0.95rem; display: block; margin-bottom: 5px;">Asignar Permisos de Páginas:</label>
+                        <div class="permisos-grid">
+                            <div class="permiso-item"><input type="checkbox" id="chk-rrhh" name="permisos" value="recursos_humanos"><label for="chk-rrhh">Recursos Humanos</label></div>
+                            <div class="permiso-item"><input type="checkbox" id="chk-reclutamiento" name="permisos" value="reclutamiento"><label for="chk-reclutamiento">Reclutamiento</label></div>
+                            <div class="permiso-item"><input type="checkbox" id="chk-asistencias" name="permisos" value="control_asistencias" onchange="toggleCamposAdicionales()"><label for="chk-asistencias">Control de Asistencias</label></div>
+                            <div class="permiso-item"><input type="checkbox" id="chk-notificaciones" name="permisos" value="notificaciones" onchange="toggleCamposAdicionales()"><label for="chk-notificaciones">Notificaciones</label></div>
+                        </div>
+                        <div id="seccion-campos-notificacion" class="notif-campos-extra">
+                            <div class="access-extra-row" style="display: flex; gap: 15px;">
+                                <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                                    <label for="notif-nombre">Nombre:</label>
+                                    <input type="text" id="notif-nombre" class="form-control">
+                                </div>
+                                <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                                    <label for="notif-telefono">Número de Teléfono:</label>
+                                    <input type="text" id="notif-telefono" class="form-control">
+                                </div>
+                            </div>
+                        </div>
+                        <div id="seccion-area-responsable" class="notif-campos-extra">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label for="area-responsable">Área Responsable:</label>
+                                <select id="area-responsable" class="form-control">
+                                    <option value="">Selecciona un área</option>
+                                    <option value="Almacen">Almacen</option>
+                                    <option value="EPS">EPS</option>
+                                    <option value="Ensamble">Ensamble</option>
+                                    <option value="Calidad">Calidad</option>
+                                    <option value="Compras">Compras</option>
+                                    <option value="Embarques">Embarques</option>
+                                    <option value="Corte">Corte</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="text-align: right; margin-top: 20px;">
+                        <button type="submit" class="btn btn-success">Guardar Acceso</button>
+                    </div>
+                </form>
+            </div>
+            <div id="tab-usuarios-registrados" class="access-tab-content">
+                <div class="table-responsive">
+                    <table class="asistencia-status-table">
+                        <thead><tr><th>Usuario</th><th>Contraseña</th></tr></thead>
+                        <tbody id="tabla-usuarios-registrados-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="modal-editar-usuario" class="control-access-overlay">
+        <div class="control-access-modal" style="max-width: 600px;">
+            <button class="close-modal-x" type="button" onclick="cerrarModalEditarUsuario()">✖</button>
+            <h3>Editar Datos de Usuario</h3>
+            <form onsubmit="event.preventDefault(); actualizarUsuarioRegistrado();">
+                <div class="access-credentials" style="display: flex; gap: 15px; margin-bottom: 15px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="edit-usuario">Usuario:</label>
+                        <input type="text" id="edit-usuario" class="form-control" required>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="edit-password">Contraseña:</label>
+                        <div class="password-box">
+                            <input type="password" id="edit-password" class="form-control password-input" required>
+                            <i class="far fa-eye-slash toggle-password" onclick="togglePasswordVisibility(this)"></i>
+                        </div>
+                    </div>
+                </div>
+                <div id="edit-grupo-notif" style="display: none; background: #141414; border: 1px dashed #007bff; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                    <label style="color: #007bff; font-weight: bold; font-size: 0.9rem; display: block; margin-bottom: 10px;">Datos de Notificaciones</label>
+                    <div class="access-extra-row" style="display: flex; gap: 15px;">
+                        <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                            <label for="edit-nombre">Nombre:</label>
+                            <input type="text" id="edit-nombre" class="form-control">
+                        </div>
+                        <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                            <label for="edit-telefono">Número de Teléfono:</label>
+                            <input type="text" id="edit-telefono" class="form-control">
+                        </div>
+                    </div>
+                </div>
+                <div id="edit-grupo-area" style="display: none; background: #141414; border: 1px dashed #007bff; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                    <label style="color: #007bff; font-weight: bold; font-size: 0.9rem; display: block; margin-bottom: 10px;">Área Responsable</label>
+                    <select id="edit-area-responsable" class="form-control">
+                        <option value="">Selecciona un área</option>
+                        <option value="Almacen">Almacen</option>
+                        <option value="EPS">EPS</option>
+                        <option value="Ensamble">Ensamble</option>
+                        <option value="Calidad">Calidad</option>
+                        <option value="Compras">Compras</option>
+                        <option value="Embarques">Embarques</option>
+                        <option value="Corte">Corte</option>
+                    </select>
+                </div>
+                <div class="permisos-recuadro" style="margin-top: 0;">
+                    <label style="font-weight: bold; color: #fff; font-size: 0.95rem; display: block; margin-bottom: 5px;">Permisos de Páginas:</label>
+                    <div class="permisos-grid">
+                        <div class="permiso-item"><input type="checkbox" id="edit-chk-rrhh" name="edit-permisos" value="recursos_humanos"><label for="edit-chk-rrhh">Recursos Humanos</label></div>
+                        <div class="permiso-item"><input type="checkbox" id="edit-chk-reclutamiento" name="edit-permisos" value="reclutamiento"><label for="edit-chk-reclutamiento">Reclutamiento</label></div>
+                        <div class="permiso-item"><input type="checkbox" id="edit-chk-asistencias" name="edit-permisos" value="control_asistencias" onchange="toggleCamposEdicion()"><label for="edit-chk-asistencias">Control de Asistencias</label></div>
+                        <div class="permiso-item"><input type="checkbox" id="edit-chk-notificaciones" name="edit-permisos" value="notificaciones" onchange="toggleCamposEdicion()"><label for="edit-chk-notificaciones">Notificaciones</label></div>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px;">
+                    <button type="button" class="btn btn-danger" onclick="eliminarUsuarioRegistrado()">Eliminar Usuario</button>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" class="btn btn-secondary" onclick="cerrarModalEditarUsuario()">Cancelar</button>
+                        <button id="btn-editar-usuario" type="button" class="btn btn-primary" onclick="habilitarEdicionUsuario()">Editar datos</button>
+                        <button id="btn-guardar-usuario" type="submit" class="btn btn-success" style="display: none;">Guardar Cambios</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
     <script src="data-manager.js"></script>
+    <script src="control-accesos.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             var calendarEl = document.getElementById('calendar');
