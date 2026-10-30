@@ -47,6 +47,9 @@
         if (!user.usuario || !user.password || !user.permisos.length) {
             throw new Error('Usuario, contraseña y al menos un permiso son obligatorios.');
         }
+        if (user.password.length < 6) {
+            throw new Error('La contraseña debe tener al menos 6 caracteres.');
+        }
         if (users.some((item) => item.usuario.toLowerCase() === user.usuario.toLowerCase() && item.id !== userId)) {
             throw new Error('Ese usuario ya está registrado.');
         }
