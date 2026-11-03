@@ -489,7 +489,7 @@ def asegurar_columna_documentos(cur):
 
 
 def asegurar_columna_nombre_completo(cur):
-    cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS nombre_completo VARCHAR(255)")
+    cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS nombre_completo VARCHAR(100)")
     cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS numero_temporal VARCHAR(50)")
     columnas = obtener_columnas(cur, 'registro')
     campos_nombre_separados = {'nombre', 'apellido_paterno', 'apellido_materno'}
@@ -1012,11 +1012,13 @@ def guardar_registro():
     datos = request.form.to_dict()
     if not datos:
         return ("ERROR: No se recibieron datos", 400)
+    nombre_completo = (datos.get('nombre_completo') or '').strip()
+    if not nombre_completo:
+        return ("ERROR: El nombre completo es obligatorio.", 400)
 
     try:
         firma_png = datos.get('firma_png') or None
         fotografia_base64 = datos.get('fotografia_base64') or None
-        nombre_completo = (datos.get('nombre_completo') or '').strip()
         numero_temporal_raw = (datos.get('numero_temporal') or datos.get('temp_id') or '').strip()
         numero_temporal = (
             f"TEMP - {numero_temporal_raw.split('-', 1)[1].strip()}"

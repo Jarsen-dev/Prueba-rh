@@ -70,7 +70,16 @@ class RegistroNombreCompletoTests(unittest.TestCase):
         self.assertIn('nombre_completo, numero_temporal', insert_query)
         self.assertNotIn('apellido_paterno', insert_query)
         self.assertEqual(values[:2], ('Ana María López García', 'TEMP - 123'))
+        self.assertEqual(insert_query.count('%s'), len(values))
         self.assertTrue(connection.committed)
+
+    def test_registration_rejects_missing_full_name(self):
+        client = utily.app.test_client()
+
+        response = client.post('/api/guardar-registro', data={'curp': 'TEST'})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('nombre completo', response.get_data(as_text=True).lower())
 
     def test_existing_split_name_columns_are_combined_without_dropping_data(self):
         columns = [(name,) for name in (
