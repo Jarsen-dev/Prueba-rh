@@ -108,12 +108,12 @@
         const resultado = [];
         (Array.isArray(empleados) ? empleados : []).forEach((item) => {
             const normalized = normalizeEmpleado(item);
-            const nombre = normalizeNombre(normalized.nombre || normalized.nombre_completo);
+            const nombre = normalizeNombre(normalized.nombre_completo || normalized.nombre);
             const index = resultado.findIndex((existente) => {
                 const mismaEmpresa = !normalized.empresa || !existente.empresa
                     || normalizeText(normalized.empresa).toUpperCase() === normalizeText(existente.empresa).toUpperCase();
                 const mismoCurp = normalized.curp && normalizeCurp(existente.curp) === normalized.curp;
-                const mismoNombre = nombre && normalizeNombre(existente.nombre || existente.nombre_completo) === nombre;
+                const mismoNombre = nombre && normalizeNombre(existente.nombre_completo || existente.nombre) === nombre;
                 return mismaEmpresa && (mismoCurp || mismoNombre);
             });
 
@@ -165,12 +165,12 @@
             return empleados.findIndex((item) => normalizeText(item.registro_id) === registroId);
         }
 
-        const nombre = normalizeText(incoming.nombre || incoming.nombre_completo).toUpperCase();
+        const nombre = normalizeText(incoming.nombre_completo || incoming.nombre).toUpperCase();
         if (!nombre) {
             return -1;
         }
         return empleados.findIndex((item) => {
-            const itemNombre = normalizeText(item.nombre || item.nombre_completo).toUpperCase();
+            const itemNombre = normalizeText(item.nombre_completo || item.nombre).toUpperCase();
             return itemNombre === nombre;
         });
     }
