@@ -77,6 +77,17 @@ class RegistroNombresTests(unittest.TestCase):
         )
         self.assertTrue(connection.committed)
 
+    def test_registration_rejects_missing_surname_fields(self):
+        client = utily.app.test_client()
+
+        response = client.post(
+            '/api/guardar-registro',
+            data={'nombre': 'Ana María'},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Apellido Paterno y Apellido Materno', response.get_data(as_text=True))
+
     def test_legacy_name_parser_separates_names_and_compound_surnames(self):
         self.assertEqual(
             utily.separar_nombre_legado('Ana María López García'),
@@ -132,6 +143,25 @@ class RegistroNombresTests(unittest.TestCase):
             'id': 12,
         }])
         self.assertNotIn('nombre_completo', data[0])
+
+    def test_pending_candidates_recover_legacy_full_name_when_surname_columns_are_empty(self):
+        cursor = FakeCursor(fetchall_results=[
+            [],
+            [('Ana María de la Cruz García', None, None, 'TEMP - 123', 12)],
+        ])
+        client = utily.app.test_client()
+
+        with patch.object(utily, 'get_db_connection', return_value=FakeConnection(cursor)):
+            response = client.get('/api/obtener-pendientes')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), [{
+            'nombre': 'Ana María',
+            'apellido_paterno': 'de la Cruz',
+            'apellido_materno': 'García',
+            'numero_temporal': 'TEMP - 123',
+            'id': 12,
+        }])
 
     def test_pending_candidates_keep_separate_records_with_same_name(self):
         cursor = FakeCursor(fetchall_results=[

@@ -581,6 +581,17 @@ def asegurar_esquema_ingresos_puesto(cur):
     )
 
 
+def normalizar_nombre_para_ingresos(nombre, apellido_paterno, apellido_materno):
+    nombre = str(nombre or '').strip()
+    apellido_paterno = str(apellido_paterno or '').strip()
+    apellido_materno = str(apellido_materno or '').strip()
+
+    if nombre and not apellido_paterno and not apellido_materno and len(nombre.split()) > 1:
+        nombre, apellido_paterno, apellido_materno = separar_nombre_legado(nombre)
+
+    return nombre, apellido_paterno, apellido_materno
+
+
 def parsear_documentos_papeleria(raw_value):
     if not raw_value:
         return {}
@@ -1061,6 +1072,17 @@ def guardar_registro():
     if not datos:
         return ("ERROR: No se recibieron datos", 400)
 
+    campos_nombre = ('nombre', 'apellido_paterno', 'apellido_materno')
+    campos_nombre_faltantes = [
+        campo for campo in campos_nombre
+        if not (datos.get(campo) or '').strip()
+    ]
+    if campos_nombre_faltantes:
+        return (
+            "ERROR: Completa Nombre(s), Apellido Paterno y Apellido Materno.",
+            400,
+        )
+
     try:
         firma_png = datos.get('firma_png') or None
         fotografia_base64 = datos.get('fotografia_base64') or None
@@ -1217,16 +1239,18 @@ def obtener_pendientes():
                 )
                 rows = cur.fetchall()
 
-        data = [
-            {
-                'nombre': row[0],
-                'apellido_paterno': row[1],
-                'apellido_materno': row[2],
+        data = []
+        for row in rows:
+            nombre, apellido_paterno, apellido_materno = normalizar_nombre_para_ingresos(
+                row[0], row[1], row[2]
+            )
+            data.append({
+                'nombre': nombre,
+                'apellido_paterno': apellido_paterno,
+                'apellido_materno': apellido_materno,
                 'numero_temporal': row[3],
                 'id': row[4],
-            }
-            for row in rows
-        ]
+            })
         return jsonify(data), 200
     except Exception as e:
         print(f"Error: {e}")
