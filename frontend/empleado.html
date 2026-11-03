@@ -1245,7 +1245,7 @@
                         <button id="btn-regresar" class="back-btn" type="button" aria-label="Regresar a lista" title="Regresar a lista">&larr;</button>
                     </div>
                     <div class="name-center">
-                        <input id="nombre-completo" class="editable-control name-field" type="text" readonly />
+                        <input id="nombre-empleado-display" class="editable-control name-field" type="text" readonly />
                     </div>
                     <div class="name-actions">
                         <div class="edit-group">
@@ -1721,7 +1721,7 @@
         const DEFAULT_NEW_EMPLOYEE_PHOTO = 'https://lh3.googleusercontent.com/d/1RT7QfchCrWT7c2djbse7tuayVQNbRCHn=w400';
 
         const fields = {
-            'nombre-completo': document.getElementById('nombre-completo'),
+            'nombre-display': document.getElementById('nombre-empleado-display'),
             'fecha-ingreso': document.getElementById('fecha-ingreso'),
             'fecha-nacimiento': document.getElementById('fecha-nacimiento'),
             'edad': document.getElementById('edad'),
@@ -1924,7 +1924,11 @@
         }
 
         function fillFields(data) {
-            fields['nombre-completo'].value = getDisplayValue(data.nombre_completo);
+            fields['nombre-display'].value = [
+                data.nombre,
+                data.apellido_paterno,
+                data.apellido_materno,
+            ].map(getDisplayValue).filter(Boolean).join(' ');
             fields['fecha-nacimiento'].value = getDisplayValue(data.fecha_nacimiento);
             fields['edad'].value = getDisplayValue(data.edad);
             setSelectValue(fields['genero'], data.genero);
@@ -2130,11 +2134,9 @@
                 ...existing,
                 registro_id: registroId,
                 curp,
-                nombre: fields['nombre-completo'].value.trim(),
-                nombre_completo: fields['nombre-completo'].value.trim(),
-                nombres: (originalData && originalData.nombre) ? originalData.nombre : '',
-                apellido_paterno: (originalData && originalData.apellido_paterno) ? originalData.apellido_paterno : '',
-                apellido_materno: (originalData && originalData.apellido_materno) ? originalData.apellido_materno : '',
+                nombre: originalData && originalData.nombre ? originalData.nombre : '',
+                apellido_paterno: originalData && originalData.apellido_paterno ? originalData.apellido_paterno : '',
+                apellido_materno: originalData && originalData.apellido_materno ? originalData.apellido_materno : '',
                 fecha_ingreso: fields['fecha-ingreso'].value.trim(),
                 fecha_nacimiento: fields['fecha-nacimiento'].value.trim(),
                 edad: fields['edad'].value.trim(),
@@ -2276,7 +2278,7 @@
             const permanentlyLocked = new Set(['fecha-nacimiento', 'edad', 'genero', 'curp', 'rfc', 'nss']);
             Object.entries(fields).forEach(([fieldKey, el]) => {
                 if (!el) return;
-                const isName = fieldKey === 'nombre-completo';
+                const isName = fieldKey === 'nombre-display';
                 if (el.tagName === 'SELECT') {
                     el.disabled = permanentlyLocked.has(fieldKey) ? true : !isEdit;
                     return;
@@ -2421,7 +2423,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:24px;background:#f3f6fb;}
 .footer{padding:16px 22px 22px;color:#5b6575;font-size:12px;}
 </style></head><body>
 <div class="card"><div class="top"><div>${data.empresa || 'EMPRESA'}</div><div>CREDENCIAL</div></div>
-<div class="body"><div class="photo">${photoHtml}</div><div class="info"><h1>${data.nombre_completo || ''}</h1>
+<div class="body"><div class="photo">${photoHtml}</div><div class="info"><h1>${[data.nombre, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ')}</h1>
 <div class="row"><b>No. Empleado:</b> ${formatValue(data.no_empleado)}</div>
 <div class="row"><b>Puesto:</b> ${formatValue(data.puesto)}</div>
 <div class="row"><b>Área:</b> ${formatValue(data.area)}</div>
@@ -2440,7 +2442,7 @@ body{font-family:Arial,sans-serif;margin:40px;color:#111;line-height:1.6;}
 h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin-top:48px;display:grid;grid-template-columns:1fr 1fr;gap:40px;}.line{border-top:1px solid #333;padding-top:8px;text-align:center;}
 </style></head><body>
 <h1>Contrato de Trabajo</h1>
-<div class="block">Empleado: <b>${formatValue(data.nombre_completo)}</b></div>
+<div class="block">Empleado: <b>${formatValue([data.nombre, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' '))}</b></div>
 <div class="block">Empresa: <b>${formatValue(data.empresa)}</b></div>
 <div class="block">No. Empleado: <b>${formatValue(data.no_empleado)}</b></div>
 <div class="block">Puesto: <b>${formatValue(data.puesto)}</b></div>
@@ -2480,7 +2482,7 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
                 currentEmployeeCurp = String(data.curp || '').toUpperCase();
 
                 companyName.textContent = empresa;
-                document.title = `${data.nombre_completo || 'Empleado'} - ${empresa}`;
+                document.title = `${[data.nombre, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ') || 'Empleado'} - ${empresa}`;
 
                 fillFields(data);
                 if (contrasenaChatbotEl) {
@@ -2510,8 +2512,9 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
         async function guardarCambios() {
             if (isRecruitmentLimited) return;
             const payload = {
-                nombre: fields['nombre-completo'].value.trim(),
-                nombre_completo: (originalData && originalData.nombre_completo) ? String(originalData.nombre_completo).trim() : fields['nombre-completo'].value.trim(),
+                nombre: originalData && originalData.nombre ? String(originalData.nombre).trim() : '',
+                apellido_paterno: originalData && originalData.apellido_paterno ? String(originalData.apellido_paterno).trim() : '',
+                apellido_materno: originalData && originalData.apellido_materno ? String(originalData.apellido_materno).trim() : '',
                 fecha_nacimiento: fields['fecha-nacimiento'].value.trim(),
                 fecha_ingreso: fields['fecha-ingreso'].value.trim(),
                 fecha_ingreso_raw: fields['fecha-ingreso'].value.trim(),
@@ -3118,7 +3121,7 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
 
         btnEliminarEmpleado.addEventListener('click', async () => {
             if (isRecruitmentLimited) return;
-            const nombre = fields['nombre-completo'].value.trim() || 'este empleado';
+            const nombre = fields['nombre-display'].value.trim() || 'este empleado';
             if (!registroId) {
                 alert('No se pudo identificar al empleado para eliminarlo.');
                 return;

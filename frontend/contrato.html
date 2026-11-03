@@ -342,7 +342,7 @@
 
         function tieneDatosCompletos(data) {
             if (!data || typeof data !== 'object') return false;
-            const camposClave = ['nacionalidad', 'edad', 'genero', 'estado_civil', 'curp', 'rfc', 'calle', 'colonia', 'municipio', 'estado', 'codigo_postal', 'nombre_completo'];
+            const camposClave = ['nacionalidad', 'edad', 'genero', 'estado_civil', 'curp', 'rfc', 'calle', 'colonia', 'municipio', 'estado', 'codigo_postal', 'nombre', 'apellido_paterno', 'apellido_materno'];
             return camposClave.some((campo) => {
                 const valor = data[campo];
                 return valor !== null && valor !== undefined && String(valor).trim() !== '';
@@ -375,7 +375,9 @@
                         return {
                             ...(encontrado || {}),
                             ...(gafeteData || {}),
-                            nombre_completo: encontrado.nombre_completo || encontrado.nombre || gafeteData?.nombre_completo || gafeteData?.nombre || '',
+                            nombre: encontrado.nombre || gafeteData?.nombre || '',
+                            apellido_paterno: encontrado.apellido_paterno || gafeteData?.apellido_paterno || '',
+                            apellido_materno: encontrado.apellido_materno || gafeteData?.apellido_materno || '',
                             curp: encontrado.curp || gafeteData?.curp || '',
                             fecha_ingreso: encontrado.fecha_ingreso || encontrado.fecha_registro || gafeteData?.fecha_ingreso || '',
                             puesto: encontrado.puesto || gafeteData?.puesto || gafeteData?.area || '',
@@ -406,7 +408,9 @@
                 return {
                     ...(encontrado || {}),
                     ...(gafeteData || {}),
-                    nombre_completo: encontrado.nombre_completo || encontrado.nombre || gafeteData?.nombre_completo || gafeteData?.nombre || '',
+                    nombre: encontrado.nombre || gafeteData?.nombre || '',
+                    apellido_paterno: encontrado.apellido_paterno || gafeteData?.apellido_paterno || '',
+                    apellido_materno: encontrado.apellido_materno || gafeteData?.apellido_materno || '',
                     curp: encontrado.curp || gafeteData?.curp || '',
                     fecha_ingreso: encontrado.fecha_ingreso || encontrado.fecha_registro || gafeteData?.fecha_ingreso || '',
                     puesto: encontrado.puesto || gafeteData?.puesto || gafeteData?.area || '',
@@ -542,7 +546,8 @@
             const fechaInicioTexto = formatFechaLarga(fechaIngreso);
             const fechaFinalTexto = formatFechaLarga(sumarDiasHabiles(fechaIngreso, 67));
 
-            setText('lbl-nombre', data.nombre_completo || data.nombre || '');
+            const nombre = [data.nombre, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ');
+            setText('lbl-nombre', nombre);
             setText('lbl-nacionalidad', data.nacionalidad || '');
             setText('lbl-edad', data.edad || '');
             setText('lbl-genero', data.genero || '');
@@ -559,7 +564,7 @@
             setText('lbl-periodo', data.pago || '');
             setText('lbl-correo', data.correo || '');
             setText('lbl-fecha-firma', fechaInicioTexto);
-            setText('lbl-nombre-firma', data.nombre_completo || data.nombre || '');
+            setText('lbl-nombre-firma', nombre);
         }
 
         async function cargarEmpleadoContrato() {

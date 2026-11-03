@@ -597,30 +597,6 @@
                 .toUpperCase();
         }
 
-        function obtenerPartesNombreCompleto(nombreCompleto) {
-            const conectores = new Set(['DE', 'DEL', 'LA', 'LAS', 'LOS', 'Y', 'MC', 'VON', 'VAN', 'DA', 'DAS', 'DO', 'DOS']);
-            const partesCrudas = normalizarTexto(nombreCompleto).split(' ').filter(Boolean);
-            const partes = partesCrudas.filter((p) => !conectores.has(p));
-
-            if (partes.length === 0) {
-                return { nombre: '', paterno: '', materno: '' };
-            }
-
-            if (partes.length === 1) {
-                return { nombre: partes[0], paterno: '', materno: '' };
-            }
-
-            if (partes.length === 2) {
-                return { nombre: partes[1], paterno: partes[0], materno: '' };
-            }
-
-            return {
-                nombre: partes.slice(2).join(' '),
-                paterno: partes[0],
-                materno: partes[1],
-            };
-        }
-
         function primeraVocalInterna(texto) {
             const base = normalizarTexto(texto);
             for (let i = 1; i < base.length; i += 1) {
@@ -751,14 +727,14 @@
 
             const tempIdParam = new URLSearchParams(window.location.search).get('temp_id');
             const tempIdValue = tempIdParam ? tempIdParam.replace(/^TEMP\s*-\s*/i, '').trim() : '';
-            const nombreCompleto = [registro.nombre, registro.apellido_paterno, registro.apellido_materno]
+            const nombreVisible = [registro.nombre, registro.apellido_paterno, registro.apellido_materno]
                 .map((parte) => String(parte || '').trim())
                 .filter(Boolean)
                 .join(' ');
-            if (tempIdValue && nombreCompleto) {
+            if (tempIdValue && nombreVisible) {
                 try {
                     const tempIds = JSON.parse(localStorage.getItem('rh_temp_employee_ids') || '{}');
-                    const nombreClave = nombreCompleto.toLocaleLowerCase();
+                    const nombreClave = nombreVisible.toLocaleLowerCase();
                     tempIds[nombreClave] = `TEMP - ${tempIdValue}`;
                     localStorage.setItem('rh_temp_employee_ids', JSON.stringify(tempIds));
                 } catch (_) {}

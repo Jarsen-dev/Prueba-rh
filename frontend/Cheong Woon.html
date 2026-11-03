@@ -267,22 +267,14 @@
             return {
                 ...emp,
                 ...local,
-                nombre: local.nombre_completo || local.nombre || emp.nombre || '',
-                nombre_completo: local.nombre_completo || local.nombre || emp.nombre || '',
+                nombre: local.nombre || emp.nombre || '',
+                apellido_paterno: local.apellido_paterno || emp.apellido_paterno || '',
+                apellido_materno: local.apellido_materno || emp.apellido_materno || '',
                 no_empleado: local.no_empleado || emp.no_empleado || '',
                 fecha_ingreso: local.fecha_ingreso || local.fecha_registro || emp.fecha_ingreso || emp.fecha_registro || '',
                 area: local.area || emp.area || '',
                 turno: local.turno || emp.turno || '',
                 estatus: String(emp.estatus || (local && local.estatus) || 'ACTIVO').toUpperCase(),
-            };
-        }
-
-        function separarNombreApellidos(nombreCompleto) {
-            const partes = String(nombreCompleto || '').trim().split(/\s+/).filter(Boolean);
-            const apellidos = partes.splice(-2);
-            return {
-                nombre: partes.join(' '),
-                apellidos: apellidos.join(' '),
             };
         }
 
@@ -435,7 +427,8 @@
 
         function renderFila(emp) {
             const displayEmp = getEmpleadoConLocal(emp);
-            const { nombre, apellidos } = separarNombreApellidos(displayEmp.nombre);
+            const nombre = displayEmp.nombre || '';
+            const apellidos = [displayEmp.apellido_paterno, displayEmp.apellido_materno].filter(Boolean).join(' ');
             const estatus = displayEmp.estatus;
             const color = estatus === 'ACTIVO' ? '#28a745' : '#dc3545';
             const linkEmpleado = `empleado.html?registro_id=${encodeURIComponent(displayEmp.registro_id || '')}&nombre=${encodeURIComponent(displayEmp.nombre || '')}`;
@@ -518,7 +511,8 @@
                         registro_id: emp.registro_id,
                         curp: emp.curp || '',
                         nombre: emp.nombre || '',
-                        nombre_completo: emp.nombre || '',
+                        apellido_paterno: emp.apellido_paterno || '',
+                        apellido_materno: emp.apellido_materno || '',
                         empresa: 'CHEONG WOON',
                         puesto: emp.puesto || '',
                         area: emp.area || '',

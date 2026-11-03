@@ -246,7 +246,7 @@
             const fechaIngreso = data.fecha_ingreso || data.fecha_registro || '';
 
             setFotoEmpleado(data);
-            setText('lbl-nombre', data.nombre_completo || data.nombre || '');
+            setText('lbl-nombre', [data.nombre, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' '));
             setText('lbl-nss', data.nss || data.imss || '');
             setText('lbl-curp', data.curp || '');
             setText('lbl-puesto', data.puesto || data.area || '');

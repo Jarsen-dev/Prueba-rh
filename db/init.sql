@@ -1,7 +1,6 @@
 CREATE TABLE IF NOT EXISTS registro (
     id                      SERIAL PRIMARY KEY,
     fecha_registro          DATE DEFAULT CURRENT_DATE,
-    nombre_completo         VARCHAR(255) NOT NULL,
     nombre                  VARCHAR(100),
     apellido_paterno        VARCHAR(100),
     apellido_materno        VARCHAR(100),
@@ -40,9 +39,6 @@ ALTER TABLE registro
     ADD COLUMN IF NOT EXISTS apellido_materno VARCHAR(100);
 ALTER TABLE registro
     ADD COLUMN IF NOT EXISTS numero_temporal VARCHAR(50);
-ALTER TABLE registro
-    ALTER COLUMN nombre_completo TYPE VARCHAR(255);
-
 CREATE TABLE IF NOT EXISTS encuesta_reclutamiento (
     id                  SERIAL PRIMARY KEY,
     fuente              VARCHAR(50),

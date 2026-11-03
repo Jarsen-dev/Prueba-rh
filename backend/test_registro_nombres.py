@@ -5,9 +5,10 @@ import utily
 
 
 class FakeCursor:
-    def __init__(self, rows=None):
+    def __init__(self, rows=None, fetchall_results=None):
         self.queries = []
         self.rows = rows or []
+        self.fetchall_results = list(fetchall_results or [])
 
     def __enter__(self):
         return self
@@ -19,6 +20,8 @@ class FakeCursor:
         self.queries.append((query, params))
 
     def fetchall(self):
+        if self.fetchall_results:
+            return self.fetchall_results.pop(0)
         return self.rows
 
 
@@ -41,7 +44,7 @@ class FakeConnection:
 
 
 class RegistroNombresTests(unittest.TestCase):
-    def test_registration_saves_separate_names_and_combined_legacy_name(self):
+    def test_registration_saves_only_separate_name_fields(self):
         cursor = FakeCursor()
         connection = FakeConnection(cursor)
         client = utily.app.test_client()
@@ -63,40 +66,69 @@ class RegistroNombresTests(unittest.TestCase):
             for query, params in cursor.queries
             if 'INSERT INTO registro' in query
         )
-        self.assertIn(
-            'nombre_completo, nombre, apellido_paterno, apellido_materno, numero_temporal',
-            insert_query,
-        )
+        self.assertNotIn('nombre_completo', insert_query)
+        self.assertIn('nombre, apellido_paterno, apellido_materno, numero_temporal', insert_query)
         self.assertEqual(
-            values[:5],
-            ('Ana María López García', 'Ana María', 'López', 'García', 'TEMP - 123'),
+            values[:4],
+            ('Ana María', 'López', 'García', 'TEMP - 123'),
         )
         self.assertTrue(connection.committed)
 
-    def test_display_name_expression_falls_back_to_legacy_full_name(self):
-        expression = utily.expresion_nombre_completo('r')
+    def test_legacy_name_parser_separates_names_and_compound_surnames(self):
+        self.assertEqual(
+            utily.separar_nombre_legado('Ana María López García'),
+            ('Ana María', 'López', 'García'),
+        )
+        self.assertEqual(
+            utily.separar_nombre_legado('Ana María de la Cruz García'),
+            ('Ana María', 'de la Cruz', 'García'),
+        )
+        self.assertEqual(
+            utily.separar_nombre_legado('José de la Cruz'),
+            ('José', '', 'de la Cruz'),
+        )
 
-        self.assertIn('r.nombre', expression)
-        self.assertIn('r.apellido_paterno', expression)
-        self.assertIn('r.apellido_materno', expression)
-        self.assertIn('r.nombre_completo', expression)
+    def test_legacy_migration_copies_missing_parts_before_dropping_old_column(self):
+        columns = [(name,) for name in (
+            'id', 'nombre', 'apellido_paterno', 'apellido_materno', 'nombre_completo',
+        )]
+        cursor = FakeCursor(fetchall_results=[
+            columns,
+            columns,
+            [(7, 'Ana María López García')],
+        ])
 
-    def test_pending_candidates_include_separate_names_and_full_name(self):
-        cursor = FakeCursor([('Ana María', 'López', 'García', 'Ana María López García', 'TEMP - 123', 12)])
+        utily.asegurar_columnas_nombre(cursor)
+
+        update_query, update_params = next(
+            (query, params)
+            for query, params in cursor.queries
+            if 'UPDATE registro' in query
+        )
+        self.assertIn('COALESCE(NULLIF(BTRIM(nombre)', update_query)
+        self.assertEqual(update_params, ('Ana María', 'López', 'García', 7))
+        self.assertEqual(cursor.queries[-1][0], 'ALTER TABLE registro DROP COLUMN nombre_completo')
+
+    def test_pending_candidates_include_only_separate_name_fields(self):
+        cursor = FakeCursor(fetchall_results=[
+            [],
+            [('Ana María', 'López', 'García', 'TEMP - 123', 12)],
+        ])
         client = utily.app.test_client()
 
         with patch.object(utily, 'get_db_connection', return_value=FakeConnection(cursor)):
             response = client.get('/api/obtener-pendientes')
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), [{
+        data = response.get_json()
+        self.assertEqual(data, [{
             'nombre': 'Ana María',
             'apellido_paterno': 'López',
             'apellido_materno': 'García',
-            'nombre_completo': 'Ana María López García',
             'numero_temporal': 'TEMP - 123',
             'id': 12,
         }])
+        self.assertNotIn('nombre_completo', data[0])
 
 
 if __name__ == '__main__':
