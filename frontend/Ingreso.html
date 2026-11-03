@@ -152,7 +152,7 @@
         const PORT = '8001';
         const API_URL = `http://${currentHost}:${PORT}`;
         const API_BASES_GET = ['', API_URL, `http://localhost:${PORT}`];
-        const API_BASES_ACTION = [API_URL, 'http://localhost:8001'];
+        const API_BASES_ACTION = ['', API_URL, `http://localhost:${PORT}`];
 
         const cuerpo = document.getElementById('cuerpo-tabla');
         const btnGuardarDatos = document.getElementById('btn-guardar-datos');

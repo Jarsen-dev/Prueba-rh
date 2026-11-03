@@ -73,6 +73,9 @@ CREATE TABLE IF NOT EXISTS ingresos_puesto (
     registro_id         INTEGER REFERENCES registro(id) ON DELETE CASCADE
 );
 
+ALTER TABLE ingresos_puesto
+    ADD COLUMN IF NOT EXISTS registro_id INTEGER REFERENCES registro(id) ON DELETE CASCADE;
+
 CREATE TABLE IF NOT EXISTS chatbot_credenciales (
     registro_id         INTEGER PRIMARY KEY REFERENCES registro(id) ON DELETE CASCADE,
     contrasena          TEXT NOT NULL,

@@ -24,6 +24,9 @@ class FakeCursor:
             return self.fetchall_results.pop(0)
         return self.rows
 
+    def fetchone(self):
+        return None
+
 
 class FakeConnection:
     def __init__(self, cursor):
@@ -129,6 +132,51 @@ class RegistroNombresTests(unittest.TestCase):
             'id': 12,
         }])
         self.assertNotIn('nombre_completo', data[0])
+
+    def test_income_schema_adds_registration_link_for_existing_databases(self):
+        cursor = FakeCursor()
+
+        utily.asegurar_esquema_ingresos_puesto(cursor)
+
+        self.assertTrue(any(
+            'CREATE TABLE IF NOT EXISTS ingresos_puesto' in query
+            for query, _ in cursor.queries
+        ))
+        self.assertTrue(any(
+            'ADD COLUMN IF NOT EXISTS registro_id' in query
+            for query, _ in cursor.queries
+        ))
+
+    def test_saving_income_inserts_assignment_linked_to_registration(self):
+        cursor = FakeCursor()
+        connection = FakeConnection(cursor)
+        client = utily.app.test_client()
+        payload = {
+            'nombre_candidato': 'Ana María López García',
+            'empresa': 'CHEONG WOON',
+            'no_empleado': 'TEMP - 123',
+            'personal': 'OPERATIVO',
+            'puesto': 'OPERARIO',
+            'area': 'EPS',
+            'turno': 'DÍA',
+            'salario': '1000',
+            'pago': 'SEMANAL',
+            'registro_id': '12',
+        }
+
+        with patch.object(utily, 'get_db_connection', return_value=connection):
+            response = client.post('/api/guardar-ingreso', json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_data(as_text=True), 'OK')
+        insert_query, insert_values = next(
+            (query, params)
+            for query, params in cursor.queries
+            if 'INSERT INTO ingresos_puesto' in query
+        )
+        self.assertIn('registro_id', insert_query)
+        self.assertEqual(insert_values[-1], 12)
+        self.assertTrue(connection.committed)
 
 
 if __name__ == '__main__':
