@@ -508,6 +508,11 @@
 
             const form = document.getElementById('registroForm');
             const formData = new FormData(form);
+            const tempId = new URLSearchParams(window.location.search).get('temp_id');
+            if (tempId) {
+                const cleanTempId = tempId.replace(/^TEMP\s*-\s*/i, '').trim();
+                if (cleanTempId) formData.set('numero_temporal', `TEMP - ${cleanTempId}`);
+            }
 
             try {
                 const { respuesta, texto } = await postConFallback('/api/guardar-registro', formData);

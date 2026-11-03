@@ -13,7 +13,7 @@
         
         table { width: 100%; min-width: 1450px; border-collapse: collapse; color: #fff; margin-top: 15px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #333; }
-        .col-seleccion { display: none; width: 42px; text-align: center; }
+        .col-seleccion { display: none; width: 42px; min-width: 42px; text-align: center; }
         .modo-eliminacion .col-seleccion { display: table-cell; }
         .col-nombre { min-width: 160px; }
         .col-apellido { min-width: 150px; }
@@ -127,8 +127,8 @@
                 <table id="tabla-ingresos">
                     <thead>
                         <tr style="border-bottom: 2px solid #444;">
-                            <th class="col-nombre">Nombre(s)</th>
                             <th class="col-seleccion" aria-label="Seleccionar para eliminar"></th>
+                            <th class="col-nombre">Nombre(s)</th>
                             <th class="col-apellido">Apellido Paterno</th>
                             <th class="col-apellido">Apellido Materno</th>
                             <th>Empresa</th>
@@ -248,6 +248,29 @@
             }
         }
 
+        function obtenerPartesCandidato(candidato) {
+            const nombreCompleto = String(candidato.nombre_completo || '').trim();
+            if (candidato.nombre || candidato.apellido_paterno || candidato.apellido_materno) {
+                return {
+                    nombre: candidato.nombre || nombreCompleto,
+                    apellido_paterno: candidato.apellido_paterno || '',
+                    apellido_materno: candidato.apellido_materno || '',
+                };
+            }
+
+            return {
+                nombre: candidato.nombre_completo || candidato.nombre || '',
+                apellido_paterno: '',
+                apellido_materno: '',
+            };
+        }
+
+        function normalizarNumeroTemporal(valor) {
+            const texto = String(valor || '').trim();
+            if (!texto) return '';
+            return /^TEMP\s*-/i.test(texto) ? texto.replace(/^TEMP\s*-\s*/i, 'TEMP - ') : `TEMP - ${texto}`;
+        }
+
         function escaparHtml(valor) {
             return String(valor || '').replace(/[&<>"']/g, (caracter) => ({
                 '&': '&amp;',
@@ -259,13 +282,16 @@
         }
 
         function filaTemplate(candidato) {
-            const tempId = obtenerNumeroTemporal(candidato.nombre_completo);
+            const partes = obtenerPartesCandidato(candidato);
+            const tempId = normalizarNumeroTemporal(candidato.numero_temporal)
+                || obtenerNumeroTemporal(candidato.nombre_completo)
+                || obtenerNumeroTemporal(partes.nombre);
             return `
                 <tr data-id="${escaparHtml(candidato.id)}" data-nombre-completo="${escaparHtml(candidato.nombre_completo)}">
-                    <td class="col-nombre">${escaparHtml(candidato.nombre)}</td>
                     <td class="col-seleccion"><input class="checkbox-candidato" type="checkbox" aria-label="Seleccionar ${escaparHtml(candidato.nombre_completo)} para eliminar"></td>
-                    <td class="col-apellido">${escaparHtml(candidato.apellido_paterno)}</td>
-                    <td class="col-apellido">${escaparHtml(candidato.apellido_materno)}</td>
+                    <td class="col-nombre">${escaparHtml(partes.nombre)}</td>
+                    <td class="col-apellido">${escaparHtml(partes.apellido_paterno)}</td>
+                    <td class="col-apellido">${escaparHtml(partes.apellido_materno)}</td>
                     <td>
                         <select class="campo-empresa" required>
                             <option value="" selected>Selecciona la opcion</option>

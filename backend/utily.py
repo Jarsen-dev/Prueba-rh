@@ -489,6 +489,7 @@ def asegurar_columnas_nombre(cur, ampliar_nombre_completo=False):
     cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS nombre VARCHAR(100)")
     cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS apellido_paterno VARCHAR(100)")
     cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS apellido_materno VARCHAR(100)")
+    cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS numero_temporal VARCHAR(50)")
     if ampliar_nombre_completo:
         cur.execute("ALTER TABLE registro ALTER COLUMN nombre_completo TYPE VARCHAR(255)")
 
@@ -989,22 +990,29 @@ def guardar_registro():
         nombre = (datos.get('nombre') or '').strip()
         apellido_paterno = (datos.get('apellido_paterno') or '').strip()
         apellido_materno = (datos.get('apellido_materno') or '').strip()
+        numero_temporal_raw = (datos.get('numero_temporal') or datos.get('temp_id') or '').strip()
+        numero_temporal = (
+            f"TEMP - {numero_temporal_raw.split('-', 1)[1].strip()}"
+            if numero_temporal_raw.upper().startswith('TEMP')
+            and '-' in numero_temporal_raw
+            else f"TEMP - {numero_temporal_raw}" if numero_temporal_raw else None
+        )
         nombre_completo = ' '.join(
             parte for parte in (nombre, apellido_paterno, apellido_materno) if parte
         ) or (datos.get('nombre_completo') or '').strip()
 
         query = """
         INSERT INTO registro (
-            nombre_completo, nombre, apellido_paterno, apellido_materno,
+            nombre_completo, nombre, apellido_paterno, apellido_materno, numero_temporal,
             fecha_nacimiento, edad, genero, estado_civil, nacionalidad, procedencia,
             curp, rfc, nss, tel_movil, correo, codigo_postal, colonia, calle,
             num_ext, num_int, municipio, estado, nombre_emergencia,
             parentesco_emergencia, telefono_emergencia, firma_archivo, fotografia_base64
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         values = (
-            nombre_completo, nombre or None, apellido_paterno or None, apellido_materno or None,
+            nombre_completo, nombre or None, apellido_paterno or None, apellido_materno or None, numero_temporal,
             datos.get('fecha_nac'), datos.get('edad'), datos.get('genero'),
             datos.get('edo_civil'), datos.get('nacionalidad'), datos.get('procedencia'), datos.get('curp'), datos.get('rfc'),
             datos.get('nss'), datos.get('tel_movil'), datos.get('correo'), datos.get('cp'),
@@ -1123,6 +1131,7 @@ def obtener_pendientes():
                         r.apellido_paterno,
                         r.apellido_materno,
                         {nombre_completo_sql},
+                        r.numero_temporal,
                         r.id
                     FROM registro r
                     WHERE NOT EXISTS (
@@ -1141,7 +1150,8 @@ def obtener_pendientes():
                 'apellido_paterno': row[1],
                 'apellido_materno': row[2],
                 'nombre_completo': row[3],
-                'id': row[4],
+                'numero_temporal': row[4],
+                'id': row[5],
             }
             for row in rows
         ]

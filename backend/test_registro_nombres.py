@@ -53,6 +53,7 @@ class RegistroNombresTests(unittest.TestCase):
                     'nombre': 'Ana María',
                     'apellido_paterno': 'López',
                     'apellido_materno': 'García',
+                    'numero_temporal': 'TEMP - 123',
                 },
             )
 
@@ -62,8 +63,14 @@ class RegistroNombresTests(unittest.TestCase):
             for query, params in cursor.queries
             if 'INSERT INTO registro' in query
         )
-        self.assertIn('nombre_completo, nombre, apellido_paterno, apellido_materno', insert_query)
-        self.assertEqual(values[:4], ('Ana María López García', 'Ana María', 'López', 'García'))
+        self.assertIn(
+            'nombre_completo, nombre, apellido_paterno, apellido_materno, numero_temporal',
+            insert_query,
+        )
+        self.assertEqual(
+            values[:5],
+            ('Ana María López García', 'Ana María', 'López', 'García', 'TEMP - 123'),
+        )
         self.assertTrue(connection.committed)
 
     def test_display_name_expression_falls_back_to_legacy_full_name(self):
@@ -75,7 +82,7 @@ class RegistroNombresTests(unittest.TestCase):
         self.assertIn('r.nombre_completo', expression)
 
     def test_pending_candidates_include_separate_names_and_full_name(self):
-        cursor = FakeCursor([('Ana María', 'López', 'García', 'Ana María López García', 12)])
+        cursor = FakeCursor([('Ana María', 'López', 'García', 'Ana María López García', 'TEMP - 123', 12)])
         client = utily.app.test_client()
 
         with patch.object(utily, 'get_db_connection', return_value=FakeConnection(cursor)):
@@ -87,6 +94,7 @@ class RegistroNombresTests(unittest.TestCase):
             'apellido_paterno': 'López',
             'apellido_materno': 'García',
             'nombre_completo': 'Ana María López García',
+            'numero_temporal': 'TEMP - 123',
             'id': 12,
         }])
 
