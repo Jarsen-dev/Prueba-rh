@@ -8,11 +8,15 @@
     <title>CW Connect</title>
     <link rel="icon" type="image/png" href="favicon.png">
     <style>
-        .container { max-width: 1200px; margin: 20px auto; padding: 20px; background: #1e1e1e; border-radius: 12px; }
+        .container { width: min(96%, 1600px); max-width: 1600px; margin: 20px auto; padding: 24px; background: #1e1e1e; border-radius: 12px; box-sizing: border-box; }
         .table-container { overflow-x: auto; }
         
-        table { width: 100%; border-collapse: collapse; color: #fff; margin-top: 15px; }
+        table { width: 100%; min-width: 1450px; border-collapse: collapse; color: #fff; margin-top: 15px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #333; }
+        .col-seleccion { display: none; width: 42px; text-align: center; }
+        .modo-eliminacion .col-seleccion { display: table-cell; }
+        .col-nombre { min-width: 160px; }
+        .col-apellido { min-width: 150px; }
         
         select, input { 
             background: #121212; color: #fff; border: 1px solid #444; 
@@ -21,10 +25,13 @@
 
         .titulo-acciones {
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-end;
             align-items: center;
+            flex-wrap: wrap;
             gap: 12px;
         }
+
+        .titulo-acciones h3 { margin-right: auto !important; }
 
         .btn-guardar {
             text-decoration: none;
@@ -53,6 +60,21 @@
         }
 
         .btn-eliminar:hover { background: #ff4b4b; color: white; }
+
+        .btn-cancelar {
+            color: #ddd;
+            font-weight: bold;
+            border: 1px solid #888;
+            padding: 5px 12px;
+            border-radius: 5px;
+            background: #2c2c2c;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .acciones-seleccion { display: flex; align-items: center; gap: 8px; }
+        .acciones-seleccion[hidden] { display: none; }
+        .checkbox-candidato { width: auto; transform: scale(1.15); cursor: pointer; }
 
         .fila-error {
             outline: 2px solid #ff4b4b;
@@ -94,13 +116,21 @@
         <div class="container">
             <div class="titulo-acciones">
                 <h3 style="margin: 0;">Asignación de Puesto</h3>
+                <button id="btn-iniciar-eliminacion" class="btn-eliminar" type="button">Eliminar</button>
+                <div id="acciones-seleccion" class="acciones-seleccion" hidden>
+                    <button id="btn-eliminar-seleccionados" class="btn-eliminar" type="button">Eliminar seleccionados</button>
+                    <button id="btn-cancelar-eliminacion" class="btn-cancelar" type="button">Cancelar</button>
+                </div>
                 <button id="btn-guardar-datos" class="btn-guardar" type="button">Guardar Datos</button>
             </div>
             <div class="table-container">
                 <table id="tabla-ingresos">
                     <thead>
                         <tr style="border-bottom: 2px solid #444;">
-                            <th>Nombre</th>
+                            <th class="col-nombre">Nombre(s)</th>
+                            <th class="col-seleccion" aria-label="Seleccionar para eliminar"></th>
+                            <th class="col-apellido">Apellido Paterno</th>
+                            <th class="col-apellido">Apellido Materno</th>
                             <th>Empresa</th>
                             <th>No. Empleado</th>
                             <th>Área</th>
@@ -108,7 +138,6 @@
                             <th>Turno</th>
                             <th>Salario</th>
                             <th>Periodo de Pago</th>
-                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody id="cuerpo-tabla">
@@ -127,6 +156,10 @@
 
         const cuerpo = document.getElementById('cuerpo-tabla');
         const btnGuardarDatos = document.getElementById('btn-guardar-datos');
+        const btnIniciarEliminacion = document.getElementById('btn-iniciar-eliminacion');
+        const accionesSeleccion = document.getElementById('acciones-seleccion');
+        const btnEliminarSeleccionados = document.getElementById('btn-eliminar-seleccionados');
+        const btnCancelarEliminacion = document.getElementById('btn-cancelar-eliminacion');
         const puestosPorArea = {
             'EPS': [
                 'AYUDANTE GENERAL', 'ALMACENISTA', 'BLOCK', 'CALDERA', 'CAPTURISTA',
@@ -215,11 +248,24 @@
             }
         }
 
+        function escaparHtml(valor) {
+            return String(valor || '').replace(/[&<>"']/g, (caracter) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;',
+            })[caracter]);
+        }
+
         function filaTemplate(candidato) {
             const tempId = obtenerNumeroTemporal(candidato.nombre_completo);
             return `
-                <tr data-id="${candidato.id}">
-                    <td>${candidato.nombre_completo || ''}</td>
+                <tr data-id="${escaparHtml(candidato.id)}" data-nombre-completo="${escaparHtml(candidato.nombre_completo)}">
+                    <td class="col-nombre">${escaparHtml(candidato.nombre)}</td>
+                    <td class="col-seleccion"><input class="checkbox-candidato" type="checkbox" aria-label="Seleccionar ${escaparHtml(candidato.nombre_completo)} para eliminar"></td>
+                    <td class="col-apellido">${escaparHtml(candidato.apellido_paterno)}</td>
+                    <td class="col-apellido">${escaparHtml(candidato.apellido_materno)}</td>
                     <td>
                         <select class="campo-empresa" required>
                             <option value="" selected>Selecciona la opcion</option>
@@ -227,7 +273,7 @@
                             <option value="KRONOS">KRONOS</option>
                         </select>
                     </td>
-                    <td><input class="campo-no-empleado" type="text" value="${tempId}" readonly required></td>
+                    <td><input class="campo-no-empleado" type="text" value="${escaparHtml(tempId)}" readonly required></td>
                     <td>
                         <select class="campo-area" required>
                             <option value="" selected>Selecciona la opcion</option>
@@ -262,7 +308,6 @@
                             <option value="MENSUAL">MENSUAL</option>
                         </select>
                     </td>
-                    <td><button class="btn-eliminar" type="button" data-action="eliminar">Eliminar</button></td>
                 </tr>
             `;
         }
@@ -302,32 +347,32 @@
         }
 
         async function cargarPendientes() {
-            cuerpo.innerHTML = '<tr><td colspan="9">Cargando candidatos...</td></tr>';
+            cuerpo.innerHTML = '<tr><td colspan="11">Cargando candidatos...</td></tr>';
 
             try {
                 const { respuesta, texto } = await getConFallback('/api/obtener-pendientes');
 
                 if (!respuesta.ok) {
                     alert(`Error al obtener pendientes (${respuesta.status}): ${texto || 'Sin detalle'}`);
-                    cuerpo.innerHTML = '<tr><td colspan="9">No se pudieron cargar candidatos.</td></tr>';
+                    cuerpo.innerHTML = '<tr><td colspan="11">No se pudieron cargar candidatos.</td></tr>';
                     return;
                 }
 
                 const candidatos = deduplicarCandidatosPendientes(JSON.parse(texto || '[]'));
                 if (!Array.isArray(candidatos) || !candidatos.length) {
-                    cuerpo.innerHTML = '<tr><td colspan="9">No hay candidatos pendientes.</td></tr>';
+                    cuerpo.innerHTML = '<tr><td colspan="11">No hay candidatos pendientes.</td></tr>';
                     return;
                 }
 
                 cuerpo.innerHTML = candidatos.map(filaTemplate).join('');
             } catch (error) {
                 alert('Error de conexión al cargar pendientes: ' + error.message);
-                cuerpo.innerHTML = '<tr><td colspan="9">No se pudieron cargar candidatos.</td></tr>';
+                cuerpo.innerHTML = '<tr><td colspan="11">No se pudieron cargar candidatos.</td></tr>';
             }
         }
 
         function construirFilaPayload(tr) {
-            const nombre = tr.querySelector('td:first-child')?.textContent.trim() || '';
+            const nombre = (tr.dataset.nombreCompleto || '').trim();
             return {
                 registro_id: (tr.dataset.id || '').trim(),
                 nombre_candidato: nombre,
@@ -440,37 +485,72 @@
         document.addEventListener('DOMContentLoaded', () => {
             cargarPendientes();
             btnGuardarDatos.addEventListener('click', guardarDatosCompletos);
+            btnIniciarEliminacion.addEventListener('click', () => {
+                document.getElementById('tabla-ingresos').classList.add('modo-eliminacion');
+                btnIniciarEliminacion.hidden = true;
+                accionesSeleccion.hidden = false;
+            });
+            btnCancelarEliminacion.addEventListener('click', cancelarEliminacion);
+            btnEliminarSeleccionados.addEventListener('click', eliminarSeleccionados);
         });
 
-        async function eliminarPendiente(tr) {
-            const nombre = tr.querySelector('td:first-child')?.textContent.trim() || 'este registro';
-            if (!window.confirm(`Esta accion eliminara definitivamente a ${nombre}. ¿Deseas continuar?`)) return;
+        function cancelarEliminacion() {
+            cuerpo.querySelectorAll('.checkbox-candidato').forEach((checkbox) => {
+                checkbox.checked = false;
+            });
+            document.getElementById('tabla-ingresos').classList.remove('modo-eliminacion');
+            accionesSeleccion.hidden = true;
+            btnIniciarEliminacion.hidden = false;
+        }
 
-            const id = tr.dataset.id;
-            if (!id) {
-                alert('No se puede eliminar el registro porque no tiene un ID válido.');
+        async function eliminarSeleccionados() {
+            const seleccionadas = Array.from(cuerpo.querySelectorAll('tr[data-id]'))
+                .filter((tr) => tr.querySelector('.checkbox-candidato')?.checked);
+            if (!seleccionadas.length) {
+                alert('Selecciona al menos un registro para eliminar.');
                 return;
             }
 
+            const nombres = seleccionadas.map((tr) => tr.dataset.nombreCompleto || 'registro');
+            const resumen = nombres.length <= 3
+                ? nombres.join(', ')
+                : `${nombres.slice(0, 3).join(', ')} y ${nombres.length - 3} más`;
+            if (!window.confirm(`Se eliminarán definitivamente ${seleccionadas.length} registro(s): ${resumen}. ¿Deseas continuar?`)) return;
+
+            btnEliminarSeleccionados.disabled = true;
+            let eliminados = 0;
+            const errores = [];
             try {
-                const { respuesta, texto } = await deleteConFallback(`/api/eliminar-pendiente/${encodeURIComponent(id)}`);
+                for (const tr of seleccionadas) {
+                    const id = tr.dataset.id;
+                    if (!id) {
+                        errores.push('Un registro no tiene un ID válido.');
+                        continue;
+                    }
 
-                if (!respuesta.ok) {
-                    alert(texto || `No se pudo eliminar el registro (${respuesta.status}).`);
-                    return;
+                    try {
+                        const { respuesta, texto } = await deleteConFallback(`/api/eliminar-pendiente/${encodeURIComponent(id)}`);
+                        if (!respuesta.ok) {
+                            errores.push(`${tr.dataset.nombreCompleto || id}: ${texto || `HTTP ${respuesta.status}`}`);
+                            continue;
+                        }
+                        tr.remove();
+                        eliminados += 1;
+                    } catch (error) {
+                        errores.push(`${tr.dataset.nombreCompleto || id}: ${error.message}`);
+                    }
                 }
+            } finally {
+                btnEliminarSeleccionados.disabled = false;
+            }
 
-                tr.remove();
-            } catch (error) {
-                alert('Error de conexión al eliminar el registro: ' + error.message);
+            if (errores.length) {
+                alert(`Se eliminaron ${eliminados} registro(s). No se pudieron eliminar ${errores.length}:\n${errores.join('\n')}`);
+            } else {
+                alert(`Se eliminaron ${eliminados} registro(s) correctamente.`);
+                cancelarEliminacion();
             }
         }
-
-        cuerpo.addEventListener('click', (event) => {
-            const botonEliminar = event.target.closest('[data-action="eliminar"]');
-            if (!botonEliminar) return;
-            eliminarPendiente(botonEliminar.closest('tr[data-id]'));
-        });
 
         cuerpo.addEventListener('change', (event) => {
             const empresa = event.target.closest('.campo-empresa');
