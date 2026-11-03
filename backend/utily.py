@@ -1012,9 +1012,16 @@ def guardar_registro():
     datos = request.form.to_dict()
     if not datos:
         return ("ERROR: No se recibieron datos", 400)
-    nombre_completo = (datos.get('nombre_completo') or '').strip()
+    nombre_completo = str(datos.get('nombre_completo') or '').strip()
+    if not nombre_completo:
+        nombre_completo = ' '.join(filter(None, (
+            str(datos.get(campo) or '').strip()
+            for campo in ('nombre', 'apellido_paterno', 'apellido_materno')
+        )))
     if not nombre_completo:
         return ("ERROR: El nombre completo es obligatorio.", 400)
+    if len(nombre_completo) > 100:
+        return ("ERROR: El nombre completo no puede superar 100 caracteres.", 400)
 
     try:
         firma_png = datos.get('firma_png') or None
