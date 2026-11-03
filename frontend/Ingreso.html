@@ -276,7 +276,6 @@
         function filaTemplate(candidato) {
             const nombreVisible = obtenerNombreVisible(candidato);
             const tempId = normalizarNumeroTemporal(candidato.numero_temporal)
-                || obtenerNumeroTemporal(nombreVisible)
                 || obtenerNumeroTemporal(nombreVisible);
             return `
                 <tr data-id="${escaparHtml(candidato.id)}" data-nombre-visible="${escaparHtml(nombreVisible)}">
