@@ -133,6 +133,23 @@ class RegistroNombresTests(unittest.TestCase):
         }])
         self.assertNotIn('nombre_completo', data[0])
 
+    def test_pending_candidates_keep_separate_records_with_same_name(self):
+        cursor = FakeCursor(fetchall_results=[
+            [],
+            [
+                ('Ana', 'López', 'García', 'TEMP - 123', 12),
+                ('Ana', 'López', 'García', 'TEMP - 124', 13),
+            ],
+        ])
+        client = utily.app.test_client()
+
+        with patch.object(utily, 'get_db_connection', return_value=FakeConnection(cursor)):
+            response = client.get('/api/obtener-pendientes')
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual([registro['id'] for registro in data], [12, 13])
+
     def test_income_schema_adds_registration_link_for_existing_databases(self):
         cursor = FakeCursor()
 
