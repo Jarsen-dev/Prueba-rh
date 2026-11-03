@@ -76,10 +76,47 @@ class RegistroNombreCompletoTests(unittest.TestCase):
     def test_registration_rejects_missing_full_name(self):
         client = utily.app.test_client()
 
-        response = client.post('/api/guardar-registro', data={'curp': 'TEST'})
+        with patch.object(utily, 'get_db_connection') as get_db_connection:
+            response = client.post('/api/guardar-registro', data={'curp': 'TEST'})
 
         self.assertEqual(response.status_code, 400)
         self.assertIn('nombre completo', response.get_data(as_text=True).lower())
+        get_db_connection.assert_not_called()
+
+    def test_registration_combines_legacy_split_name_fields(self):
+        cursor = FakeCursor()
+        connection = FakeConnection(cursor)
+        client = utily.app.test_client()
+
+        with patch.object(utily, 'get_db_connection', return_value=connection):
+            response = client.post(
+                '/api/guardar-registro',
+                data={
+                    'nombre': 'Ana María',
+                    'apellido_paterno': 'López',
+                    'apellido_materno': 'García',
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        insert_query, values = next(
+            (query, params)
+            for query, params in cursor.queries
+            if 'INSERT INTO registro' in query
+        )
+        self.assertIn('nombre_completo, numero_temporal', insert_query)
+        self.assertEqual(values[0], 'Ana María López García')
+
+    def test_registration_rejects_name_longer_than_database_column(self):
+        client = utily.app.test_client()
+
+        response = client.post(
+            '/api/guardar-registro',
+            data={'nombre_completo': 'A' * 101},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('100 caracteres', response.get_data(as_text=True))
 
     def test_existing_split_name_columns_are_combined_without_dropping_data(self):
         columns = [(name,) for name in (
