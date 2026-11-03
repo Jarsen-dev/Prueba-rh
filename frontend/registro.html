@@ -157,11 +157,21 @@
             <form id="registroForm" action="/api/guardar-registro" method="POST">
 
                 <h3>DATOS PERSONALES</h3>
-<!-- Nombre Completo -->
+<!-- Nombre y apellidos -->
                 <div class="row">
                     <div class="col">
-                        <label>Nombre Completo</label>
-                        <input type="text" name="nombre" 
+                        <label>Nombre(s)</label>
+                        <input type="text" name="nombre" maxlength="100" required
+                            oninput="this.value = this.value.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());">
+                    </div>
+                    <div class="col">
+                        <label>Apellido Paterno</label>
+                        <input type="text" name="apellido_paterno" maxlength="100" required
+                            oninput="this.value = this.value.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());">
+                    </div>
+                    <div class="col">
+                        <label>Apellido Materno</label>
+                        <input type="text" name="apellido_materno" maxlength="100" required
                             oninput="this.value = this.value.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());">
                     </div>
                 </div>
@@ -649,12 +659,14 @@
         function validarRegistro() {
             const form = document.getElementById('registroForm');
             const required = [
-                'nombre','fecha_nac','genero','edo_civil','curp','rfc','nss','tel_movil','correo',
+                'nombre','apellido_paterno','apellido_materno','fecha_nac','genero','edo_civil','curp','rfc','nss','tel_movil','correo',
                 'cp','colonia','calle','num_ext','municipio','estado','nom_eme1','par_eme1','tel_eme1'
             ];
 
             const labels = {
-                nombre: 'Nombre completo',
+                nombre: 'Nombre(s)',
+                apellido_paterno: 'Apellido paterno',
+                apellido_materno: 'Apellido materno',
                 fecha_nac: 'Fecha nacimiento',
                 genero: 'Género',
                 edo_civil: 'Estado civil',
@@ -734,10 +746,14 @@
 
             const tempIdParam = new URLSearchParams(window.location.search).get('temp_id');
             const tempIdValue = tempIdParam ? tempIdParam.replace(/^TEMP\s*-\s*/i, '').trim() : '';
-            if (tempIdValue && registro.nombre) {
+            const nombreCompleto = [registro.nombre, registro.apellido_paterno, registro.apellido_materno]
+                .map((parte) => String(parte || '').trim())
+                .filter(Boolean)
+                .join(' ');
+            if (tempIdValue && nombreCompleto) {
                 try {
                     const tempIds = JSON.parse(localStorage.getItem('rh_temp_employee_ids') || '{}');
-                    const nombreClave = String(registro.nombre).trim().toLocaleLowerCase();
+                    const nombreClave = nombreCompleto.toLocaleLowerCase();
                     tempIds[nombreClave] = `TEMP - ${tempIdValue}`;
                     localStorage.setItem('rh_temp_employee_ids', JSON.stringify(tempIds));
                 } catch (_) {}

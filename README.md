@@ -109,7 +109,7 @@ Puertos publicados en el host:
 
 Estos puertos (3001/8001) se eligieron para no chocar con el otro proyecto que ya corre en el mismo servidor (`produccion_frontend` en 3000, `produccion_backend` en 8000, `produccion_pgadmin` en 5050 y su Postgres publicado en el host 5433). Este proyecto tiene su propio contenedor y volumen de Postgres, aislado del de ese otro proyecto, y por eso puede quedar sin puerto publicado en el host — evita justamente chocar con el 5433 que ya usa el otro proyecto.
 
-El esquema de las tablas (`registro`, `encuesta_reclutamiento`, `incidencias_empleado`) se crea automáticamente la primera vez que el volumen de Postgres está vacío, vía `db/init.sql`. Cambios de esquema posteriores requieren un `ALTER TABLE` manual — no hay herramienta de migraciones.
+El esquema de las tablas (`registro`, `encuesta_reclutamiento`, `incidencias_empleado`) se crea automáticamente la primera vez que el volumen de Postgres está vacío, vía `db/init.sql`. Las columnas de nombre y apellidos se agregan automáticamente a bases existentes desde la API, conservando el nombre completo anterior para los registros ya guardados. Otros cambios de esquema posteriores requieren un `ALTER TABLE` manual — no hay herramienta de migraciones.
 
 ### Chatbot de WhatsApp
 

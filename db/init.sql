@@ -1,7 +1,10 @@
 CREATE TABLE IF NOT EXISTS registro (
     id                      SERIAL PRIMARY KEY,
     fecha_registro          DATE DEFAULT CURRENT_DATE,
-    nombre_completo         VARCHAR(100) NOT NULL,
+    nombre_completo         VARCHAR(255) NOT NULL,
+    nombre                  VARCHAR(100),
+    apellido_paterno        VARCHAR(100),
+    apellido_materno        VARCHAR(100),
     fecha_nacimiento        DATE,
     edad                    INTEGER,
     genero                  VARCHAR(30),
@@ -27,6 +30,15 @@ CREATE TABLE IF NOT EXISTS registro (
     fotografia_base64       TEXT,
     documentos_papeleria    TEXT
 );
+
+ALTER TABLE registro
+    ADD COLUMN IF NOT EXISTS nombre VARCHAR(100);
+ALTER TABLE registro
+    ADD COLUMN IF NOT EXISTS apellido_paterno VARCHAR(100);
+ALTER TABLE registro
+    ADD COLUMN IF NOT EXISTS apellido_materno VARCHAR(100);
+ALTER TABLE registro
+    ALTER COLUMN nombre_completo TYPE VARCHAR(255);
 
 CREATE TABLE IF NOT EXISTS encuesta_reclutamiento (
     id                  SERIAL PRIMARY KEY,
