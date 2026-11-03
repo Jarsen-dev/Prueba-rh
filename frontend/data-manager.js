@@ -14,6 +14,14 @@
         return normalizeText(value).toUpperCase().replace(/\s+/g, ' ');
     }
 
+    function nombreVisible(empleado) {
+        return [
+            empleado && empleado.nombre,
+            empleado && empleado.apellido_paterno,
+            empleado && empleado.apellido_materno,
+        ].map(normalizeText).filter(Boolean).join(' ');
+    }
+
     function normalizeStatus(value) {
         return normalizeText(value).toUpperCase();
     }
@@ -108,12 +116,12 @@
         const resultado = [];
         (Array.isArray(empleados) ? empleados : []).forEach((item) => {
             const normalized = normalizeEmpleado(item);
-            const nombre = normalizeNombre(normalized.nombre_completo || normalized.nombre);
+            const nombre = normalizeNombre(nombreVisible(normalized));
             const index = resultado.findIndex((existente) => {
                 const mismaEmpresa = !normalized.empresa || !existente.empresa
                     || normalizeText(normalized.empresa).toUpperCase() === normalizeText(existente.empresa).toUpperCase();
                 const mismoCurp = normalized.curp && normalizeCurp(existente.curp) === normalized.curp;
-                const mismoNombre = nombre && normalizeNombre(existente.nombre_completo || existente.nombre) === nombre;
+                const mismoNombre = nombre && normalizeNombre(nombreVisible(existente)) === nombre;
                 return mismaEmpresa && (mismoCurp || mismoNombre);
             });
 
@@ -165,12 +173,12 @@
             return empleados.findIndex((item) => normalizeText(item.registro_id) === registroId);
         }
 
-        const nombre = normalizeText(incoming.nombre_completo || incoming.nombre).toUpperCase();
+        const nombre = normalizeNombre(nombreVisible(incoming));
         if (!nombre) {
             return -1;
         }
         return empleados.findIndex((item) => {
-            const itemNombre = normalizeText(item.nombre_completo || item.nombre).toUpperCase();
+            const itemNombre = normalizeNombre(nombreVisible(item));
             return itemNombre === nombre;
         });
     }
@@ -338,7 +346,8 @@
             curp: normalizeCurp((snapshot && snapshot.curp) || actual.curp || identity.curp),
             registro_id: normalizeText((snapshot && snapshot.registro_id) || actual.registro_id || identity.registro_id),
             nombre: normalizeText((snapshot && snapshot.nombre) || actual.nombre || identity.nombre),
-            nombre_completo: normalizeText((snapshot && snapshot.nombre_completo) || actual.nombre_completo || actual.nombre || identity.nombre),
+            apellido_paterno: normalizeText((snapshot && snapshot.apellido_paterno) || actual.apellido_paterno),
+            apellido_materno: normalizeText((snapshot && snapshot.apellido_materno) || actual.apellido_materno),
             empresa: normalizeText((snapshot && snapshot.empresa) || actual.empresa || ''),
             puesto: normalizeText((snapshot && snapshot.puesto) || actual.puesto || ''),
             no_empleado: normalizeText((snapshot && snapshot.no_empleado) || actual.no_empleado || ''),

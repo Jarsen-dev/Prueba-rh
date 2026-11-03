@@ -59,6 +59,16 @@ class ListadoGeneralTests(unittest.TestCase):
         query = next(sql for sql in self.cursor.queries if 'FROM registro AS r' in sql)
         self.assertIn("fecha_inactivo >= CURRENT_TIMESTAMP - INTERVAL '7 days'", query)
 
+    def test_employee_export_uses_separate_name_columns(self):
+        response = self.exportar()
+
+        self.assertEqual(response.status_code, 200)
+        query = next(sql for sql in self.cursor.queries if 'FROM registro AS r' in sql)
+        self.assertIn('r.nombre,', query)
+        self.assertIn('r.apellido_paterno,', query)
+        self.assertIn('r.apellido_materno,', query)
+        self.assertNotIn('nombre_completo', query)
+
 
 if __name__ == '__main__':
     unittest.main()

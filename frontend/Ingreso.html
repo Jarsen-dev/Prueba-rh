@@ -249,20 +249,19 @@
         }
 
         function obtenerPartesCandidato(candidato) {
-            const nombreCompleto = String(candidato.nombre_completo || '').trim();
-            if (candidato.nombre || candidato.apellido_paterno || candidato.apellido_materno) {
-                return {
-                    nombre: candidato.nombre || nombreCompleto,
-                    apellido_paterno: candidato.apellido_paterno || '',
-                    apellido_materno: candidato.apellido_materno || '',
-                };
-            }
-
             return {
-                nombre: candidato.nombre_completo || candidato.nombre || '',
-                apellido_paterno: '',
-                apellido_materno: '',
+                nombre: candidato.nombre || '',
+                apellido_paterno: candidato.apellido_paterno || '',
+                apellido_materno: candidato.apellido_materno || '',
             };
+        }
+
+        function obtenerNombreVisible(candidato) {
+            return [
+                candidato.nombre,
+                candidato.apellido_paterno,
+                candidato.apellido_materno,
+            ].map((parte) => String(parte || '').trim()).filter(Boolean).join(' ');
         }
 
         function normalizarNumeroTemporal(valor) {
@@ -283,12 +282,13 @@
 
         function filaTemplate(candidato) {
             const partes = obtenerPartesCandidato(candidato);
+            const nombreVisible = obtenerNombreVisible(partes);
             const tempId = normalizarNumeroTemporal(candidato.numero_temporal)
-                || obtenerNumeroTemporal(candidato.nombre_completo)
+                || obtenerNumeroTemporal(nombreVisible)
                 || obtenerNumeroTemporal(partes.nombre);
             return `
-                <tr data-id="${escaparHtml(candidato.id)}" data-nombre-completo="${escaparHtml(candidato.nombre_completo)}">
-                    <td class="col-seleccion"><input class="checkbox-candidato" type="checkbox" aria-label="Seleccionar ${escaparHtml(candidato.nombre_completo)} para eliminar"></td>
+                <tr data-id="${escaparHtml(candidato.id)}" data-nombre-visible="${escaparHtml(nombreVisible)}">
+                    <td class="col-seleccion"><input class="checkbox-candidato" type="checkbox" aria-label="Seleccionar ${escaparHtml(nombreVisible)} para eliminar"></td>
                     <td class="col-nombre">${escaparHtml(partes.nombre)}</td>
                     <td class="col-apellido">${escaparHtml(partes.apellido_paterno)}</td>
                     <td class="col-apellido">${escaparHtml(partes.apellido_materno)}</td>
@@ -364,7 +364,7 @@
         function deduplicarCandidatosPendientes(candidatos) {
             const vistos = new Map();
             return (Array.isArray(candidatos) ? candidatos : []).filter((candidato) => {
-                const nombre = String(candidato?.nombre_completo || '').trim().toLowerCase();
+                const nombre = obtenerNombreVisible(candidato || {}).toLowerCase();
                 if (!nombre) return false;
                 if (vistos.has(nombre)) return false;
                 vistos.set(nombre, true);
@@ -398,7 +398,7 @@
         }
 
         function construirFilaPayload(tr) {
-            const nombre = (tr.dataset.nombreCompleto || '').trim();
+            const nombre = (tr.dataset.nombreVisible || '').trim();
             return {
                 registro_id: (tr.dataset.id || '').trim(),
                 nombre_candidato: nombre,
@@ -537,7 +537,7 @@
                 return;
             }
 
-            const nombres = seleccionadas.map((tr) => tr.dataset.nombreCompleto || 'registro');
+            const nombres = seleccionadas.map((tr) => tr.dataset.nombreVisible || 'registro');
             const resumen = nombres.length <= 3
                 ? nombres.join(', ')
                 : `${nombres.slice(0, 3).join(', ')} y ${nombres.length - 3} más`;
@@ -557,13 +557,13 @@
                     try {
                         const { respuesta, texto } = await deleteConFallback(`/api/eliminar-pendiente/${encodeURIComponent(id)}`);
                         if (!respuesta.ok) {
-                            errores.push(`${tr.dataset.nombreCompleto || id}: ${texto || `HTTP ${respuesta.status}`}`);
+                            errores.push(`${tr.dataset.nombreVisible || id}: ${texto || `HTTP ${respuesta.status}`}`);
                             continue;
                         }
                         tr.remove();
                         eliminados += 1;
                     } catch (error) {
-                        errores.push(`${tr.dataset.nombreCompleto || id}: ${error.message}`);
+                        errores.push(`${tr.dataset.nombreVisible || id}: ${error.message}`);
                     }
                 }
             } finally {

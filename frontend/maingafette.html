@@ -486,19 +486,6 @@
         const API_URL = `http://${currentHost}:${PORT}`;
         const API_BASES = [API_URL, `http://localhost:${PORT}`];
 
-        function parseNombreCompleto(nombreCompleto) {
-            const palabras = String(nombreCompleto || '').trim().split(/\s+/).filter(Boolean);
-            if (palabras.length === 0) {
-                return { firstName: '', lastName: '' };
-            }
-            const lastName = palabras.slice(-2).join(' ');
-            const firstName = palabras.slice(0, -2).join(' ');
-            return {
-                firstName: firstName || palabras[0],
-                lastName: lastName,
-            };
-        }
-
         async function fetchFromBackend(endpoint) {
             let lastError = null;
             for (const baseUrl of API_BASES) {
@@ -528,7 +515,10 @@
         }
 
         function applyEmployeeToPair(pairCards, datos) {
-            const nombre = parseNombreCompleto(datos.nombre_completo || datos.nombre || '');
+            const nombre = {
+                firstName: datos.nombre || '',
+                lastName: [datos.apellido_paterno, datos.apellido_materno].filter(Boolean).join(' '),
+            };
             pairCards.forEach((card) => {
                 card.style.display = '';
                 card.querySelectorAll('.employee-first-name').forEach((el) => {
