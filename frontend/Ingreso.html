@@ -188,7 +188,7 @@
 
             for (const baseUrl of API_BASES_GET) {
                 try {
-                    const respuesta = await fetch(`${baseUrl}${endpoint}`);
+                    const respuesta = await fetch(`${baseUrl}${endpoint}`, { cache: 'no-store' });
                     const texto = await respuesta.text();
                     return { respuesta, texto };
                 } catch (errorRed) {
@@ -361,17 +361,6 @@
             puestoSelect.disabled = puestos.length === 0;
         });
 
-        function deduplicarCandidatosPendientes(candidatos) {
-            const vistos = new Map();
-            return (Array.isArray(candidatos) ? candidatos : []).filter((candidato) => {
-                const nombre = obtenerNombreVisible(candidato || {}).toLowerCase();
-                if (!nombre) return false;
-                if (vistos.has(nombre)) return false;
-                vistos.set(nombre, true);
-                return true;
-            });
-        }
-
         async function cargarPendientes() {
             cuerpo.innerHTML = '<tr><td colspan="11">Cargando candidatos...</td></tr>';
 
@@ -384,8 +373,12 @@
                     return;
                 }
 
-                const candidatos = deduplicarCandidatosPendientes(JSON.parse(texto || '[]'));
-                if (!Array.isArray(candidatos) || !candidatos.length) {
+                const candidatos = JSON.parse(texto || '[]');
+                if (!Array.isArray(candidatos)) {
+                    throw new Error('La respuesta del servidor no contiene una lista de candidatos.');
+                }
+
+                if (!candidatos.length) {
                     cuerpo.innerHTML = '<tr><td colspan="11">No hay candidatos pendientes.</td></tr>';
                     return;
                 }
