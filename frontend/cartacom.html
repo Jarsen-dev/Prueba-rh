@@ -223,7 +223,7 @@
 
         async function cargarEmpleadoCarta() {
             const cached = getEmployeeRecordFromCache();
-            if (cached) setText('lbl-nombre', [cached.nombre, cached.apellido_paterno, cached.apellido_materno].filter(Boolean).join(' '));
+            if (cached) setText('lbl-nombre', cached.nombre_completo || '');
             if (!idEmpleado) return;
 
             const endpoints = buildEmpleadoEndpoint(idEmpleado);
@@ -235,7 +235,7 @@
 
                     const data = await response.json();
                     const empleado = { ...cached, ...data };
-                    setText('lbl-nombre', [empleado.nombre, empleado.apellido_paterno, empleado.apellido_materno].filter(Boolean).join(' '));
+                    setText('lbl-nombre', empleado.nombre_completo || '');
                     return;
                 } catch (_) { }
             }

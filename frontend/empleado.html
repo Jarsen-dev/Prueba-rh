@@ -1924,11 +1924,7 @@
         }
 
         function fillFields(data) {
-            fields['nombre-display'].value = [
-                data.nombre,
-                data.apellido_paterno,
-                data.apellido_materno,
-            ].map(getDisplayValue).filter(Boolean).join(' ');
+            fields['nombre-display'].value = getDisplayValue(data.nombre_completo);
             fields['fecha-nacimiento'].value = getDisplayValue(data.fecha_nacimiento);
             fields['edad'].value = getDisplayValue(data.edad);
             setSelectValue(fields['genero'], data.genero);
@@ -2134,9 +2130,7 @@
                 ...existing,
                 registro_id: registroId,
                 curp,
-                nombre: originalData && originalData.nombre ? originalData.nombre : '',
-                apellido_paterno: originalData && originalData.apellido_paterno ? originalData.apellido_paterno : '',
-                apellido_materno: originalData && originalData.apellido_materno ? originalData.apellido_materno : '',
+                nombre_completo: originalData && originalData.nombre_completo ? originalData.nombre_completo : '',
                 fecha_ingreso: fields['fecha-ingreso'].value.trim(),
                 fecha_nacimiento: fields['fecha-nacimiento'].value.trim(),
                 edad: fields['edad'].value.trim(),
@@ -2423,7 +2417,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:24px;background:#f3f6fb;}
 .footer{padding:16px 22px 22px;color:#5b6575;font-size:12px;}
 </style></head><body>
 <div class="card"><div class="top"><div>${data.empresa || 'EMPRESA'}</div><div>CREDENCIAL</div></div>
-<div class="body"><div class="photo">${photoHtml}</div><div class="info"><h1>${[data.nombre, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ')}</h1>
+<div class="body"><div class="photo">${photoHtml}</div><div class="info"><h1>${formatValue(data.nombre_completo)}</h1>
 <div class="row"><b>No. Empleado:</b> ${formatValue(data.no_empleado)}</div>
 <div class="row"><b>Puesto:</b> ${formatValue(data.puesto)}</div>
 <div class="row"><b>Área:</b> ${formatValue(data.area)}</div>
@@ -2442,7 +2436,7 @@ body{font-family:Arial,sans-serif;margin:40px;color:#111;line-height:1.6;}
 h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin-top:48px;display:grid;grid-template-columns:1fr 1fr;gap:40px;}.line{border-top:1px solid #333;padding-top:8px;text-align:center;}
 </style></head><body>
 <h1>Contrato de Trabajo</h1>
-<div class="block">Empleado: <b>${formatValue([data.nombre, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' '))}</b></div>
+<div class="block">Empleado: <b>${formatValue(data.nombre_completo)}</b></div>
 <div class="block">Empresa: <b>${formatValue(data.empresa)}</b></div>
 <div class="block">No. Empleado: <b>${formatValue(data.no_empleado)}</b></div>
 <div class="block">Puesto: <b>${formatValue(data.puesto)}</b></div>
@@ -2482,7 +2476,7 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
                 currentEmployeeCurp = String(data.curp || '').toUpperCase();
 
                 companyName.textContent = empresa;
-                document.title = `${[data.nombre, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ') || 'Empleado'} - ${empresa}`;
+                document.title = `${data.nombre_completo || 'Empleado'} - ${empresa}`;
 
                 fillFields(data);
                 if (contrasenaChatbotEl) {
@@ -2512,9 +2506,7 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
         async function guardarCambios() {
             if (isRecruitmentLimited) return;
             const payload = {
-                nombre: originalData && originalData.nombre ? String(originalData.nombre).trim() : '',
-                apellido_paterno: originalData && originalData.apellido_paterno ? String(originalData.apellido_paterno).trim() : '',
-                apellido_materno: originalData && originalData.apellido_materno ? String(originalData.apellido_materno).trim() : '',
+                nombre_completo: originalData && originalData.nombre_completo ? String(originalData.nombre_completo).trim() : '',
                 fecha_nacimiento: fields['fecha-nacimiento'].value.trim(),
                 fecha_ingreso: fields['fecha-ingreso'].value.trim(),
                 fecha_ingreso_raw: fields['fecha-ingreso'].value.trim(),

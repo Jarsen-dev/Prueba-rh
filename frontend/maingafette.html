@@ -516,16 +516,15 @@
 
         function applyEmployeeToPair(pairCards, datos) {
             const nombre = {
-                firstName: datos.nombre || '',
-                lastName: [datos.apellido_paterno, datos.apellido_materno].filter(Boolean).join(' '),
+                fullName: datos.nombre_completo || '',
             };
             pairCards.forEach((card) => {
                 card.style.display = '';
                 card.querySelectorAll('.employee-first-name').forEach((el) => {
-                    el.textContent = (nombre.firstName || '').toUpperCase();
+                    el.textContent = (nombre.fullName || '').toUpperCase();
                 });
                 card.querySelectorAll('.employee-last-name').forEach((el) => {
-                    el.textContent = (nombre.lastName || '').toUpperCase();
+                    el.textContent = '';
                 });
                 card.querySelectorAll('.employee-nss').forEach((el) => {
                     el.textContent = datos.nss || datos.imss || '';

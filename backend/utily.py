@@ -488,71 +488,27 @@ def asegurar_columna_documentos(cur):
     cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS documentos_papeleria TEXT")
 
 
-def separar_nombre_legado(nombre):
-    partes = str(nombre or '').strip().split()
-    if not partes:
-        return '', '', ''
-    if len(partes) == 1:
-        return partes[0], '', ''
-    if len(partes) == 2:
-        return partes[0], partes[1], ''
-
-    particulas = {'da', 'das', 'de', 'del', 'di', 'do', 'dos', 'la', 'las', 'los', 'van', 'von', 'y'}
-
-    def extraer_apellido(restantes):
-        apellido = [restantes.pop()]
-        while restantes and restantes[-1].casefold() in particulas:
-            apellido.insert(0, restantes.pop())
-        return ' '.join(apellido)
-
-    restantes = partes[:]
-    apellido_materno = extraer_apellido(restantes)
-    if len(restantes) == 1:
-        return restantes[0], '', apellido_materno
-    apellido_paterno = extraer_apellido(restantes) if restantes else ''
-    nombre_propio = ' '.join(restantes)
-    return nombre_propio, apellido_paterno, apellido_materno
-
-
-def asegurar_columnas_nombre(cur):
-    cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS nombre VARCHAR(100)")
-    cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS apellido_paterno VARCHAR(100)")
-    cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS apellido_materno VARCHAR(100)")
+def asegurar_columna_nombre_completo(cur):
+    cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS nombre_completo VARCHAR(255)")
     cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS numero_temporal VARCHAR(50)")
     columnas = obtener_columnas(cur, 'registro')
-    if 'nombre_completo' not in columnas:
-        return
-
-    cur.execute("LOCK TABLE registro IN ACCESS EXCLUSIVE MODE")
-    columnas = obtener_columnas(cur, 'registro')
-    if 'nombre_completo' not in columnas:
-        return
-
-    cur.execute(
-        """
-        SELECT id, nombre_completo
-        FROM registro
-        WHERE (
-              NULLIF(BTRIM(nombre), '') IS NULL
-              OR NULLIF(BTRIM(apellido_paterno), '') IS NULL
-              OR NULLIF(BTRIM(apellido_materno), '') IS NULL
-          )
-          AND NULLIF(BTRIM(nombre_completo), '') IS NOT NULL
-        """
-    )
-    for registro_id, nombre_completo in cur.fetchall():
-        nombre, apellido_paterno, apellido_materno = separar_nombre_legado(nombre_completo)
+    campos_nombre_separados = {'nombre', 'apellido_paterno', 'apellido_materno'}
+    if campos_nombre_separados.issubset(columnas):
         cur.execute(
             """
             UPDATE registro
-            SET nombre = COALESCE(NULLIF(BTRIM(nombre), ''), %s),
-                apellido_paterno = COALESCE(NULLIF(BTRIM(apellido_paterno), ''), %s),
-                apellido_materno = COALESCE(NULLIF(BTRIM(apellido_materno), ''), %s)
-            WHERE id = %s
-            """,
-            (nombre or None, apellido_paterno or None, apellido_materno or None, registro_id),
+            SET nombre_completo = NULLIF(
+                TRIM(CONCAT_WS(
+                    ' ',
+                    NULLIF(BTRIM(nombre), ''),
+                    NULLIF(BTRIM(apellido_paterno), ''),
+                    NULLIF(BTRIM(apellido_materno), '')
+                )),
+                ''
+            )
+            WHERE NULLIF(BTRIM(nombre_completo), '') IS NULL
+            """
         )
-    cur.execute("ALTER TABLE registro DROP COLUMN nombre_completo")
 
 
 def asegurar_esquema_ingresos_puesto(cur):
@@ -579,17 +535,6 @@ def asegurar_esquema_ingresos_puesto(cur):
         ADD COLUMN IF NOT EXISTS registro_id INTEGER REFERENCES registro(id) ON DELETE CASCADE
         """
     )
-
-
-def normalizar_nombre_para_ingresos(nombre, apellido_paterno, apellido_materno):
-    nombre = str(nombre or '').strip()
-    apellido_paterno = str(apellido_paterno or '').strip()
-    apellido_materno = str(apellido_materno or '').strip()
-
-    if nombre and not apellido_paterno and not apellido_materno and len(nombre.split()) > 1:
-        nombre, apellido_paterno, apellido_materno = separar_nombre_legado(nombre)
-
-    return nombre, apellido_paterno, apellido_materno
 
 
 def parsear_documentos_papeleria(raw_value):
@@ -922,7 +867,7 @@ def obtener_columnas(cur, tabla):
 
 def obtener_empleado_dict(cur, registro_id):
     cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS procedencia VARCHAR(150)")
-    asegurar_columnas_nombre(cur)
+    asegurar_columna_nombre_completo(cur)
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS chatbot_credenciales (
@@ -948,9 +893,7 @@ def obtener_empleado_dict(cur, registro_id):
         f"""
         SELECT
             r.id,
-            r.nombre,
-            r.apellido_paterno,
-            r.apellido_materno,
+            r.nombre_completo,
             r.fecha_nacimiento,
             r.edad,
             r.genero,
@@ -999,42 +942,40 @@ def obtener_empleado_dict(cur, registro_id):
 
     return {
         'registro_id': row[0],
-        'nombre': row[1],
-        'apellido_paterno': row[2],
-        'apellido_materno': row[3],
-        'fecha_nacimiento': row[4].strftime('%Y-%m-%d') if row[4] else None,
-        'edad': row[5],
-        'genero': row[6],
-        'estado_civil': row[7],
-        'nacionalidad': row[8],
-        'procedencia': row[9],
-        'curp': row[10],
-        'rfc': row[11],
-        'nss': row[12],
-        'tel_movil': row[13],
-        'correo': row[14],
-        'codigo_postal': row[15],
-        'colonia': row[16],
-        'calle': row[17],
-        'num_ext': row[18],
-        'num_int': row[19],
-        'municipio': row[20],
-        'estado': row[21],
-        'nombre_emergencia': row[22],
-        'parentesco_emergencia': row[23],
-        'telefono_emergencia': row[24],
-        'firma_archivo': row[25],
-        'fotografia_base64': row[26],
-        'fecha_ingreso': row[27].strftime('%Y-%m-%d') if row[27] else None,
-        'empresa': row[28],
-        'no_empleado': row[29],
-        'personal': row[30],
-        'puesto': row[31],
-        'area': row[32],
-        'turno': row[33],
-        'salario': row[34],
-        'pago': row[35],
-        'contrasena_chatbot': row[36],
+        'nombre_completo': row[1],
+        'fecha_nacimiento': row[2].strftime('%Y-%m-%d') if row[2] else None,
+        'edad': row[3],
+        'genero': row[4],
+        'estado_civil': row[5],
+        'nacionalidad': row[6],
+        'procedencia': row[7],
+        'curp': row[8],
+        'rfc': row[9],
+        'nss': row[10],
+        'tel_movil': row[11],
+        'correo': row[12],
+        'codigo_postal': row[13],
+        'colonia': row[14],
+        'calle': row[15],
+        'num_ext': row[16],
+        'num_int': row[17],
+        'municipio': row[18],
+        'estado': row[19],
+        'nombre_emergencia': row[20],
+        'parentesco_emergencia': row[21],
+        'telefono_emergencia': row[22],
+        'firma_archivo': row[23],
+        'fotografia_base64': row[24],
+        'fecha_ingreso': row[25].strftime('%Y-%m-%d') if row[25] else None,
+        'empresa': row[26],
+        'no_empleado': row[27],
+        'personal': row[28],
+        'puesto': row[29],
+        'area': row[30],
+        'turno': row[31],
+        'salario': row[32],
+        'pago': row[33],
+        'contrasena_chatbot': row[34],
     }
 
 def separar_numeracion(valor):
@@ -1072,23 +1013,10 @@ def guardar_registro():
     if not datos:
         return ("ERROR: No se recibieron datos", 400)
 
-    campos_nombre = ('nombre', 'apellido_paterno', 'apellido_materno')
-    campos_nombre_faltantes = [
-        campo for campo in campos_nombre
-        if not (datos.get(campo) or '').strip()
-    ]
-    if campos_nombre_faltantes:
-        return (
-            "ERROR: Completa Nombre(s), Apellido Paterno y Apellido Materno.",
-            400,
-        )
-
     try:
         firma_png = datos.get('firma_png') or None
         fotografia_base64 = datos.get('fotografia_base64') or None
-        nombre = (datos.get('nombre') or '').strip()
-        apellido_paterno = (datos.get('apellido_paterno') or '').strip()
-        apellido_materno = (datos.get('apellido_materno') or '').strip()
+        nombre_completo = (datos.get('nombre_completo') or '').strip()
         numero_temporal_raw = (datos.get('numero_temporal') or datos.get('temp_id') or '').strip()
         numero_temporal = (
             f"TEMP - {numero_temporal_raw.split('-', 1)[1].strip()}"
@@ -1098,16 +1026,16 @@ def guardar_registro():
         )
         query = """
         INSERT INTO registro (
-            nombre, apellido_paterno, apellido_materno, numero_temporal,
+            nombre_completo, numero_temporal,
             fecha_nacimiento, edad, genero, estado_civil, nacionalidad, procedencia,
             curp, rfc, nss, tel_movil, correo, codigo_postal, colonia, calle,
             num_ext, num_int, municipio, estado, nombre_emergencia,
             parentesco_emergencia, telefono_emergencia, firma_archivo, fotografia_base64
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         values = (
-            nombre or None, apellido_paterno or None, apellido_materno or None, numero_temporal,
+            nombre_completo or None, numero_temporal,
             datos.get('fecha_nac'), datos.get('edad'), datos.get('genero'),
             datos.get('edo_civil'), datos.get('nacionalidad'), datos.get('procedencia'), datos.get('curp'), datos.get('rfc'),
             datos.get('nss'), datos.get('tel_movil'), datos.get('correo'), datos.get('cp'),
@@ -1118,7 +1046,7 @@ def guardar_registro():
 
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                asegurar_columnas_nombre(cur)
+                asegurar_columna_nombre_completo(cur)
                 cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS fotografia_base64 TEXT")
                 cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS procedencia VARCHAR(150)")
                 cur.execute(query, values)
@@ -1218,14 +1146,12 @@ def obtener_pendientes():
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                asegurar_columnas_nombre(cur)
+                asegurar_columna_nombre_completo(cur)
                 asegurar_esquema_ingresos_puesto(cur)
                 cur.execute(
                     """
                     SELECT
-                        r.nombre,
-                        r.apellido_paterno,
-                        r.apellido_materno,
+                        r.nombre_completo,
                         r.numero_temporal,
                         r.id
                     FROM registro r
@@ -1239,18 +1165,14 @@ def obtener_pendientes():
                 )
                 rows = cur.fetchall()
 
-        data = []
-        for row in rows:
-            nombre, apellido_paterno, apellido_materno = normalizar_nombre_para_ingresos(
-                row[0], row[1], row[2]
-            )
-            data.append({
-                'nombre': nombre,
-                'apellido_paterno': apellido_paterno,
-                'apellido_materno': apellido_materno,
-                'numero_temporal': row[3],
-                'id': row[4],
-            })
+        data = [
+            {
+                'nombre_completo': row[0],
+                'numero_temporal': row[1],
+                'id': row[2],
+            }
+            for row in rows
+        ]
         return jsonify(data), 200
     except Exception as e:
         print(f"Error: {e}")
@@ -1369,7 +1291,7 @@ def obtener_ingresos(empresa=None):
             with conn.cursor() as cur:
                 asegurar_esquema_ingresos_puesto(cur)
                 cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS estatus VARCHAR(20) DEFAULT 'ACTIVO'")
-                asegurar_columnas_nombre(cur)
+                asegurar_columna_nombre_completo(cur)
                 cur.execute(
                     """
                     SELECT column_name
@@ -1391,9 +1313,7 @@ def obtener_ingresos(empresa=None):
                 cur.execute(
                     f"""
                     SELECT ingresos_puesto.registro_id,
-                           r.nombre,
-                           r.apellido_paterno,
-                           r.apellido_materno,
+                           r.nombre_completo,
                            ingresos_puesto.no_empleado,
                            ingresos_puesto.empresa
                         , {fecha_select} AS fecha_ingreso
@@ -1414,17 +1334,15 @@ def obtener_ingresos(empresa=None):
         data = [
             {
                 'registro_id': row[0],
-                'nombre': row[1],
-                'apellido_paterno': row[2],
-                'apellido_materno': row[3],
-                'no_empleado': row[4],
-                'empresa': row[5],
-                'fecha_ingreso': row[6].strftime('%Y-%m-%d') if row[6] else None,
-                'fecha_nacimiento': row[7].strftime('%Y-%m-%d') if row[7] else None,
-                'estatus': row[8] or 'ACTIVO',
-                'area': row[9] or '',
-                'puesto': row[10] or '',
-                'turno': row[11] or '',
+                'nombre_completo': row[1],
+                'no_empleado': row[2],
+                'empresa': row[3],
+                'fecha_ingreso': row[4].strftime('%Y-%m-%d') if row[4] else None,
+                'fecha_nacimiento': row[5].strftime('%Y-%m-%d') if row[5] else None,
+                'estatus': row[6] or 'ACTIVO',
+                'area': row[7] or '',
+                'puesto': row[8] or '',
+                'turno': row[9] or '',
             }
             for row in rows
         ]
@@ -1455,12 +1373,8 @@ def exportar_empleados(empresa):
             with conn.cursor() as cur:
                 cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS estatus VARCHAR(20) DEFAULT 'ACTIVO'")
                 cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS fecha_inactivo TIMESTAMP")
-                asegurar_columnas_nombre(cur)
-                nombre_persona_sql = (
-                    "TRIM(CONCAT_WS(' ', NULLIF(BTRIM(r.nombre), ''), "
-                    "NULLIF(BTRIM(r.apellido_paterno), ''), "
-                    "NULLIF(BTRIM(r.apellido_materno), '')))"
-                )
+                asegurar_columna_nombre_completo(cur)
+                nombre_persona_sql = "TRIM(r.nombre_completo)"
                 cur.execute("ALTER TABLE encuesta_reclutamiento ADD COLUMN IF NOT EXISTS nombre_empleado VARCHAR(200)")
                 cur.execute(
                     """
@@ -1473,9 +1387,7 @@ def exportar_empleados(empresa):
                 cur.execute(
                     f"""
                     SELECT r.fecha_registro,
-                           r.nombre,
-                           r.apellido_paterno,
-                           r.apellido_materno,
+                           r.nombre_completo,
                            r.fecha_nacimiento,
                            r.edad,
                            r.genero,
@@ -1524,7 +1436,7 @@ def exportar_empleados(empresa):
                 rows = cur.fetchall()
 
         fields = (
-            'fecha_registro', 'nombre', 'apellido_paterno', 'apellido_materno',
+            'fecha_registro', 'nombre_completo',
             'fecha_nacimiento', 'edad',
             'genero', 'estado_civil', 'nacionalidad', 'curp', 'rfc', 'nss',
             'tel_movil', 'correo', 'codigo_postal', 'colonia', 'calle',
@@ -1546,9 +1458,7 @@ def exportar_empleados(empresa):
         worksheet.title = 'Empleados'
         columnas = (
             ('fecha_registro', 'fecha_registro'),
-            ('nombre', 'nombre'),
-            ('apellido_paterno', 'apellido_paterno'),
-            ('apellido_materno', 'apellido_materno'),
+            ('nombre_completo', 'nombre_completo'),
             ('fecha_nacimiento', 'fecha_nacimiento'),
             ('edad', 'edad'),
             ('genero', 'genero'),
@@ -1638,7 +1548,7 @@ def actualizar_empleado(registro_id):
                 cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS procedencia VARCHAR(150)")
                 cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS estatus VARCHAR(20) DEFAULT 'ACTIVO'")
                 cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS fecha_inactivo TIMESTAMP")
-                asegurar_columnas_nombre(cur)
+                asegurar_columna_nombre_completo(cur)
                 cols_registro = obtener_columnas(cur, 'registro')
                 cols_ingresos = obtener_columnas(cur, 'ingresos_puesto')
 
@@ -1660,11 +1570,8 @@ def actualizar_empleado(registro_id):
                         fecha_col = candidato
                         break
 
-                nombres_separados = all(
-                    campo in payload
-                    for campo in ('nombre', 'apellido_paterno', 'apellido_materno')
-                )
                 registro_map = {
+                    'nombre_completo': payload.get('nombre_completo'),
                     'fecha_nacimiento': payload.get('fecha_nacimiento'),
                     'edad': payload.get('edad'),
                     'genero': payload.get('genero'),
@@ -1689,12 +1596,6 @@ def actualizar_empleado(registro_id):
                     'fotografia_base64': payload.get('fotografia_base64'),
                     'estatus': payload.get('estatus'),
                 }
-
-                if nombres_separados:
-                    registro_map.update({
-                        campo: str(payload.get(campo) or '').strip()
-                        for campo in ('nombre', 'apellido_paterno', 'apellido_materno')
-                    })
 
                 if fecha_col:
                     registro_map[fecha_col] = fecha_ingreso_valor
