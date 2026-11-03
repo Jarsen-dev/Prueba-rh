@@ -128,9 +128,7 @@
                     <thead>
                         <tr style="border-bottom: 2px solid #444;">
                             <th class="col-seleccion" aria-label="Seleccionar para eliminar"></th>
-                            <th class="col-nombre">Nombre(s)</th>
-                            <th class="col-apellido">Apellido Paterno</th>
-                            <th class="col-apellido">Apellido Materno</th>
+                            <th class="col-nombre">Nombre Completo</th>
                             <th>Empresa</th>
                             <th>No. Empleado</th>
                             <th>Área</th>
@@ -248,65 +246,15 @@
             }
         }
 
-        function obtenerPartesCandidato(candidato) {
-            const partes = {
-                nombre: candidato.nombre || candidato.nombres || '',
-                apellido_paterno: candidato.apellido_paterno || candidato.apellidoPaterno || '',
-                apellido_materno: candidato.apellido_materno || candidato.apellidoMaterno || '',
-            };
-            const nombreLegacy = String(candidato.nombre || '').trim();
-            const nombreAlternativo = String(
+        function obtenerNombreVisible(candidato) {
+            return String(
                 candidato.nombre_completo
-                || candidato.nombreCompleto
                 || candidato.nombre_candidato
-                || candidato.full_name
+                || [candidato.nombre, candidato.apellido_paterno, candidato.apellido_materno]
+                    .filter(Boolean)
+                    .join(' ')
                 || ''
             ).trim();
-            const nombreEsCompleto = !nombreAlternativo
-                && nombreLegacy.includes(' ')
-                && !partes.apellido_paterno
-                && !partes.apellido_materno;
-            const nombreCompleto = nombreAlternativo || (nombreEsCompleto ? nombreLegacy : '');
-
-            if (!nombreCompleto || (partes.nombre && partes.apellido_paterno && partes.apellido_materno)) {
-                return partes;
-            }
-
-            const tokens = nombreCompleto.split(/\s+/);
-            if (tokens.length === 1) {
-                return { ...partes, nombre: partes.nombre || tokens[0] };
-            }
-            if (tokens.length === 2) {
-                return {
-                    ...partes,
-                    nombre: partes.nombre || tokens[0],
-                    apellido_paterno: partes.apellido_paterno || tokens[1],
-                };
-            }
-
-            const particulas = new Set(['da', 'das', 'de', 'del', 'di', 'do', 'dos', 'la', 'las', 'los', 'van', 'von', 'y']);
-            const apellidoMaterno = [tokens.pop()];
-            while (tokens.length && particulas.has(tokens[tokens.length - 1].toLocaleLowerCase())) {
-                apellidoMaterno.unshift(tokens.pop());
-            }
-            const apellidoPaterno = [tokens.pop()];
-            while (tokens.length && particulas.has(tokens[tokens.length - 1].toLocaleLowerCase())) {
-                apellidoPaterno.unshift(tokens.pop());
-            }
-
-            return {
-                nombre: nombreEsCompleto ? tokens.join(' ') : (partes.nombre || tokens.join(' ')),
-                apellido_paterno: partes.apellido_paterno || apellidoPaterno.join(' '),
-                apellido_materno: partes.apellido_materno || apellidoMaterno.join(' '),
-            };
-        }
-
-        function obtenerNombreVisible(candidato) {
-            return [
-                candidato.nombre,
-                candidato.apellido_paterno,
-                candidato.apellido_materno,
-            ].map((parte) => String(parte || '').trim()).filter(Boolean).join(' ');
         }
 
         function normalizarNumeroTemporal(valor) {
@@ -326,17 +274,14 @@
         }
 
         function filaTemplate(candidato) {
-            const partes = obtenerPartesCandidato(candidato);
-            const nombreVisible = obtenerNombreVisible(partes);
+            const nombreVisible = obtenerNombreVisible(candidato);
             const tempId = normalizarNumeroTemporal(candidato.numero_temporal)
                 || obtenerNumeroTemporal(nombreVisible)
-                || obtenerNumeroTemporal(partes.nombre);
+                || obtenerNumeroTemporal(nombreVisible);
             return `
                 <tr data-id="${escaparHtml(candidato.id)}" data-nombre-visible="${escaparHtml(nombreVisible)}">
                     <td class="col-seleccion"><input class="checkbox-candidato" type="checkbox" aria-label="Seleccionar ${escaparHtml(nombreVisible)} para eliminar"></td>
-                    <td class="col-nombre">${escaparHtml(partes.nombre)}</td>
-                    <td class="col-apellido">${escaparHtml(partes.apellido_paterno)}</td>
-                    <td class="col-apellido">${escaparHtml(partes.apellido_materno)}</td>
+                    <td class="col-nombre">${escaparHtml(nombreVisible)}</td>
                     <td>
                         <select class="campo-empresa" required>
                             <option value="" selected>Selecciona la opcion</option>

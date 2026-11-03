@@ -115,7 +115,6 @@
                     <th class="seleccion-column" style="padding: 12px;"></th>
                     <th style="padding: 12px;">No. Empleado</th>
                     <th style="padding: 12px; text-align: left;">Nombre</th>
-                    <th style="padding: 12px; text-align: left;">Apellido</th>
                     <th style="padding: 12px;">Fecha Ingreso</th>
                     <th style="padding: 12px;">Área</th>
                     <th style="padding: 12px;">Turno</th>
@@ -267,9 +266,11 @@
             return {
                 ...emp,
                 ...local,
-                nombre: local.nombre || emp.nombre || '',
-                apellido_paterno: local.apellido_paterno || emp.apellido_paterno || '',
-                apellido_materno: local.apellido_materno || emp.apellido_materno || '',
+                nombre_completo: local.nombre_completo || emp.nombre_completo || [
+                    local.nombre || emp.nombre,
+                    local.apellido_paterno || emp.apellido_paterno,
+                    local.apellido_materno || emp.apellido_materno,
+                ].filter(Boolean).join(' '),
                 no_empleado: local.no_empleado || emp.no_empleado || '',
                 fecha_ingreso: local.fecha_ingreso || local.fecha_registro || emp.fecha_ingreso || emp.fecha_registro || '',
                 area: local.area || emp.area || '',
@@ -280,7 +281,7 @@
 
         function matchesSearch(emp) {
             const displayEmp = getEmpleadoConLocal(emp);
-            const text = `${displayEmp.nombre || ''} ${displayEmp.no_empleado || ''}`.toLowerCase();
+            const text = `${displayEmp.nombre_completo || ''} ${displayEmp.no_empleado || ''}`.toLowerCase();
             return text.includes(searchQuery);
         }
 
@@ -427,20 +428,18 @@
 
         function renderFila(emp) {
             const displayEmp = getEmpleadoConLocal(emp);
-            const nombre = displayEmp.nombre || '';
-            const apellidos = [displayEmp.apellido_paterno, displayEmp.apellido_materno].filter(Boolean).join(' ');
+            const nombre = displayEmp.nombre_completo || '';
             const estatus = displayEmp.estatus;
             const color = estatus === 'ACTIVO' ? '#28a745' : '#dc3545';
-            const linkEmpleado = `empleado.html?registro_id=${encodeURIComponent(displayEmp.registro_id || '')}&nombre=${encodeURIComponent(displayEmp.nombre || '')}`;
+            const linkEmpleado = `empleado.html?registro_id=${encodeURIComponent(displayEmp.registro_id || '')}&nombre=${encodeURIComponent(nombre)}`;
             const estatusHtml = isRecruitmentLimited
                 ? `<span style="display:inline-block;background:${color};color:white;padding:5px 10px;border-radius:4px;">${estatus}</span>`
-                : `<button class="btn-estatus" data-registro-id="${String(displayEmp.registro_id || '').replace(/"/g, '&quot;')}" data-curp="${String(displayEmp.curp || '').replace(/"/g, '&quot;')}" data-nombre="${(displayEmp.nombre || '').replace(/"/g, '&quot;')}" style="background: ${color}; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; opacity: 1;">${estatus}</button>`;
+                : `<button class="btn-estatus" data-registro-id="${String(displayEmp.registro_id || '').replace(/"/g, '&quot;')}" data-curp="${String(displayEmp.curp || '').replace(/"/g, '&quot;')}" data-nombre="${nombre.replace(/"/g, '&quot;')}" style="background: ${color}; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; opacity: 1;">${estatus}</button>`;
             return `
                 <tr>
                     <td class="seleccion-column" style="padding: 12px; text-align: center;"><input class="seleccion-empleado" type="checkbox" value="${String(displayEmp.registro_id || '')}" ${displayEmp.registro_id ? '' : 'disabled'} /></td>
                     <td style="padding: 12px; text-align: center;">${displayEmp.no_empleado || ''}</td>
                     <td style="padding: 12px;"><a class="btn-nombre" href="${linkEmpleado}">${nombre}</a></td>
-                    <td style="padding: 12px;"><a class="btn-nombre" href="${linkEmpleado}">${apellidos}</a></td>
                     <td style="padding: 12px; text-align: center;">${formatearFechaIngreso(displayEmp.fecha_ingreso)}</td>
                     <td style="padding: 12px; text-align: center;">${displayEmp.area || ''}</td>
                     <td style="padding: 12px; text-align: center;">${displayEmp.turno || ''}</td>
@@ -510,9 +509,9 @@
                     window.DataManager.upsertMany(empleadosCache.map((emp) => ({
                         registro_id: emp.registro_id,
                         curp: emp.curp || '',
-                        nombre: emp.nombre || '',
-                        apellido_paterno: emp.apellido_paterno || '',
-                        apellido_materno: emp.apellido_materno || '',
+                        nombre_completo: emp.nombre_completo || [
+                            emp.nombre, emp.apellido_paterno, emp.apellido_materno,
+                        ].filter(Boolean).join(' '),
                         empresa: 'CHEONG WOON',
                         puesto: emp.puesto || '',
                         area: emp.area || '',

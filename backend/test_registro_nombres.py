@@ -46,8 +46,8 @@ class FakeConnection:
         self.committed = True
 
 
-class RegistroNombresTests(unittest.TestCase):
-    def test_registration_saves_only_separate_name_fields(self):
+class RegistroNombreCompletoTests(unittest.TestCase):
+    def test_registration_saves_full_name_and_temporary_number(self):
         cursor = FakeCursor()
         connection = FakeConnection(cursor)
         client = utily.app.test_client()
@@ -56,9 +56,7 @@ class RegistroNombresTests(unittest.TestCase):
             response = client.post(
                 '/api/guardar-registro',
                 data={
-                    'nombre': 'Ana María',
-                    'apellido_paterno': 'López',
-                    'apellido_materno': 'García',
+                    'nombre_completo': 'Ana María López García',
                     'numero_temporal': 'TEMP - 123',
                 },
             )
@@ -69,85 +67,31 @@ class RegistroNombresTests(unittest.TestCase):
             for query, params in cursor.queries
             if 'INSERT INTO registro' in query
         )
-        self.assertNotIn('nombre_completo', insert_query)
-        self.assertIn('nombre, apellido_paterno, apellido_materno, numero_temporal', insert_query)
-        self.assertEqual(
-            values[:4],
-            ('Ana María', 'López', 'García', 'TEMP - 123'),
-        )
+        self.assertIn('nombre_completo, numero_temporal', insert_query)
+        self.assertNotIn('apellido_paterno', insert_query)
+        self.assertEqual(values[:2], ('Ana María López García', 'TEMP - 123'))
         self.assertTrue(connection.committed)
 
-    def test_registration_rejects_missing_surname_fields(self):
-        client = utily.app.test_client()
-
-        response = client.post(
-            '/api/guardar-registro',
-            data={'nombre': 'Ana María'},
-        )
-
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('Apellido Paterno y Apellido Materno', response.get_data(as_text=True))
-
-    def test_legacy_name_parser_separates_names_and_compound_surnames(self):
-        self.assertEqual(
-            utily.separar_nombre_legado('Ana María López García'),
-            ('Ana María', 'López', 'García'),
-        )
-        self.assertEqual(
-            utily.separar_nombre_legado('Ana María de la Cruz García'),
-            ('Ana María', 'de la Cruz', 'García'),
-        )
-        self.assertEqual(
-            utily.separar_nombre_legado('José de la Cruz'),
-            ('José', '', 'de la Cruz'),
-        )
-
-    def test_legacy_migration_copies_missing_parts_before_dropping_old_column(self):
+    def test_existing_split_name_columns_are_combined_without_dropping_data(self):
         columns = [(name,) for name in (
-            'id', 'nombre', 'apellido_paterno', 'apellido_materno', 'nombre_completo',
+            'id', 'nombre', 'apellido_paterno', 'apellido_materno',
         )]
-        cursor = FakeCursor(fetchall_results=[
-            columns,
-            columns,
-            [(7, 'Ana María López García')],
-        ])
+        cursor = FakeCursor(fetchall_results=[columns])
 
-        utily.asegurar_columnas_nombre(cursor)
+        utily.asegurar_columna_nombre_completo(cursor)
 
-        update_query, update_params = next(
-            (query, params)
-            for query, params in cursor.queries
-            if 'UPDATE registro' in query
-        )
-        self.assertIn('COALESCE(NULLIF(BTRIM(nombre)', update_query)
-        self.assertEqual(update_params, ('Ana María', 'López', 'García', 7))
-        self.assertEqual(cursor.queries[-1][0], 'ALTER TABLE registro DROP COLUMN nombre_completo')
+        self.assertTrue(any(
+            'ADD COLUMN IF NOT EXISTS nombre_completo' in query
+            for query, _ in cursor.queries
+        ))
+        update_query = next(query for query, _ in cursor.queries if 'UPDATE registro' in query)
+        self.assertIn('CONCAT_WS', update_query)
+        self.assertFalse(any('DROP COLUMN' in query for query, _ in cursor.queries))
 
-    def test_pending_candidates_include_only_separate_name_fields(self):
+    def test_pending_candidates_return_full_name_field(self):
         cursor = FakeCursor(fetchall_results=[
             [],
-            [('Ana María', 'López', 'García', 'TEMP - 123', 12)],
-        ])
-        client = utily.app.test_client()
-
-        with patch.object(utily, 'get_db_connection', return_value=FakeConnection(cursor)):
-            response = client.get('/api/obtener-pendientes')
-
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertEqual(data, [{
-            'nombre': 'Ana María',
-            'apellido_paterno': 'López',
-            'apellido_materno': 'García',
-            'numero_temporal': 'TEMP - 123',
-            'id': 12,
-        }])
-        self.assertNotIn('nombre_completo', data[0])
-
-    def test_pending_candidates_recover_legacy_full_name_when_surname_columns_are_empty(self):
-        cursor = FakeCursor(fetchall_results=[
-            [],
-            [('Ana María de la Cruz García', None, None, 'TEMP - 123', 12)],
+            [('Ana María López García', 'TEMP - 123', 12)],
         ])
         client = utily.app.test_client()
 
@@ -156,19 +100,17 @@ class RegistroNombresTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), [{
-            'nombre': 'Ana María',
-            'apellido_paterno': 'de la Cruz',
-            'apellido_materno': 'García',
+            'nombre_completo': 'Ana María López García',
             'numero_temporal': 'TEMP - 123',
             'id': 12,
         }])
 
-    def test_pending_candidates_keep_separate_records_with_same_name(self):
+    def test_pending_candidates_keep_duplicate_full_names(self):
         cursor = FakeCursor(fetchall_results=[
             [],
             [
-                ('Ana', 'López', 'García', 'TEMP - 123', 12),
-                ('Ana', 'López', 'García', 'TEMP - 124', 13),
+                ('Ana López García', 'TEMP - 123', 12),
+                ('Ana López García', 'TEMP - 124', 13),
             ],
         ])
         client = utily.app.test_client()
@@ -177,8 +119,7 @@ class RegistroNombresTests(unittest.TestCase):
             response = client.get('/api/obtener-pendientes')
 
         self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertEqual([registro['id'] for registro in data], [12, 13])
+        self.assertEqual([item['id'] for item in response.get_json()], [12, 13])
 
     def test_income_schema_adds_registration_link_for_existing_databases(self):
         cursor = FakeCursor()

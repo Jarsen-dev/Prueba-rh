@@ -15,11 +15,14 @@
     }
 
     function nombreVisible(empleado) {
-        return [
-            empleado && empleado.nombre,
-            empleado && empleado.apellido_paterno,
-            empleado && empleado.apellido_materno,
-        ].map(normalizeText).filter(Boolean).join(' ');
+        return normalizeText(
+            (empleado && empleado.nombre_completo)
+            || [
+                empleado && empleado.nombre,
+                empleado && empleado.apellido_paterno,
+                empleado && empleado.apellido_materno,
+            ].map(normalizeText).filter(Boolean).join(' ')
+        );
     }
 
     function normalizeStatus(value) {
@@ -189,6 +192,11 @@
             ...source,
             curp: normalizeCurp(source.curp),
             estatus: normalizeStatus(source.estatus || 'ACTIVO'),
+            nombre_completo: normalizeText(source.nombre_completo || [
+                source.nombre,
+                source.apellido_paterno,
+                source.apellido_materno,
+            ].map(normalizeText).filter(Boolean).join(' ')),
         };
 
         if (!Array.isArray(normalized.comentarios)) {
@@ -345,9 +353,7 @@
             estatus: 'ACTIVO',
             curp: normalizeCurp((snapshot && snapshot.curp) || actual.curp || identity.curp),
             registro_id: normalizeText((snapshot && snapshot.registro_id) || actual.registro_id || identity.registro_id),
-            nombre: normalizeText((snapshot && snapshot.nombre) || actual.nombre || identity.nombre),
-            apellido_paterno: normalizeText((snapshot && snapshot.apellido_paterno) || actual.apellido_paterno),
-            apellido_materno: normalizeText((snapshot && snapshot.apellido_materno) || actual.apellido_materno),
+            nombre_completo: nombreVisible(snapshot || {}) || nombreVisible(actual) || normalizeText(identity.nombre_completo || identity.nombre),
             empresa: normalizeText((snapshot && snapshot.empresa) || actual.empresa || ''),
             puesto: normalizeText((snapshot && snapshot.puesto) || actual.puesto || ''),
             no_empleado: normalizeText((snapshot && snapshot.no_empleado) || actual.no_empleado || ''),

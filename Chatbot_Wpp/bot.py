@@ -12,7 +12,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 backend_root = os.path.join(project_root, "backend")
 module_root = project_root if os.path.exists(os.path.join(project_root, "utily.py")) else backend_root
 sys.path.insert(0, module_root)
-from utily import asegurar_columnas_nombre
+from utily import asegurar_columna_nombre_completo
 
 app = Flask(__name__)
 logger = getLogger(__name__)
@@ -70,7 +70,7 @@ def asegurar_tabla_credenciales(cur):
 def buscar_colaborador(numero_empleado):
   with conectar_db() as conn:
     with conn.cursor() as cur:
-      asegurar_columnas_nombre(cur)
+      asegurar_columna_nombre_completo(cur)
       asegurar_tabla_credenciales(cur)
       cur.execute(
         """
@@ -92,9 +92,7 @@ def buscar_colaborador(numero_empleado):
       cur.execute(
         f"""
         SELECT r.id,
-               TRIM(CONCAT_WS(' ', NULLIF(BTRIM(r.nombre), ''),
-                              NULLIF(BTRIM(r.apellido_paterno), ''),
-                              NULLIF(BTRIM(r.apellido_materno), ''))),
+               r.nombre_completo,
                i.no_empleado, i.puesto, i.area, i.turno,
                c.contrasena
         FROM registro AS r
