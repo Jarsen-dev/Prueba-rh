@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS registro (
     nombre                  VARCHAR(100),
     apellido_paterno        VARCHAR(100),
     apellido_materno        VARCHAR(100),
+    numero_temporal         VARCHAR(50),
     fecha_nacimiento        DATE,
     edad                    INTEGER,
     genero                  VARCHAR(30),
@@ -37,6 +38,8 @@ ALTER TABLE registro
     ADD COLUMN IF NOT EXISTS apellido_paterno VARCHAR(100);
 ALTER TABLE registro
     ADD COLUMN IF NOT EXISTS apellido_materno VARCHAR(100);
+ALTER TABLE registro
+    ADD COLUMN IF NOT EXISTS numero_temporal VARCHAR(50);
 ALTER TABLE registro
     ALTER COLUMN nombre_completo TYPE VARCHAR(255);
 
