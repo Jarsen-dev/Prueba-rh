@@ -115,6 +115,18 @@ El esquema de las tablas (`registro`, `encuesta_reclutamiento`, `ingresos_puesto
 
 El chatbot conserva sus respuestas automáticas para personal activo y su conexión con los teléfonos registrados en Reclutamiento. Configura `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN` y `WHATSAPP_VERIFY_TOKEN` con los datos de Meta WhatsApp Cloud API. Los avisos de incidencias por WhatsApp y la notificación diferida a contactos de emergencia ya no forman parte del sistema.
 
+### Bot independiente de Telegram
+
+El bot de Telegram está separado del chatbot de WhatsApp: sus archivos están en `telegram/`, sin modificar `Chatbot_Wpp/bot.py` ni las dependencias de WhatsApp. Configura `TELEGRAM_BOT_TOKEN` en `.env` y ejecútalo en un entorno Python independiente:
+
+```bash
+python -m venv .venv-telegram
+.venv-telegram/bin/python -m pip install -r telegram/telegram_requirements.txt
+.venv-telegram/bin/python telegram/telegram_bot.py
+```
+
+En Windows, sustituye `.venv-telegram/bin/python` por `.venv-telegram\Scripts\python.exe`. El bot carga el `.env` de la raíz del proyecto, responde a `/start` y repite los mensajes de texto.
+
 El historial interno del expediente de empleado se guarda en la tabla `incidencias_empleado`, con el tipo, fechas, duración, motivos, hora/opción de entrada o salida y los archivos adjuntos que correspondan. Los avisos de incidencia por WhatsApp no se envían.
 
 ## Limitaciones conocidas
