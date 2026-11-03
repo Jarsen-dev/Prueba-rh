@@ -555,6 +555,32 @@ def asegurar_columnas_nombre(cur):
     cur.execute("ALTER TABLE registro DROP COLUMN nombre_completo")
 
 
+def asegurar_esquema_ingresos_puesto(cur):
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ingresos_puesto (
+            id SERIAL PRIMARY KEY,
+            nombre_candidato VARCHAR(100),
+            empresa VARCHAR(150),
+            no_empleado VARCHAR(50),
+            personal VARCHAR(100),
+            puesto VARCHAR(150),
+            area VARCHAR(150),
+            turno VARCHAR(50),
+            salario VARCHAR(50),
+            pago VARCHAR(50),
+            registro_id INTEGER REFERENCES registro(id) ON DELETE CASCADE
+        )
+        """
+    )
+    cur.execute(
+        """
+        ALTER TABLE ingresos_puesto
+        ADD COLUMN IF NOT EXISTS registro_id INTEGER REFERENCES registro(id) ON DELETE CASCADE
+        """
+    )
+
+
 def parsear_documentos_papeleria(raw_value):
     if not raw_value:
         return {}
@@ -1171,6 +1197,7 @@ def obtener_pendientes():
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 asegurar_columnas_nombre(cur)
+                asegurar_esquema_ingresos_puesto(cur)
                 cur.execute(
                     """
                     SELECT
@@ -1316,6 +1343,7 @@ def obtener_ingresos(empresa=None):
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                asegurar_esquema_ingresos_puesto(cur)
                 cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS estatus VARCHAR(20) DEFAULT 'ACTIVO'")
                 asegurar_columnas_nombre(cur)
                 cur.execute(
@@ -2199,6 +2227,7 @@ def guardar_ingreso():
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                asegurar_esquema_ingresos_puesto(cur)
                 resultado = guardar_o_actualizar_ingreso(cur, payload)
             conn.commit()
 
@@ -2234,6 +2263,7 @@ def guardar_ingresos():
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                asegurar_esquema_ingresos_puesto(cur)
                 for idx, fila in enumerate(payload, start=1):
                     if not isinstance(fila, dict):
                         return (f"ERROR: Fila {idx} inválida", 400)
