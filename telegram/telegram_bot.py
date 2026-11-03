@@ -1,19 +1,17 @@
-import os
 from pathlib import Path
 import telebot
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
-# Ruta absoluta a la raíz del proyecto (Prueba-rh)
+# Carga directa de las variables mediante lectura explícita del archivo
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_PATH = BASE_DIR / ".env"
 
-# Carga explícita indicando la ruta del archivo .env
-load_dotenv(dotenv_path=ENV_PATH)
+config = dotenv_values(ENV_PATH)
+token = config.get("TELEGRAM_BOT_TOKEN")
 
-token = os.getenv("TELEGRAM_BOT_TOKEN")
 if not token:
     raise RuntimeError(
-        f"Falta configurar TELEGRAM_BOT_TOKEN en el archivo .env en: {ENV_PATH}"
+        f"No se pudo extraer TELEGRAM_BOT_TOKEN del archivo en: {ENV_PATH}"
     )
 
 bot = telebot.TeleBot(token)
