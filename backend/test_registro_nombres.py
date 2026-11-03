@@ -5,8 +5,9 @@ import utily
 
 
 class FakeCursor:
-    def __init__(self):
+    def __init__(self, rows=None):
         self.queries = []
+        self.rows = rows or []
 
     def __enter__(self):
         return self
@@ -16,6 +17,9 @@ class FakeCursor:
 
     def execute(self, query, params=None):
         self.queries.append((query, params))
+
+    def fetchall(self):
+        return self.rows
 
 
 class FakeConnection:
@@ -69,6 +73,22 @@ class RegistroNombresTests(unittest.TestCase):
         self.assertIn('r.apellido_paterno', expression)
         self.assertIn('r.apellido_materno', expression)
         self.assertIn('r.nombre_completo', expression)
+
+    def test_pending_candidates_include_separate_names_and_full_name(self):
+        cursor = FakeCursor([('Ana María', 'López', 'García', 'Ana María López García', 12)])
+        client = utily.app.test_client()
+
+        with patch.object(utily, 'get_db_connection', return_value=FakeConnection(cursor)):
+            response = client.get('/api/obtener-pendientes')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), [{
+            'nombre': 'Ana María',
+            'apellido_paterno': 'López',
+            'apellido_materno': 'García',
+            'nombre_completo': 'Ana María López García',
+            'id': 12,
+        }])
 
 
 if __name__ == '__main__':

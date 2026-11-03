@@ -1118,7 +1118,12 @@ def obtener_pendientes():
                 asegurar_columnas_nombre(cur)
                 cur.execute(
                     """
-                    SELECT {nombre_completo_sql}, r.id
+                    SELECT
+                        COALESCE(NULLIF(BTRIM(r.nombre), ''), {nombre_completo_sql}),
+                        r.apellido_paterno,
+                        r.apellido_materno,
+                        {nombre_completo_sql},
+                        r.id
                     FROM registro r
                     WHERE NOT EXISTS (
                         SELECT 1
@@ -1132,8 +1137,11 @@ def obtener_pendientes():
 
         data = [
             {
-                'nombre_completo': row[0],
-                'id': row[1],
+                'nombre': row[0],
+                'apellido_paterno': row[1],
+                'apellido_materno': row[2],
+                'nombre_completo': row[3],
+                'id': row[4],
             }
             for row in rows
         ]
