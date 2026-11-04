@@ -2,7 +2,6 @@ from pathlib import Path
 import telebot
 from dotenv import dotenv_values
 
-# Carga directa de las variables mediante lectura explícita del archivo
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_PATH = BASE_DIR / ".env"
 
