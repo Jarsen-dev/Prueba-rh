@@ -2651,8 +2651,10 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
             if (!registroId) {
                 throw new Error('No se pudo identificar al empleado para consultar sus incidencias.');
             }
-            const respuesta = await fetch(`/api/empleados/${encodeURIComponent(registroId)}/incidencias`);
-            const resultado = await respuesta.json();
+            const { respuesta, texto } = await getConFallback(
+                `/api/empleados/${encodeURIComponent(registroId)}/incidencias`,
+            );
+            const resultado = JSON.parse(texto || '{}');
             if (!respuesta.ok) {
                 throw new Error(resultado.error || 'No se pudieron consultar las incidencias.');
             }
@@ -2664,11 +2666,10 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
         async function deleteEmployeeIncident(incidenciaId) {
             if (!window.confirm('¿Deseas eliminar este registro de incidencia?')) return;
             try {
-                const respuesta = await fetch(
+                const { respuesta, texto } = await deleteConFallback(
                     `/api/empleados/${encodeURIComponent(registroId)}/incidencias/${encodeURIComponent(incidenciaId)}`,
-                    { method: 'DELETE' },
                 );
-                const resultado = await respuesta.json();
+                const resultado = JSON.parse(texto || '{}');
                 if (!respuesta.ok) {
                     throw new Error(resultado.error || 'No se pudo eliminar la incidencia.');
                 }
@@ -2773,7 +2774,7 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
                     const attachment = document.createElement('a');
                     attachment.className = 'notification-detail';
                     attachment.textContent = `Archivo: ${incident.attachmentName}`;
-                    attachment.href = `/api/empleados/${encodeURIComponent(registroId)}/incidencias/${encodeURIComponent(incident.id)}/archivo`;
+                    attachment.href = `${API_URL}/api/empleados/${encodeURIComponent(registroId)}/incidencias/${encodeURIComponent(incident.id)}/archivo`;
                     attachment.download = incident.attachmentName;
                     item.appendChild(attachment);
                 }
@@ -3004,14 +3005,11 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
                     ? document.getElementById(archivoInputId).files[0]
                     : null;
                 if (archivo) datosIncidencia.set('archivo', archivo);
-                const respuesta = await fetch(
+                const { respuesta, texto } = await postConFallback(
                     `/api/empleados/${encodeURIComponent(registroId)}/incidencias`,
-                    {
-                        method: 'POST',
-                        body: datosIncidencia,
-                    },
+                    datosIncidencia,
                 );
-                const resultado = await respuesta.json();
+                const resultado = JSON.parse(texto || '{}');
                 if (!respuesta.ok) {
                     throw new Error(resultado.error || 'No se pudo guardar la incidencia.');
                 }
