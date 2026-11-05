@@ -117,7 +117,7 @@ El chatbot conserva sus respuestas automáticas para personal activo y su conexi
 
 ### Bot independiente de Telegram
 
-El bot de Telegram está separado del chatbot de WhatsApp: sus archivos están en `telegram/`, sin modificar `Chatbot_Wpp/bot.py` ni las dependencias de WhatsApp. Configura `TELEGRAM_BOT_TOKEN` y `TELEGRAM_ADMIN_IDS` en `.env`; este último debe ser una lista separada por comas de IDs numéricos de Telegram autorizados. Si la lista está vacía, los comandos administrativos quedan bloqueados. El bot consulta la misma base PostgreSQL usando las variables `POSTGRES_*` y requiere `psycopg2-binary`. Desde el equipo host se conecta a `127.0.0.1:5434`; `TELEGRAM_POSTGRES_PORT` permite cambiar el puerto local publicado. Ejecútalo en un entorno Python independiente:
+El bot de Telegram está separado del chatbot de WhatsApp: sus archivos están en `telegram/`, sin modificar `Chatbot_Wpp/bot.py` ni las dependencias de WhatsApp. Usa `python-telegram-bot` con handlers asíncronos. Configura `TELEGRAM_BOT_TOKEN` y `TELEGRAM_ADMIN_IDS` en `.env`; este último debe ser una lista separada por comas de IDs numéricos de Telegram autorizados. Si la lista está vacía, los comandos administrativos quedan bloqueados. El bot consulta la misma base PostgreSQL usando las variables `POSTGRES_*` y requiere `psycopg2-binary`. Desde el equipo host se conecta a `127.0.0.1:5434`; `TELEGRAM_POSTGRES_PORT` permite cambiar el puerto local publicado. Ejecútalo en un entorno Python independiente:
 
 ```bash
 python -m venv .venv-telegram

@@ -1,11 +1,22 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import telegram_bot
 
 
-class TelegramBotTests(unittest.TestCase):
+def crear_update(user_id=123, chat_type='private', text='/eliminar 123'):
+    mensaje = SimpleNamespace(reply_text=AsyncMock())
+    return SimpleNamespace(
+        effective_user=SimpleNamespace(id=user_id),
+        effective_chat=SimpleNamespace(type=chat_type),
+        effective_message=mensaje,
+        callback_query=None,
+        message=mensaje,
+    )
+
+
+class TelegramBotTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         telegram_bot.pending_deletions.clear()
 
@@ -32,114 +43,123 @@ class TelegramBotTests(unittest.TestCase):
         self.assertEqual(connect.call_args.kwargs['host'], '127.0.0.1')
         self.assertEqual(connect.call_args.kwargs['port'], '5434')
 
-    @patch.object(telegram_bot.bot, 'reply_to')
-    @patch.object(telegram_bot, 'buscar_empleado')
-    def test_unauthorized_delete_does_not_query_the_database(self, buscar, reply_to):
-        message = SimpleNamespace(
-            from_user=SimpleNamespace(id=999),
-            chat=SimpleNamespace(type='private'),
-            text='/eliminar 123',
-        )
-
+    @patch('telegram_bot.buscar_empleado')
+    async def test_unauthorized_delete_does_not_query_the_database(self, buscar):
+        update = crear_update(user_id=999)
         with patch.object(telegram_bot, 'ADMIN_IDS', {123}):
-            telegram_bot.handle_eliminar(message)
+            await telegram_bot.handle_eliminar(
+                update,
+                SimpleNamespace(args=['123']),
+            )
 
         buscar.assert_not_called()
-        self.assertIn('No tienes autorización', reply_to.call_args.args[1])
-
-    @patch.object(telegram_bot.bot, 'reply_to')
-    @patch.object(telegram_bot, 'buscar_empleado')
-    def test_delete_is_rejected_in_group_chats(self, buscar, reply_to):
-        message = SimpleNamespace(
-            from_user=SimpleNamespace(id=123),
-            chat=SimpleNamespace(type='group'),
-            text='/eliminar 123',
+        update.effective_message.reply_text.assert_awaited_once()
+        self.assertIn(
+            'No tienes autorización',
+            update.effective_message.reply_text.call_args.args[0],
         )
 
+    @patch('telegram_bot.buscar_empleado')
+    async def test_delete_is_rejected_in_group_chats(self, buscar):
+        update = crear_update(chat_type='group')
         with patch.object(telegram_bot, 'ADMIN_IDS', {123}):
-            telegram_bot.handle_eliminar(message)
+            await telegram_bot.handle_eliminar(
+                update,
+                SimpleNamespace(args=['123']),
+            )
 
         buscar.assert_not_called()
-        self.assertIn('chat privado', reply_to.call_args.args[1])
-
-    @patch.object(telegram_bot.bot, 'send_message')
-    @patch.object(telegram_bot.bot, 'answer_callback_query')
-    @patch.object(telegram_bot.bot, 'reply_to')
-    @patch.object(telegram_bot, 'buscar_empleado')
-    @patch.object(telegram_bot, 'get_db_connection')
-    def test_delete_requires_admin_confirmation_before_database_delete(
-        self,
-        get_db_connection,
-        buscar,
-        reply_to,
-        answer_callback_query,
-        send_message,
-    ):
-        buscar.return_value = ((5, 'Ana López', '123', 'Operadora', 'Producción', 'Matutino'), None)
-        connection = MagicMock()
-        connection.__enter__.return_value = connection
-        cursor = MagicMock()
-        connection.cursor.return_value.__enter__.return_value = cursor
-        cursor.fetchone.return_value = (5,)
-        get_db_connection.return_value = connection
-        message = SimpleNamespace(
-            from_user=SimpleNamespace(id=123),
-            chat=SimpleNamespace(type='private'),
-            text='/eliminar 123',
+        self.assertIn(
+            'chat privado',
+            update.effective_message.reply_text.call_args.args[0],
         )
 
+    @patch('telegram_bot.eliminar_registro', return_value=True)
+    @patch('telegram_bot.buscar_empleado')
+    async def test_delete_requires_confirmation_before_deleting(self, buscar, eliminar):
+        buscar.return_value = (
+            (5, 'Ana López', '123', 'Operadora', 'Producción', 'Matutino'),
+            None,
+        )
+        update = crear_update()
         with patch.object(telegram_bot, 'ADMIN_IDS', {123}), patch.dict(
             telegram_bot.config, {'DB_WRITE_LOCK': '0'}
         ):
-            telegram_bot.handle_eliminar(message)
+            await telegram_bot.handle_eliminar(
+                update,
+                SimpleNamespace(args=['123']),
+            )
 
-            self.assertEqual(cursor.execute.call_count, 0)
+            eliminar.assert_not_called()
             self.assertEqual(len(telegram_bot.pending_deletions), 1)
 
             confirmation_id = next(iter(telegram_bot.pending_deletions))
-            callback = SimpleNamespace(
-                id='callback-1',
+            callback_query = SimpleNamespace(
                 data=f'delete:{confirmation_id}',
-                from_user=SimpleNamespace(id=123),
-                message=SimpleNamespace(
-                    chat=SimpleNamespace(id=456, type='private'),
-                ),
+                answer=AsyncMock(),
+                edit_message_text=AsyncMock(),
             )
-            telegram_bot.handle_confirmacion_eliminacion(callback)
+            callback_update = SimpleNamespace(
+                effective_user=SimpleNamespace(id=123),
+                effective_chat=SimpleNamespace(type='private'),
+                callback_query=callback_query,
+            )
+            await telegram_bot.handle_confirmacion_eliminacion(
+                callback_update,
+                SimpleNamespace(),
+            )
 
-        self.assertEqual(cursor.execute.call_count, 1)
-        self.assertIn('DELETE FROM registro', cursor.execute.call_args.args[0])
-        self.assertEqual(cursor.execute.call_args.args[1], (5, '123'))
-        connection.commit.assert_called_once()
+        eliminar.assert_called_once_with(5, '123')
+        callback_query.edit_message_text.assert_awaited_once()
+        self.assertIn(
+            'Se eliminó',
+            callback_query.edit_message_text.call_args.args[0],
+        )
         self.assertFalse(telegram_bot.pending_deletions)
-        answer_callback_query.assert_called_once()
-        send_message.assert_called_once()
 
-    @patch.object(telegram_bot.bot, 'answer_callback_query')
-    @patch.object(telegram_bot, 'get_db_connection')
-    def test_another_admin_cannot_confirm_someone_elses_deletion(
-        self,
-        get_db_connection,
-        answer_callback_query,
-    ):
+    @patch('telegram_bot.eliminar_registro')
+    async def test_another_admin_cannot_confirm_someone_elses_deletion(self, eliminar):
         telegram_bot.pending_deletions['confirmation'] = {
             'admin_id': 123,
             'registro_id': 5,
             'no_empleado': '123',
             'expires_at': telegram_bot.time.monotonic() + 60,
         }
-        callback = SimpleNamespace(
-            id='callback-2',
+        callback_query = SimpleNamespace(
             data='delete:confirmation',
-            from_user=SimpleNamespace(id=456),
-            message=SimpleNamespace(chat=SimpleNamespace(id=789, type='private')),
+            answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
+        )
+        update = SimpleNamespace(
+            effective_user=SimpleNamespace(id=456),
+            effective_chat=SimpleNamespace(type='private'),
+            callback_query=callback_query,
         )
 
         with patch.object(telegram_bot, 'ADMIN_IDS', {123, 456}):
-            telegram_bot.handle_confirmacion_eliminacion(callback)
+            await telegram_bot.handle_confirmacion_eliminacion(
+                update,
+                SimpleNamespace(),
+            )
 
-        get_db_connection.assert_not_called()
-        answer_callback_query.assert_called_once()
+        eliminar.assert_not_called()
+        self.assertIn(
+            'no está disponible',
+            callback_query.edit_message_text.call_args.args[0],
+        )
+
+    def test_application_registers_admin_handlers(self):
+        application = telegram_bot.crear_aplicacion()
+        commands = {
+            command
+            for handler in application.handlers[0]
+            if hasattr(handler, 'commands')
+            for command in handler.commands
+        }
+
+        self.assertTrue({
+            'start', 'ayuda', 'consultar', 'eliminar', 'cancelar_eliminar',
+        }.issubset(commands))
 
 
 if __name__ == '__main__':
