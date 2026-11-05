@@ -132,6 +132,15 @@
             margin-top: 10px;
         }
         button:hover { background: #0056b3; }
+        .captura-menu { position: relative; display: flex; justify-content: flex-end; margin-top: 8px; }
+        .captura-menu > summary { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid #555; border-radius: 6px; color: #fff; cursor: pointer; font-size: 0.9rem; list-style: none; }
+        .captura-menu > summary::-webkit-details-marker { display: none; }
+        .captura-menu > summary::after { content: "▾"; }
+        .captura-icono { width: 22px; height: 22px; object-fit: contain; }
+        .captura-opciones { position: absolute; top: 100%; right: 0; z-index: 10; min-width: 250px; margin-top: 4px; padding: 6px; background: #1e1e1e; border: 1px solid #555; border-radius: 6px; box-shadow: 0 6px 14px rgba(0,0,0,0.35); }
+        .captura-opciones button { display: block; width: 100%; margin: 0; padding: 9px 10px; background: transparent; text-align: left; font-size: 0.9rem; font-weight: normal; }
+        .captura-opciones button:hover { background: #2c2c2c; }
+        .captura-input { display: none; }
     </style>
 </head>
 <body>
@@ -152,6 +161,19 @@
             <div style="margin-bottom: 20px;">
                 <h2 style="margin: 10px 0; text-align: center;">¡TE DAMOS LA BIENVENIDA AL EQUIPO!</h2>
                 <p id="fecha-actual" style="color: #d9d9d9; font-size: 0.9rem; margin: 0; text-align: right;"></p>
+                <details class="captura-menu">
+                    <summary>
+                        <img class="captura-icono" src="https://drive.google.com/uc?export=view&amp;id=19PMZdhH9XgevUS9BRHvkoc4YDnSkquy2" alt="">
+                        <span>Capturar Documento</span>
+                    </summary>
+                    <div class="captura-opciones">
+                        <button type="button" onclick="capturarDocumento('Acta de Nacimiento')">Acta de Nacimiento</button>
+                        <button type="button" onclick="capturarDocumento('Comprobante de Domicilio')">Comprobante de Domicilio</button>
+                        <button type="button" onclick="capturarDocumento('Constancia de Situación Fiscal')">Constancia de Situación Fiscal</button>
+                        <button type="button" onclick="capturarDocumento('Número de Seguro Social')">Número de Seguro Social</button>
+                    </div>
+                </details>
+                <input class="captura-input" id="captura-documento" type="file" accept="image/*" capture="environment">
             </div>
             
             <form id="registroForm" action="/api/guardar-registro" method="POST">
@@ -387,6 +409,15 @@
         mostrarFecha();
             
         });
+    </script>
+    <script>
+        function capturarDocumento(tipoDocumento) {
+            const inputCaptura = document.getElementById('captura-documento');
+            inputCaptura.dataset.tipoDocumento = tipoDocumento;
+            inputCaptura.value = '';
+            document.querySelector('.captura-menu').open = false;
+            inputCaptura.click();
+        }
     </script>
     <script>
 // FECHA - NACIMIENTO --------------------------------------------------------------------------------------------------------------------
