@@ -105,9 +105,9 @@ Puertos publicados en el host:
 | frontend  | 3001        | nginx sirve las páginas estáticas y reenvía `/api/` al backend |
 | backend   | 8001        | API Flask (gunicorn) |
 | chatbot   | 5002        | Webhook de WhatsApp, respuestas automáticas y contactos de Reclutamiento |
-| postgres  | (interno)   | sin puerto publicado; solo el backend lo alcanza por la red interna de Docker |
+| postgres  | 127.0.0.1:5434 | PostgreSQL para el bot local; el backend usa la red interna de Docker |
 
-Estos puertos (3001/8001) se eligieron para no chocar con el otro proyecto que ya corre en el mismo servidor (`produccion_frontend` en 3000, `produccion_backend` en 8000, `produccion_pgadmin` en 5050 y su Postgres publicado en el host 5433). Este proyecto tiene su propio contenedor y volumen de Postgres, aislado del de ese otro proyecto, y por eso puede quedar sin puerto publicado en el host — evita justamente chocar con el 5433 que ya usa el otro proyecto.
+Estos puertos se eligieron para no chocar con el otro proyecto que ya corre en el mismo servidor (`produccion_frontend` en 3000, `produccion_backend` en 8000, `produccion_pgadmin` en 5050 y su Postgres publicado en el host 5433). PostgreSQL de este proyecto escucha en el puerto `5434` del loopback (`127.0.0.1`) para que el bot local pueda conectarse; no queda publicado en interfaces externas. Si el puerto 5434 ya está ocupado, define `TELEGRAM_POSTGRES_PORT` en `.env` con otro puerto local disponible y recrea el servicio de PostgreSQL.
 
 El esquema de las tablas (`registro`, `encuesta_reclutamiento`, `ingresos_puesto`, `incidencias_empleado`) se crea automáticamente la primera vez que el volumen de Postgres está vacío, vía `db/init.sql`. La tabla `registro` guarda el nombre de cada persona en un único campo `nombre_completo`. En bases existentes que tengan los campos separados de una versión anterior, la API vuelve a agregar `nombre_completo` y combina los valores para conservarlos; las columnas anteriores se dejan intactas para no borrar datos. Otros cambios de esquema posteriores requieren un `ALTER TABLE` manual — no hay herramienta de migraciones.
 
@@ -117,7 +117,7 @@ El chatbot conserva sus respuestas automáticas para personal activo y su conexi
 
 ### Bot independiente de Telegram
 
-El bot de Telegram está separado del chatbot de WhatsApp: sus archivos están en `telegram/`, sin modificar `Chatbot_Wpp/bot.py` ni las dependencias de WhatsApp. Configura `TELEGRAM_BOT_TOKEN` en `.env` y ejecútalo en un entorno Python independiente:
+El bot de Telegram está separado del chatbot de WhatsApp: sus archivos están en `telegram/`, sin modificar `Chatbot_Wpp/bot.py` ni las dependencias de WhatsApp. Configura `TELEGRAM_BOT_TOKEN` y `TELEGRAM_ADMIN_IDS` en `.env`; este último debe ser una lista separada por comas de IDs numéricos de Telegram autorizados. Si la lista está vacía, los comandos administrativos quedan bloqueados. El bot consulta la misma base PostgreSQL usando las variables `POSTGRES_*` y requiere `psycopg2-binary`. Desde el equipo host se conecta a `127.0.0.1:5434`; `TELEGRAM_POSTGRES_PORT` permite cambiar el puerto local publicado. Ejecútalo en un entorno Python independiente:
 
 ```bash
 python -m venv .venv-telegram
@@ -125,7 +125,11 @@ python -m venv .venv-telegram
 .venv-telegram/bin/python telegram/telegram_bot.py
 ```
 
-En Windows, sustituye `.venv-telegram/bin/python` por `.venv-telegram\Scripts\python.exe`. El bot carga el `.env` de la raíz del proyecto, responde a `/start` y repite los mensajes de texto.
+En Windows, sustituye `.venv-telegram/bin/python` por `.venv-telegram\Scripts\python.exe`. El bot carga el `.env` de la raíz del proyecto y también acepta variables de entorno del proceso. Los administradores pueden usar `/consultar <no_empleado>` para consultar datos básicos de puesto y `/eliminar <no_empleado>` para solicitar un borrado definitivo; este último solo se ejecuta tras confirmar el botón en Telegram, y puede cancelarse con `/cancelar_eliminar`. Cada confirmación expira en cinco minutos. El borrado elimina en cascada los datos relacionados con el registro.
+
+### Escaneo de documentos del registro
+
+El botón de captura permite seleccionar imágenes JPG, PNG o WEBP, y archivos PDF de hasta 9 MB. El backend envía el documento a OpenAI para extraer únicamente los campos del tipo elegido, devuelve JSON y completa campos vacíos del formulario sin reemplazar los que ya se capturaron. El archivo no se conserva en la base de datos ni en el servidor. Configura `OPENAI_API_KEY` en `.env` o en el entorno disponible para Docker Compose; opcionalmente, `OPENAI_MODEL` selecciona el modelo (por defecto `gpt-4o-mini`). Confirma los datos extraídos antes de enviar el registro. Como son documentos con datos personales sensibles, habilita HTTPS en el sitio antes de usarlo con candidatos.
 
 El historial interno del expediente de empleado se guarda en la tabla `incidencias_empleado`, con el tipo, fechas, duración, motivos, hora/opción de entrada o salida y los archivos adjuntos que correspondan. Los avisos de incidencia por WhatsApp no se envían.
 

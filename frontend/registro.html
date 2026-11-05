@@ -141,6 +141,7 @@
         .captura-opciones button { display: block; width: 100%; margin: 0; padding: 9px 10px; background: transparent; text-align: left; font-size: 0.9rem; font-weight: normal; }
         .captura-opciones button:hover { background: #2c2c2c; }
         .captura-input { display: none; }
+        .captura-status { margin: 8px 0 0; color: #bbb; font-size: 0.8rem; text-align: right; }
     </style>
 </head>
 <body>
@@ -173,7 +174,10 @@
                         <button type="button" onclick="capturarDocumento('Número de Seguro Social')">Número de Seguro Social</button>
                     </div>
                 </details>
-                <input class="captura-input" id="captura-documento" type="file" accept="image/*" capture="environment">
+                <input class="captura-input" id="captura-documento" type="file" accept=".pdf,application/pdf,image/jpeg,image/png,image/webp">
+                <p class="captura-status" id="captura-status" role="status" aria-live="polite">
+                    El documento se enviará a OpenAI para extraer datos y no se conservará en el servidor.
+                </p>
             </div>
             
             <form id="registroForm" action="/api/guardar-registro" method="POST">
@@ -411,13 +415,123 @@
         });
     </script>
     <script>
+        let tipoDocumentoSeleccionado = '';
+
         function capturarDocumento(tipoDocumento) {
             const inputCaptura = document.getElementById('captura-documento');
-            inputCaptura.dataset.tipoDocumento = tipoDocumento;
+            tipoDocumentoSeleccionado = tipoDocumento;
             inputCaptura.value = '';
             document.querySelector('.captura-menu').open = false;
             inputCaptura.click();
         }
+
+        function completarCamposDocumento(campos) {
+            const formulario = document.getElementById('registroForm');
+            let cantidadCompletada = 0;
+            const camposOrdenados = Object.entries(campos || {}).sort(([campoA], [campoB]) => {
+                if (campoA === 'cp') return -1;
+                if (campoB === 'cp') return 1;
+                return 0;
+            });
+
+            camposOrdenados.forEach(([nombre, valor]) => {
+                if (typeof valor !== 'string' || !valor.trim()) return;
+                const control = formulario.elements.namedItem(nombre);
+                if (!control || !('value' in control) || control.value.trim()) return;
+
+                let valorNormalizado = valor.trim();
+                if (nombre === 'genero') {
+                    const genero = valorNormalizado.toLocaleUpperCase('es-MX');
+                    if (['HOMBRE', 'M'].includes(genero)) valorNormalizado = 'MASCULINO';
+                    if (['MUJER', 'F'].includes(genero)) valorNormalizado = 'FEMENINO';
+                }
+
+                if (control instanceof HTMLSelectElement) {
+                    const opcion = Array.from(control.options).find(
+                        (item) => item.value.toLocaleUpperCase('es-MX') === valorNormalizado.toLocaleUpperCase('es-MX')
+                            || item.textContent.trim().toLocaleUpperCase('es-MX') === valorNormalizado.toLocaleUpperCase('es-MX')
+                    );
+                    if (opcion) {
+                        control.value = opcion.value;
+                        cantidadCompletada++;
+                    } else if (nombre === 'colonia') {
+                        const nuevaOpcion = document.createElement('option');
+                        nuevaOpcion.value = valorNormalizado;
+                        nuevaOpcion.textContent = valorNormalizado;
+                        control.add(nuevaOpcion);
+                        control.value = valorNormalizado;
+                        cantidadCompletada++;
+                    }
+                } else {
+                    control.value = valorNormalizado;
+                    control.dispatchEvent(new Event('input', { bubbles: true }));
+                    if (nombre === 'fecha_nac') {
+                        control.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                    cantidadCompletada++;
+                    if (nombre === 'cp' && /^\d{5}$/.test(valorNormalizado)) {
+                        autocompletarCP(false);
+                    }
+                }
+            });
+
+            return cantidadCompletada;
+        }
+
+        async function enviarDocumentoParaEscaneo(archivo, tipoDocumento) {
+            const estado = document.getElementById('captura-status');
+            const datos = new FormData();
+            datos.append('tipo_documento', tipoDocumento);
+            datos.append('archivo', archivo);
+            estado.textContent = 'Analizando documento…';
+
+            let ultimoError = null;
+            for (const baseUrl of API_BASES) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 55000);
+                try {
+                    const respuesta = await fetch(`${baseUrl}/api/escanear-documento`, {
+                        method: 'POST',
+                        body: datos,
+                        signal: controller.signal,
+                    });
+                    if ([403, 404].includes(respuesta.status)) {
+                        ultimoError = new Error(`HTTP ${respuesta.status}`);
+                        continue;
+                    }
+
+                    const resultado = await respuesta.json();
+                    if (!respuesta.ok) {
+                        throw new Error(resultado.error || 'No se pudo analizar el documento.');
+                    }
+                    return resultado.campos || {};
+                } catch (error) {
+                    ultimoError = error;
+                } finally {
+                    clearTimeout(timeoutId);
+                }
+            }
+
+            throw ultimoError || new Error('No fue posible conectar con el servicio de escaneo.');
+        }
+
+        document.getElementById('captura-documento').addEventListener('change', async function() {
+            const archivo = this.files && this.files[0];
+            if (!archivo) return;
+
+            try {
+                const campos = await enviarDocumentoParaEscaneo(archivo, tipoDocumentoSeleccionado);
+                const cantidadCompletada = completarCamposDocumento(campos);
+                document.getElementById('captura-status').textContent = cantidadCompletada
+                    ? `Documento analizado. Se completaron ${cantidadCompletada} campos vacíos; revísalos antes de continuar.`
+                    : 'Documento analizado; no se encontraron campos vacíos para completar.';
+            } catch (error) {
+                document.getElementById('captura-status').textContent =
+                    `No se pudo analizar el documento: ${error.message}`;
+            } finally {
+                this.value = '';
+            }
+        });
     </script>
     <script>
 // FECHA - NACIMIENTO --------------------------------------------------------------------------------------------------------------------
@@ -448,7 +562,7 @@
             }
         });
 
-        function autocompletarCP() {
+        function autocompletarCP(mostrarError = true) {
             const cpBuscado = document.getElementById('cp').value.trim();
             const selectCol = document.getElementById('colonia');
             const inputMun = document.getElementById('municipio');
@@ -467,7 +581,7 @@
                     opt.text = fila.d_asenta;
                     selectCol.add(opt);
                 });
-            } else {
+            } else if (mostrarError) {
                 alert("CP no encontrado");
             }
         }
