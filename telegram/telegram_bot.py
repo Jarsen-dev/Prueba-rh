@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import re
@@ -6,14 +7,23 @@ from pathlib import Path
 from uuid import uuid4
 
 import psycopg2
-import telebot
 from dotenv import dotenv_values
-from telebot import types
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.constants import ChatType
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_PATH = BASE_DIR / '.env'
 config = {**dotenv_values(ENV_PATH), **os.environ}
+logger = logging.getLogger(__name__)
 
 token = config.get('TELEGRAM_BOT_TOKEN')
 if not token:
@@ -34,21 +44,16 @@ def parse_admin_ids(value):
 
 ADMIN_IDS = parse_admin_ids(config.get('TELEGRAM_ADMIN_IDS'))
 if not ADMIN_IDS:
-    logging.getLogger(__name__).warning(
+    logger.warning(
         'TELEGRAM_ADMIN_IDS no está configurado; los comandos administrativos quedan bloqueados.'
     )
 
-bot = telebot.TeleBot(token)
 pending_deletions = {}
 CONFIRMATION_TTL_SECONDS = 300
 
 
 def es_administrador(user_id):
     return user_id is not None and user_id in ADMIN_IDS
-
-
-def es_chat_privado(message):
-    return bool(message.chat and message.chat.type == 'private')
 
 
 def limpiar_confirmaciones_expiradas():
@@ -107,20 +112,48 @@ def buscar_empleado(no_empleado):
     return next(iter(empleados.values())), None
 
 
-def responder_no_autorizado(message):
-    bot.reply_to(message, 'No tienes autorización para usar los comandos administrativos.')
+def eliminar_registro(registro_id, no_empleado):
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM registro AS r
+                WHERE r.id = %s
+                  AND EXISTS (
+                      SELECT 1
+                      FROM ingresos_puesto AS ip
+                      WHERE ip.registro_id = r.id
+                        AND BTRIM(ip.no_empleado::text) = %s
+                  )
+                RETURNING r.id
+                """,
+                (registro_id, no_empleado),
+            )
+            eliminado = cur.fetchone()
+        conn.commit()
+    return bool(eliminado)
 
 
-@bot.message_handler(commands=['start', 'ayuda'])
-def handle_start(message):
-    if not es_chat_privado(message):
-        bot.reply_to(message, 'Usa el bot en un chat privado para consultar comandos.')
+async def responder(update, texto, reply_markup=None):
+    if update.effective_message:
+        await update.effective_message.reply_text(texto, reply_markup=reply_markup)
+
+
+async def autorizar_chat_privado(update):
+    if not update.effective_chat or update.effective_chat.type != ChatType.PRIVATE:
+        await responder(update, 'Por seguridad, usa estos comandos en un chat privado con el bot.')
+        return False
+    if not es_administrador(update.effective_user.id if update.effective_user else None):
+        await responder(update, 'No tienes autorización para usar los comandos administrativos.')
+        return False
+    return True
+
+
+async def handle_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not await autorizar_chat_privado(update):
         return
-    if not es_administrador(message.from_user.id if message.from_user else None):
-        responder_no_autorizado(message)
-        return
-    bot.reply_to(
-        message,
+    await responder(
+        update,
         'Comandos administrativos:\n'
         '/consultar <no_empleado> - consulta puesto y datos básicos\n'
         '/eliminar <no_empleado> - solicita confirmación antes del borrado definitivo\n'
@@ -128,33 +161,26 @@ def handle_start(message):
     )
 
 
-@bot.message_handler(commands=['consultar'])
-def handle_consultar(message):
-    if not es_chat_privado(message):
-        bot.reply_to(message, 'Por seguridad, las consultas solo están disponibles en un chat privado.')
+async def handle_consultar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await autorizar_chat_privado(update):
         return
-    if not es_administrador(message.from_user.id if message.from_user else None):
-        responder_no_autorizado(message)
-        return
-
-    partes = (message.text or '').split(maxsplit=1)
-    if len(partes) != 2 or not partes[1].strip():
-        bot.reply_to(message, 'Uso: /consultar <no_empleado>')
+    if len(context.args) != 1 or not context.args[0].strip():
+        await responder(update, 'Uso: /consultar <no_empleado>')
         return
 
     try:
-        empleado, error = buscar_empleado(partes[1].strip())
+        empleado, error = await asyncio.to_thread(buscar_empleado, context.args[0].strip())
     except (psycopg2.Error, RuntimeError):
-        logging.getLogger(__name__).exception('No se pudo consultar un empleado desde Telegram.')
-        bot.reply_to(message, 'No fue posible consultar la base de datos.')
+        logger.exception('No se pudo consultar un empleado desde Telegram.')
+        await responder(update, 'No fue posible consultar la base de datos.')
         return
 
     if error:
-        bot.reply_to(message, error)
+        await responder(update, error)
         return
 
-    bot.reply_to(
-        message,
+    await responder(
+        update,
         '\n'.join((
             f'Número: {empleado[2] or "Sin asignar"}',
             f'Nombre: {empleado[1] or "Sin nombre"}',
@@ -165,51 +191,46 @@ def handle_consultar(message):
     )
 
 
-@bot.message_handler(commands=['eliminar'])
-def handle_eliminar(message):
-    if not es_chat_privado(message):
-        bot.reply_to(message, 'Por seguridad, las eliminaciones solo están disponibles en un chat privado.')
-        return
-    if not es_administrador(message.from_user.id if message.from_user else None):
-        responder_no_autorizado(message)
+async def handle_eliminar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await autorizar_chat_privado(update):
         return
     limpiar_confirmaciones_expiradas()
     if str(config.get('DB_WRITE_LOCK') or '0').strip() == '1':
-        bot.reply_to(message, 'La base de datos está bloqueada para cambios; no se realizó ninguna acción.')
+        await responder(update, 'La base de datos está bloqueada para cambios; no se realizó ninguna acción.')
+        return
+    if len(context.args) != 1 or not context.args[0].strip():
+        await responder(update, 'Uso: /eliminar <no_empleado>')
         return
 
-    partes = (message.text or '').split(maxsplit=1)
-    if len(partes) != 2 or not partes[1].strip():
-        bot.reply_to(message, 'Uso: /eliminar <no_empleado>')
-        return
-
-    no_empleado = partes[1].strip()
+    no_empleado = context.args[0].strip()
     try:
-        empleado, error = buscar_empleado(no_empleado)
+        empleado, error = await asyncio.to_thread(buscar_empleado, no_empleado)
     except (psycopg2.Error, RuntimeError):
-        logging.getLogger(__name__).exception('No se pudo preparar una eliminación desde Telegram.')
-        bot.reply_to(message, 'No fue posible consultar la base de datos.')
+        logger.exception('No se pudo preparar una eliminación desde Telegram.')
+        await responder(update, 'No fue posible consultar la base de datos.')
         return
 
     if error:
-        bot.reply_to(message, error)
+        await responder(update, error)
         return
 
     confirmation_id = uuid4().hex
     pending_deletions[confirmation_id] = {
-        'admin_id': message.from_user.id,
+        'admin_id': update.effective_user.id,
         'registro_id': empleado[0],
         'no_empleado': no_empleado,
         'expires_at': time.monotonic() + CONFIRMATION_TTL_SECONDS,
     }
 
-    keyboard = types.InlineKeyboardMarkup()
-    keyboard.row(
-        types.InlineKeyboardButton('Sí, eliminar definitivamente', callback_data=f'delete:{confirmation_id}'),
-        types.InlineKeyboardButton('Cancelar', callback_data=f'cancel:{confirmation_id}'),
-    )
-    bot.reply_to(
-        message,
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton(
+            'Sí, eliminar definitivamente',
+            callback_data=f'delete:{confirmation_id}',
+        ),
+        InlineKeyboardButton('Cancelar', callback_data=f'cancel:{confirmation_id}'),
+    ]])
+    await responder(
+        update,
         (
             f'Confirma el borrado definitivo del registro de {empleado[1] or "este empleado"} '
             f'(número {empleado[2]})?\n'
@@ -220,18 +241,11 @@ def handle_eliminar(message):
     )
 
 
-@bot.message_handler(commands=['cancelar_eliminar'])
-def handle_cancelar_eliminar(message):
-    if not es_chat_privado(message):
-        bot.reply_to(message, 'Por seguridad, las confirmaciones solo se administran en un chat privado.')
+async def handle_cancelar_eliminar(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not await autorizar_chat_privado(update):
         return
-    user_id = message.from_user.id if message.from_user else None
-    if not es_administrador(user_id):
-        responder_no_autorizado(message)
-        return
-
     limpiar_confirmaciones_expiradas()
-
+    user_id = update.effective_user.id
     canceladas = [
         confirmation_id
         for confirmation_id, pendiente in pending_deletions.items()
@@ -239,84 +253,97 @@ def handle_cancelar_eliminar(message):
     ]
     for confirmation_id in canceladas:
         pending_deletions.pop(confirmation_id, None)
-    bot.reply_to(message, 'Se cancelaron tus confirmaciones pendientes.')
+    await responder(update, 'Se cancelaron tus confirmaciones pendientes.')
 
 
-@bot.callback_query_handler(func=lambda call: bool(call.data and call.data.startswith(('delete:', 'cancel:'))))
-def handle_confirmacion_eliminacion(call):
-    accion, _, confirmation_id = call.data.partition(':')
-    pendiente = pending_deletions.get(confirmation_id)
-    user_id = call.from_user.id if call.from_user else None
+async def handle_confirmacion_eliminacion(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer()
 
     if (
-        not call.message
-        or call.message.chat.type != 'private'
-        or not es_administrador(user_id)
-        or not pendiente
-        or pendiente['admin_id'] != user_id
+        not update.effective_chat
+        or update.effective_chat.type != ChatType.PRIVATE
+        or not es_administrador(update.effective_user.id if update.effective_user else None)
     ):
-        bot.answer_callback_query(call.id, 'Esta confirmación no está disponible.')
+        await query.edit_message_text('Esta confirmación no está disponible.')
+        return
+
+    accion, _, confirmation_id = (query.data or '').partition(':')
+    pendiente = pending_deletions.get(confirmation_id)
+    if not pendiente or pendiente['admin_id'] != update.effective_user.id:
+        await query.edit_message_text('Esta confirmación no está disponible.')
         return
     if pendiente['expires_at'] <= time.monotonic():
         pending_deletions.pop(confirmation_id, None)
-        bot.answer_callback_query(call.id, 'La confirmación expiró.')
-        bot.send_message(call.message.chat.id, 'La solicitud expiró. Usa /eliminar para iniciar otra.')
+        await query.edit_message_text('La solicitud expiró. Usa /eliminar para iniciar otra.')
         return
     if accion == 'cancel':
         pending_deletions.pop(confirmation_id, None)
-        bot.answer_callback_query(call.id, 'Eliminación cancelada.')
-        bot.send_message(call.message.chat.id, 'No se eliminó ningún registro.')
+        await query.edit_message_text('No se eliminó ningún registro.')
+        return
+    if accion != 'delete':
+        await query.edit_message_text('Esta confirmación no está disponible.')
         return
     if str(config.get('DB_WRITE_LOCK') or '0').strip() == '1':
         pending_deletions.pop(confirmation_id, None)
-        bot.answer_callback_query(call.id, 'La base de datos está bloqueada.')
-        bot.send_message(call.message.chat.id, 'La base de datos está bloqueada; no se eliminó ningún registro.')
+        await query.edit_message_text(
+            'La base de datos está bloqueada; no se eliminó ningún registro.'
+        )
         return
 
     try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    DELETE FROM registro AS r
-                    WHERE r.id = %s
-                      AND EXISTS (
-                          SELECT 1
-                          FROM ingresos_puesto AS ip
-                          WHERE ip.registro_id = r.id
-                            AND BTRIM(ip.no_empleado::text) = %s
-                      )
-                    RETURNING r.id
-                    """,
-                    (pendiente['registro_id'], pendiente['no_empleado']),
-                )
-                eliminado = cur.fetchone()
-            conn.commit()
+        eliminado = await asyncio.to_thread(
+            eliminar_registro,
+            pendiente['registro_id'],
+            pendiente['no_empleado'],
+        )
     except (psycopg2.Error, RuntimeError):
-        logging.getLogger(__name__).exception('No se pudo completar una eliminación desde Telegram.')
-        bot.answer_callback_query(call.id, 'No fue posible completar el borrado.')
-        bot.send_message(call.message.chat.id, 'No fue posible completar el borrado; no confirmes de nuevo sin consultar el estado.')
+        logger.exception('No se pudo completar una eliminación desde Telegram.')
+        await query.edit_message_text(
+            'No fue posible completar el borrado. Consulta el estado actual antes de reintentar.'
+        )
         return
 
     pending_deletions.pop(confirmation_id, None)
     if eliminado:
-        bot.answer_callback_query(call.id, 'Registro eliminado.')
-        bot.send_message(
-            call.message.chat.id,
-            f'Se eliminó el registro con número de empleado {pendiente["no_empleado"]}.',
+        await query.edit_message_text(
+            f'Se eliminó el registro con número de empleado {pendiente["no_empleado"]}.'
         )
     else:
-        bot.answer_callback_query(call.id, 'El registro ya no coincide.')
-        bot.send_message(call.message.chat.id, 'No se eliminó ningún registro; consulta su estado actual.')
+        await query.edit_message_text(
+            'No se eliminó ningún registro; consulta su estado actual.'
+        )
 
 
-@bot.message_handler(content_types=['text'])
-def handle_text(message):
-    if es_chat_privado(message):
-        bot.reply_to(message, 'Usa /ayuda para consultar los comandos disponibles.')
+async def handle_text(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat and update.effective_chat.type == ChatType.PRIVATE:
+        await responder(update, 'Usa /ayuda para consultar los comandos disponibles.')
+
+
+def crear_aplicacion():
+    application = Application.builder().token(token).build()
+    application.add_handler(CommandHandler(['start', 'ayuda'], handle_start))
+    application.add_handler(CommandHandler('consultar', handle_consultar))
+    application.add_handler(CommandHandler('eliminar', handle_eliminar))
+    application.add_handler(CommandHandler('cancelar_eliminar', handle_cancelar_eliminar))
+    application.add_handler(
+        CallbackQueryHandler(
+            handle_confirmacion_eliminacion,
+            pattern=r'^(delete|cancel):[a-f0-9]{32}$',
+        )
+    )
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text)
+    )
+    return application
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    logging.getLogger(__name__).info('Bot de Telegram encendido.')
-    bot.infinity_polling()
+    logger.info('Bot de Telegram encendido.')
+    crear_aplicacion().run_polling()
