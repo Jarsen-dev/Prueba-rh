@@ -6,8 +6,10 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "127.0.0.1:${TELEGRAM_POSTGRES_PORT:-5435}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rh_app -d rh_system"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -16,11 +18,12 @@ services:
     image: rh-system-backend:local
     build: ./backend
     restart: unless-stopped
+    env_file: .env
     environment:
       DB_WRITE_LOCK: "0"
       EMPLOYEE_DOCS_ROOT: /app/uploads
-      CHATBOT_INTERNAL_URL: http://chatbot:5000
-      CHATBOT_INTERNAL_TOKEN: ${CHATBOT_INTERNAL_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,9 +44,6 @@ services:
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
       WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
       WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION:-v23.0}
-      CHATBOT_INTERNAL_TOKEN: ${CHATBOT_INTERNAL_TOKEN:-}
-      WHATSAPP_NOTIFICATION_TEMPLATE_PREFIX: ${WHATSAPP_NOTIFICATION_TEMPLATE_PREFIX:-rh_aviso}
-      WHATSAPP_TEMPLATE_LANGUAGE: ${WHATSAPP_TEMPLATE_LANGUAGE:-es_MX}
     depends_on:
       postgres:
         condition: service_healthy
