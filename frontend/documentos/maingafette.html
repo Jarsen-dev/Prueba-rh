@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CW Connect</title>
-    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="icon" type="image/png" href="../favicon.png">
     <style>
         :root {
             --primary-blue: #2563eb;
@@ -654,11 +654,11 @@
             localStorage.removeItem('gafeteReturnUrl');
             localStorage.removeItem('gafeteData');
             localStorage.removeItem('gafeteBatchData');
-            if (returnUrl) {
-                window.location.href = returnUrl;
+            if (['Cheong Woon.html', 'Kronos.html'].includes(returnUrl)) {
+                window.location.href = `../${encodeURI(returnUrl)}`;
                 return;
             }
-            window.location.href = 'Cheong Woon.html';
+            window.location.href = '../Cheong%20Woon.html';
         }
 
         document.addEventListener('DOMContentLoaded', () => {
