@@ -130,9 +130,9 @@
 
     <script>
         const formatos = {
-            cartacom: { titulo: 'Carta Compromiso', pagina: 'cartacom.html' },
-            cartaimss: { titulo: 'Carta Patronal IMSS', pagina: 'cartaimss.html' },
-            contrato: { titulo: 'Contrato Laboral', pagina: 'contrato.html' },
+            cartacom: { titulo: 'Carta Compromiso', pagina: 'documentos/cartacom.html' },
+            cartaimss: { titulo: 'Carta Patronal IMSS', pagina: 'documentos/cartaimss.html' },
+            contrato: { titulo: 'Contrato Laboral', pagina: 'documentos/contrato.html' },
         };
         const parametros = new URLSearchParams(window.location.search);
         const formato = formatos[parametros.get('tipo')];
@@ -145,7 +145,8 @@
         const botonImprimir = document.getElementById('btn-imprimir');
         const promesasCarga = [];
 
-        document.getElementById('btn-regresar').href = encodeURI(returnUrl);
+        const urlRetorno = new URL(encodeURI(returnUrl), `${window.location.origin}/`).href;
+        document.getElementById('btn-regresar').href = urlRetorno;
 
         function crearDocumento(registroId, indice) {
             const contenedor = document.createElement('section');
@@ -192,7 +193,7 @@
                         `;
                         contenido.head.append(estilo);
                         const linkRegresar = contenido.getElementById('btn-regresar');
-                        if (linkRegresar) linkRegresar.href = encodeURI(returnUrl);
+                        if (linkRegresar) linkRegresar.href = urlRetorno;
 
                         const esperarDatos = () => {
                             if (esperaFinalizada) return;

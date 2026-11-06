@@ -65,11 +65,11 @@ Gestión de Personal `Cheong Woon.html / Kronos.html`:
 ✓ Documentos personalizados automaticos.
 
 ## Generación Automática de Documentos y Gafetes
-Identificaciones `maingafette.html`:
+Identificaciones `frontend/documentos/maingafette.html`:
 
 ✓ Módulo de diseño y generación de gafetes de empleados para impresión directa o exportación a PDF.
 
-# Plantillas Automatizadas `contrato.html, cartaimss.html, cartacom.html`:
+# Plantillas Automatizadas `frontend/documentos/contrato.html`, `frontend/documentos/cartaimss.html` y `frontend/documentos/cartacom.html`:
 
 ✓ Creación automática de Contratos de Trabajo, Cartas IMSS y Cartas Compromiso tomando los datos guardados del colaborador sin necesidad de llenado manual.
 
