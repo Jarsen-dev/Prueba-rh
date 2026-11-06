@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import unittest
 from unittest.mock import Mock, patch
@@ -9,6 +10,62 @@ import utily
 class EscanearDocumentoTests(unittest.TestCase):
     def setUp(self):
         self.client = utily.app.test_client()
+
+    @patch.dict(os.environ, {'OPENAI_API_KEY': 'test-key'})
+    @patch('utily.requests.post')
+    def test_document_types_send_their_exact_field_guidance_and_schema(self, post_openai):
+        casos = {
+            'Acta de Nacimiento': {
+                'nombre_completo', 'fecha_nac', 'genero',
+            },
+            'Comprobante de Domicilio': {
+                'cp', 'colonia', 'calle', 'num_ext', 'num_int', 'municipio', 'estado',
+            },
+            'Constancia de Situación Fiscal': {
+                'nombre_completo', 'rfc', 'curp', 'cp', 'colonia', 'calle',
+                'num_ext', 'num_int', 'municipio', 'estado',
+            },
+            'Número de Seguro Social': {'nss'},
+        }
+
+        for tipo_documento, campos_esperados in casos.items():
+            with self.subTest(tipo_documento=tipo_documento):
+                valores_vacios = json.dumps({
+                    campo: None for campo in campos_esperados
+                })
+                respuesta = Mock()
+                respuesta.json.return_value = {'output_text': valores_vacios}
+                post_openai.return_value = respuesta
+
+                response = self.client.post(
+                    '/api/escanear-documento',
+                    data={
+                        'tipo_documento': tipo_documento,
+                        'archivo': (
+                            io.BytesIO(b'%PDF-1.7 documento'),
+                            'documento.pdf',
+                        ),
+                    },
+                    content_type='multipart/form-data',
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(set(response.get_json()['campos']), campos_esperados)
+                solicitud = post_openai.call_args.kwargs['json']
+                esquema = solicitud['text']['format']['schema']
+                self.assertEqual(set(esquema['properties']), campos_esperados)
+                self.assertEqual(set(esquema['required']), campos_esperados)
+                texto = solicitud['input'][0]['content'][0]['text']
+                self.assertIn(tipo_documento, texto)
+                self.assertIn(
+                    utily.INSTRUCCIONES_TIPO_DOCUMENTO[tipo_documento],
+                    texto,
+                )
+                for campo in campos_esperados:
+                    self.assertIn(
+                        utily.INSTRUCCIONES_CAMPOS_DOCUMENTO[campo],
+                        esquema['properties'][campo]['description'],
+                    )
 
     @patch.dict(os.environ, {'OPENAI_API_KEY': 'test-key'})
     @patch('utily.requests.post')
