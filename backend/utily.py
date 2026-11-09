@@ -18,6 +18,7 @@ from werkzeug.utils import secure_filename
 
 import auth
 import bitacora
+import catalogos
 import telegram_api
 
 app = Flask(__name__)
@@ -2198,6 +2199,12 @@ def obtener_empleado_por_id(id_empleado):
     except Exception as e:
         print(f"Error detallado en /obtener-empleado: {e}")
         return (f"ERROR: {str(e)}", 500)
+
+
+@app.route('/api/catalogos/ingreso', methods=['GET'])
+def catalogo_ingreso():
+    """Opciones del formulario de asignación de puesto (las mismas de Ingreso.html)."""
+    return jsonify(catalogos.catalogo_ingreso())
 
 
 @app.route('/api/empleados/buscar', methods=['GET'])

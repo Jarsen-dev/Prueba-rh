@@ -9,7 +9,7 @@ import sys
 from typing import Any
 
 import httpx
-from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import BotCommand, Update
 from telegram.constants import ChatType
 from telegram.ext import (
     Application,
@@ -21,115 +21,46 @@ from telegram.ext import (
     filters,
 )
 
-from bot.backend import ClienteBackend, ErrorBackend, NoVinculado
-from bot.borrador import CambioPendiente
+from bot.backend import ClienteBackend, ErrorBackend
 from bot.config import Settings, obtener_settings
 from bot.estado import Estados
+from bot.interfaz import (  # noqa: F401 - reexportados para quien importe desde principal
+    TEXTO_NO_VINCULADO,
+    formatear_empleado,
+    parametros_busqueda,
+    partir,
+    responder,
+    teclado_confirmar,
+    texto_error,
+)
+from bot.menu import formularios, pantallas
 
 logger = logging.getLogger(__name__)
 
-MAX_MENSAJE = 4096
 PRIVADO = filters.ChatType.PRIVATE
-
-TEXTO_NO_VINCULADO = (
-    'Este Telegram no está vinculado a una cuenta del sistema de RH.\n\n'
-    'En el panel abre «Telegram», genera un código y envíalo aquí con:\n'
-    '/vincular CÓDIGO\n\n'
-    'O abre directamente el enlace que te muestra el panel.'
-)
 
 TEXTO_AYUDA = (
     'Comandos disponibles:\n'
+    '/sistema — menú con botones (empleados, ingresos, reclutamiento, descargas)\n'
     '/consultar <número o nombre> — datos básicos de un empleado\n'
     '/eliminar <número> — eliminar un empleado (pide confirmación doble)\n'
-    '/cancelar — descarta el cambio pendiente\n'
+    '/cancelar — descarta el cambio o formulario pendiente\n'
     '/yo — tu cuenta y permisos\n'
     '/desvincular — desconecta este Telegram de tu cuenta\n'
     '/ayuda — esta lista\n\n'
-    'Lo que puedes ver y hacer depende de los permisos de tu cuenta en el panel.'
+    'Lo que puedes ver y hacer depende de los permisos de tu cuenta en el panel. '
+    'Nada se guarda sin que pulses Confirmar.'
 )
 
 COMANDOS = [
+    BotCommand('sistema', 'Menú con botones'),
     BotCommand('consultar', 'Consultar un empleado'),
     BotCommand('eliminar', 'Eliminar un empleado'),
-    BotCommand('cancelar', 'Descartar el cambio pendiente'),
+    BotCommand('cancelar', 'Descartar lo pendiente'),
     BotCommand('yo', 'Mi cuenta y permisos'),
     BotCommand('desvincular', 'Desconectar este Telegram'),
     BotCommand('ayuda', 'Ayuda'),
 ]
-
-
-# --- Funciones puras ---------------------------------------------------------
-
-def formatear_empleado(empleado: dict[str, Any]) -> str:
-    def dato(clave: str, defecto: str = 'Sin dato') -> str:
-        valor = empleado.get(clave)
-        return str(valor).strip() if valor not in (None, '') else defecto
-
-    return '\n'.join((
-        f'👤 {dato("nombre_completo", "Sin nombre")}',
-        f'Número: {dato("no_empleado", "Sin asignar")}',
-        f'Empresa: {dato("empresa")}',
-        f'Puesto: {dato("puesto")}',
-        f'Área: {dato("area")}',
-        f'Turno: {dato("turno")}',
-        f'Estatus: {dato("estatus")}',
-    ))
-
-
-def parametros_busqueda(texto: str) -> dict[str, str] | None:
-    """Número de empleado exacto si son solo dígitos; si no, parte del nombre."""
-    texto = ' '.join(texto.split())
-    if not texto:
-        return None
-    if texto.isdigit():
-        return {'no_empleado': texto}
-    if len(texto) < 3:
-        return None
-    return {'q': texto}
-
-
-def texto_error(error: Exception) -> str:
-    if isinstance(error, NoVinculado):
-        return TEXTO_NO_VINCULADO
-    if isinstance(error, ErrorBackend):
-        if error.status == 401:
-            return ('Tu sesión ya no es válida: desvincularon este Telegram o cambió la '
-                    'contraseña de tu cuenta. Vuelve a vincularlo desde el panel.')
-        if error.status == 403:
-            return '🚫 Tu cuenta no tiene permiso para esta acción.'
-        if error.status == 503 and error.codigo == 'BOT_APAGADO':
-            return 'El bot está desactivado en el sistema.'
-        return f'⚠️ {error.mensaje}'
-    return '⚠️ Ocurrió un error inesperado. Intenta de nuevo.'
-
-
-def teclado_confirmar(pendiente: CambioPendiente) -> InlineKeyboardMarkup:
-    peligro = pendiente.metodo == 'DELETE'
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton('🗑 Sí, eliminar' if peligro else '✅ Confirmar', callback_data=f'ok:{pendiente.id}'),
-        InlineKeyboardButton('✖️ Cancelar', callback_data=f'no:{pendiente.id}'),
-    ]])
-
-
-def partir(texto: str, tope: int = MAX_MENSAJE) -> list[str]:
-    partes, actual = [], ''
-    for linea in texto.split('\n'):
-        while len(linea) > tope:
-            if actual:
-                partes.append(actual)
-                actual = ''
-            partes.append(linea[:tope])
-            linea = linea[tope:]
-        candidato = f'{actual}\n{linea}' if actual else linea
-        if len(candidato) > tope:
-            partes.append(actual)
-            actual = linea
-        else:
-            actual = candidato
-    if actual:
-        partes.append(actual)
-    return partes or ['']
 
 
 # --- Ayudantes de contexto ---------------------------------------------------
@@ -144,15 +75,6 @@ def _estados(context: ContextTypes.DEFAULT_TYPE) -> Estados:
 
 def _settings(context: ContextTypes.DEFAULT_TYPE) -> Settings:
     return context.application.bot_data['settings']
-
-
-async def responder(update: Update, texto: str, reply_markup=None) -> None:
-    mensaje = update.effective_message
-    if mensaje is None:
-        return
-    partes = partir(texto)
-    for i, parte in enumerate(partes):
-        await mensaje.reply_text(parte, reply_markup=reply_markup if i == len(partes) - 1 else None)
 
 
 # --- Vinculación ---------------------------------------------------------------
@@ -262,19 +184,7 @@ async def cmd_eliminar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await responder(update, 'Ese número coincide con más de un registro; no hice nada. Revísalo en el panel.')
         return
 
-    empleado = empleados[0]
-    pendiente = CambioPendiente(
-        metodo='DELETE',
-        ruta=f'/api/eliminar-empleado/{int(empleado["registro_id"])}',
-        titulo='🗑 Eliminar definitivamente este empleado y todos sus datos:',
-        detalle=[
-            f'Nombre: {empleado.get("nombre_completo") or "Sin nombre"}',
-            f'Número: {empleado.get("no_empleado")}',
-            f'Empresa: {empleado.get("empresa") or "Sin dato"}',
-            f'Puesto: {empleado.get("puesto") or "Sin dato"}',
-        ],
-        origen='menu',
-    )
+    pendiente = formularios.pendiente_eliminar(empleados[0])
     estado = _estados(context).de(telegram_id)
     async with estado.candado:
         estado.pendiente = pendiente
@@ -284,9 +194,10 @@ async def cmd_eliminar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def cmd_cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     estado = _estados(context).de(update.effective_user.id)
     async with estado.candado:
-        habia = estado.pendiente is not None
+        habia = estado.pendiente is not None or estado.asistente is not None
         estado.pendiente = None
-    await responder(update, 'Cambio pendiente descartado.' if habia else 'No tenías ningún cambio pendiente.')
+    estado.limpiar_menu()
+    await responder(update, 'Descartado.' if habia else 'No tenías nada pendiente.')
 
 
 async def al_boton(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -323,8 +234,8 @@ async def al_boton(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             telegram_id,
             pendiente.metodo,
             pendiente.ruta,
-            json=pendiente.cuerpo,
             headers={'X-Origen-Telegram': pendiente.origen},
+            **pendiente.argumentos_peticion(),
         )
     except ErrorBackend as error:
         await consulta.edit_message_text(f'{pendiente.resumen()}\n\n{texto_error(error)}')
@@ -340,8 +251,16 @@ async def al_boton(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await consulta.edit_message_text(f'{pendiente.resumen()}\n\n✅ Hecho.')
 
 
-async def al_texto(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
-    await responder(update, 'Por ahora atiendo comandos. Escribe /ayuda para ver la lista.')
+async def al_texto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await pantallas.atender_texto(update, context, update.effective_message.text or ''):
+        return
+    await responder(update, 'Usa /sistema para el menú con botones, o /ayuda para ver los comandos.')
+
+
+async def al_archivo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await pantallas.atender_archivo(update, context):
+        return
+    await responder(update, 'No esperaba un archivo. Para adjuntar un documento, ábrelo desde el formulario en /sistema.')
 
 
 async def al_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -391,11 +310,19 @@ def construir(settings: Settings) -> Application:
         'consultar': cmd_consultar,
         'eliminar': cmd_eliminar,
         'cancelar': cmd_cancelar,
+        'sistema': pantallas.cmd_sistema,
+        'menu': pantallas.cmd_sistema,
     }
     for nombre, handler in comandos.items():
         app.add_handler(CommandHandler(nombre, handler, filters=PRIVADO))
     app.add_handler(CallbackQueryHandler(al_boton, pattern=r'^(ok|no):[0-9a-f]{8}$'))
+    app.add_handler(CallbackQueryHandler(pantallas.al_boton_nodo, pattern=r'^m:[a-z_]{1,30}$'))
+    app.add_handler(CallbackQueryHandler(pantallas.al_boton_empleado, pattern=r'^e:\d{1,3}$'))
+    app.add_handler(CallbackQueryHandler(pantallas.al_boton_accion_empleado, pattern=r'^ea:[a-z]{2,5}$'))
+    app.add_handler(CallbackQueryHandler(pantallas.al_boton_candidato, pattern=r'^cp?:\d{1,4}$'))
+    app.add_handler(CallbackQueryHandler(pantallas.al_boton_asistente, pattern=r'^a:(\d{1,3}|[bsx])$'))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & PRIVADO, al_texto))
+    app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & PRIVADO, al_archivo))
     app.add_error_handler(al_error)
     return app
 

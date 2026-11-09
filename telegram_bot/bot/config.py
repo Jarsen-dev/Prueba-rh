@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     BACKEND_URL: str = 'http://backend:8000'
     #: Minutos que vive un cambio esperando el botón Confirmar.
     BOT_MINUTOS_PENDIENTE: int = 30
+    #: Para «hoy» y «mañana» en las fechas de los formularios.
+    ZONA_HORARIA: str = 'America/Mexico_City'
 
     def problemas(self) -> list[str]:
         faltan = []

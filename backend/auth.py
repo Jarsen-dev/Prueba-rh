@@ -61,6 +61,7 @@ PERMISOS_POR_ENDPOINT = {
     'servir_documento_desde_db': ADMIN_O_RECLUTAMIENTO,
     'servir_documento_empleado': ADMIN_O_RECLUTAMIENTO,
     'buscar_empleados': ADMIN_O_RECLUTAMIENTO,
+    'catalogo_ingreso': ADMIN,
 
     # Telegram: el panel genera códigos y ve su vínculo; las internas las
     # protege el secreto del bot (telegram_api.exigir_bot), no la sesión.

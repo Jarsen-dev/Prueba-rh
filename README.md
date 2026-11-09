@@ -144,14 +144,29 @@ Revocar corta el acceso en la siguiente petición, y cambiar la contraseña de l
 
 | Comando | Qué hace |
 |---|---|
+| `/sistema` (o `/menu`) | Menú con botones; ver abajo |
 | `/consultar <número o nombre>` | Datos básicos de un empleado |
 | `/eliminar <número>` | Pide dos confirmaciones con botón antes de eliminar; solo `admin` |
-| `/cancelar` | Descarta el cambio pendiente |
+| `/cancelar` | Descarta el cambio o formulario pendiente |
 | `/yo` | Muestra tu cuenta y tus permisos |
 | `/desvincular` | Desconecta este Telegram de tu cuenta |
 | `/ayuda` | Lista de comandos |
 
 El bot solo atiende chats privados. Nada se escribe sin pulsar el botón Confirmar.
+
+**Menú `/sistema` (sin IA):** solo muestra las opciones que permite la cuenta. Aun así, quien decide es el backend.
+
+| Opción | Permiso | Qué hace |
+|---|---|---|
+| Empleados | admin, reclutamiento | Busca por número o nombre y muestra la ficha. Solo con `admin`: historial de incidencias, registrar incidencia (vacaciones, incapacidad, suspensión o carta compromiso, con foto o PDF opcional), dar de baja o reactivar, y eliminar (doble confirmación) |
+| Ingresos pendientes | admin | Asigna empresa, área, puesto, turno, salario y pago a un candidato, igual que en `Ingreso.html` |
+| Reclutamiento | admin, reclutamiento | Ingresos del mes por fuente y por equipo |
+| Descargas | según el Excel | Listado general de Cheong Woon y de Kronos (`admin`) y reporte de reclutamiento del mes; el archivo llega al chat |
+
+Cómo funcionan los formularios:
+- Se llenan paso a paso con botones. Las fechas se escriben como DD/MM/AAAA o con los botones «Hoy» y «Mañana», y la zona horaria se fija con `ZONA_HORARIA`.
+- Terminan en un resumen con Confirmar y mandan exactamente los mismos campos que el panel; las pruebas lo comparan con el HTML.
+- Los catálogos de empresa, área, puesto, turno y pago salen de `GET /api/catalogos/ingreso` (`backend/catalogos.py`). Si cambias los de `Ingreso.html`, cambia también ese archivo: `test_catalogos.py` falla si no coinciden.
 
 **Seguridad de las rutas internas:**
 - Las rutas `/api/telegram/interno/*` solo aceptan el secreto compartido. Si el secreto está vacío, responden 503.
