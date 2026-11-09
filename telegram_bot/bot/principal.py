@@ -36,6 +36,7 @@ from bot.interfaz import (  # noqa: F401 - reexportados para quien importe desde
 from bot import conversacion
 from bot.agente import Agente
 from bot.llm import ClienteOpenAI
+from bot.voz import ClienteVoz
 from bot.menu import formularios, pantallas
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,8 @@ TEXTO_AYUDA = (
     '/ayuda — esta lista\n\n'
     'También puedes escribirme, por ejemplo «¿cuántos activos hay en Kronos?», «registra vacaciones a Ana del '
     '16 al 20 de noviembre» o «da de baja a Bruno Castillo». Los cambios siempre te los muestro antes con un '
-    'botón Confirmar.\n\n'
+    'botón Confirmar. '
+    'También entiendo notas de voz: te muestro lo que entendí antes de contestar.\n\n'
     'Lo que puedes ver y hacer depende de los permisos de tu cuenta en el panel. '
     'Nada se guarda sin que pulses Confirmar.'
 )
@@ -279,6 +281,16 @@ async def al_archivo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await responder(update, 'No esperaba un archivo. Para adjuntar un documento, ábrelo desde el formulario en /sistema.')
 
 
+async def al_voz(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Una nota de voz se transcribe y sigue el mismo camino que un texto (formulario abierto o agente)."""
+    texto = await conversacion.transcribir_nota(update, context)
+    if texto is None:
+        return
+    if await pantallas.atender_texto(update, context, texto):
+        return
+    await conversacion.atender(update, context, texto, origen='voz')
+
+
 async def al_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error('Error atendiendo una actualización', exc_info=context.error)
     if isinstance(update, Update) and update.effective_message:
@@ -306,6 +318,9 @@ async def al_iniciar(app: Application) -> None:
             enmascarar=settings.BOT_ENMASCARAR_DATOS,
         )
         logger.info('Agente activo con %s.', settings.OPENAI_MODEL)
+        if settings.voz_activa:
+            app.bot_data['voz'] = ClienteVoz(api_key=settings.OPENAI_API_KEY, modelo=settings.OPENAI_MODELO_VOZ,
+                                             base_url=settings.OPENAI_BASE_URL, http=http)
     else:
         logger.info('Sin OPENAI_API_KEY: solo menú y comandos.')
     await app.bot.set_my_commands(COMANDOS)
@@ -351,6 +366,7 @@ def construir(settings: Settings) -> Application:
     app.add_handler(CallbackQueryHandler(conversacion.al_calificar, pattern=r'^cal:\d{1,12}:[+-]$'))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & PRIVADO, al_texto))
     app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & PRIVADO, al_archivo))
+    app.add_handler(MessageHandler((filters.VOICE | filters.AUDIO) & PRIVADO, al_voz))
     app.add_error_handler(al_error)
     return app
 

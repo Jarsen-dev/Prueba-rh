@@ -31,6 +31,10 @@ from bot.agente import Agente  # noqa: E402
 from bot.backend import ClienteBackend  # noqa: E402
 from bot.llm import ClienteOpenAI  # noqa: E402
 from bot.seguridad import RutaNoPermitida, buscar_endpoint, puede_usar  # noqa: E402
+from bot.voz import ClienteVoz  # noqa: E402
+
+#: Audios generados con TTS para los casos «voz: true» (no se versionan).
+AUDIOS = Path(__file__).parent / 'resultados' / 'audios'
 
 BACKEND = os.environ.get('EVAL_BACKEND_URL', 'http://127.0.0.1:58101')
 SECRETO = 'secreto-del-banco'
@@ -178,6 +182,22 @@ def revisar(caso: dict, resultado, guia: dict, permisos: list[str]) -> tuple[lis
     return duras, blandas
 
 
+async def audio_de(http: httpx.AsyncClient, clave: str, texto: str) -> bytes:
+    """La nota de voz del caso: TTS de OpenAI, guardada para no pagarla en cada corrida."""
+    import hashlib
+    archivo = AUDIOS / f'{hashlib.sha1(texto.encode()).hexdigest()[:16]}.ogg'
+    if archivo.exists():
+        return archivo.read_bytes()
+    respuesta = await http.post(
+        'https://api.openai.com/v1/audio/speech', headers={'Authorization': f'Bearer {clave}'},
+        json={'model': 'gpt-4o-mini-tts', 'voice': 'alloy', 'input': texto, 'response_format': 'opus',
+              'instructions': 'Habla en español de México, con naturalidad, como alguien de Recursos Humanos.'})
+    respuesta.raise_for_status()
+    AUDIOS.mkdir(parents=True, exist_ok=True)
+    archivo.write_bytes(respuesta.content)
+    return respuesta.content
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--repeticiones', type=int, default=3)
@@ -202,6 +222,8 @@ async def main() -> int:
         modelo = modelo_openai()
         agente = Agente(llm=ClienteOpenAI(api_key=clave, modelo=modelo, base_url='https://api.openai.com/v1', http=http),
                         backend=backend, guardar_enviados=True)
+        voz = ClienteVoz(api_key=clave, modelo=os.environ.get('OPENAI_MODELO_VOZ', 'gpt-4o-mini-transcribe'),
+                         base_url='https://api.openai.com/v1', http=http)
         semaforo = asyncio.Semaphore(args.concurrencia)
         filas = []
 
@@ -209,8 +231,14 @@ async def main() -> int:
             cuenta = CUENTAS[caso.get('cuenta', 'admin')]
             async with semaforo:
                 inicio = time.monotonic()
+                mensaje, origen, transcrito = caso['mensaje'], 'agente', None
                 try:
-                    resultado = await agente.responder(cuenta['telegram_id'], caso['mensaje'], [], datetime.now(zona))
+                    if caso.get('voz'):
+                        # Como el bot: la nota se transcribe y el texto sigue el camino normal.
+                        transcrito = (await voz.transcribir(await audio_de(http, clave, mensaje))).texto
+                        mensaje, origen = transcrito, 'voz'
+                    resultado = await agente.responder(cuenta['telegram_id'], mensaje, [], datetime.now(zona),
+                                                       origen=origen)
                 except Exception as error:  # noqa: BLE001
                     filas.append({'id': caso['id'], 'rep': repeticion, 'error': f'{type(error).__name__}: {error}'})
                     return
@@ -221,6 +249,7 @@ async def main() -> int:
                     'peticiones': [f'{m} {r}' for m, r, _ in resultado.peticiones],
                     'archivos': [a.nombre for a in resultado.archivos],
                     'pendiente': resultado.pendiente.resumen() if resultado.pendiente else None,
+                    'transcrito': transcrito,
                     'tokens': resultado.tokens, 'segundos': round(time.monotonic() - inicio, 1),
                 })
 
@@ -242,6 +271,8 @@ async def main() -> int:
             problemas = f.get('duras', []) + f.get('blandas', []) + ([f['error']] if 'error' in f else [])
             if problemas:
                 print(f'     rep {f["rep"]}: {"; ".join(problemas)}')
+                if f.get('transcrito'):
+                    print(f'       🎙 {f["transcrito"]!r}')
                 if 'texto' in f:
                     print(f'       → {f["texto"][:220]!r}')
     print(f'\nAprobadas: {aprobadas}/{len(filas)} · compuerta dura: {total_duras} fallas · errores: {len(errores)} · '

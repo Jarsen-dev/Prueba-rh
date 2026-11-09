@@ -115,7 +115,8 @@ def _mensaje(chat, **extra):
 
     return SimpleNamespace(
         reply_text=reply_text, reply_document=reply_document,
-        chat=SimpleNamespace(type=ChatType.PRIVATE), photo=None, document=None, text=None, **extra,
+        chat=SimpleNamespace(type=ChatType.PRIVATE), photo=None, document=None, text=None, voice=None, audio=None,
+        **extra,
     )
 
 
@@ -129,6 +130,27 @@ def archivo(chat, nombre, file_id='f1', tamano=100, telegram_id=7):
     mensaje = _mensaje(chat)
     mensaje.document = SimpleNamespace(file_name=nombre, file_size=tamano, file_id=file_id)
     return SimpleNamespace(effective_user=SimpleNamespace(id=telegram_id), effective_message=mensaje, callback_query=None)
+
+
+def nota_de_voz(chat, segundos=5, file_id='v1', tamano=1000, telegram_id=7):
+    mensaje = _mensaje(chat)
+    mensaje.voice = SimpleNamespace(duration=segundos, file_size=tamano, file_id=file_id, mime_type='audio/ogg')
+    return SimpleNamespace(effective_user=SimpleNamespace(id=telegram_id), effective_message=mensaje,
+                           effective_chat=SimpleNamespace(id=telegram_id), callback_query=None)
+
+
+class FakeVoz:
+    """Transcribe siempre lo mismo y anota lo que recibió."""
+
+    def __init__(self, texto, error=None):
+        self.texto, self.error, self.recibidos, self.modelo = texto, error, [], 'gpt-4o-mini-transcribe'
+
+    async def transcribir(self, audio, nombre='voz.ogg', tipo='audio/ogg'):
+        from bot.voz import Transcripcion
+        self.recibidos.append((audio, nombre, tipo))
+        if self.error:
+            raise self.error
+        return Transcripcion(' '.join(self.texto.split()), self.modelo, 120, 15, 0.4)
 
 
 def pulsar(chat, datos, telegram_id=7):

@@ -30,7 +30,6 @@ from bot.seguridad import RutaNoPermitida, buscar_endpoint, puede_usar
 if TYPE_CHECKING:
     from bot.herramientas import Contexto
 
-ORIGEN = 'agente'
 LISTO = ('Preparé el cambio «{titulo}». La persona ya ve el resumen con el botón Confirmar. TODAVÍA NO ESTÁ '
          'GUARDADO: díselo en una línea y pídele que revise el resumen y confirme.')
 TIPOS = list(formularios.TITULOS_INCIDENCIA)
@@ -131,7 +130,7 @@ async def preparar_estatus(ctx: 'Contexto', registro_id: Any = None, accion: str
     actual = await _estatus_actual(ctx, empleado)
     if (accion == 'baja') == (actual == 'INACTIVO'):
         raise GuardaFallo(f'El empleado ya está {actual}; no hay nada que cambiar.')
-    return _dejar(ctx, formularios.pendiente_estatus({**ctx.vistos.empleado(registro_id), 'estatus': actual}, ORIGEN))
+    return _dejar(ctx, formularios.pendiente_estatus({**ctx.vistos.empleado(registro_id), 'estatus': actual}, ctx.origen))
 
 
 async def preparar_incidencia(ctx: 'Contexto', registro_id: Any = None, tipo: str = '', desde: Any = None,
@@ -150,7 +149,7 @@ async def preparar_incidencia(ctx: 'Contexto', registro_id: Any = None, tipo: st
             raise GuardaFallo('La persona no ha enviado ningún archivo. Pídele que mande la foto o el PDF.')
         archivo = ctx.adjunto
     try:
-        pendiente = formularios.pendiente_incidencia(empleado, tipo, inicio, fin, motivo, archivo, ORIGEN)
+        pendiente = formularios.pendiente_incidencia(empleado, tipo, inicio, fin, motivo, archivo, ctx.origen)
     except ValueError as error:
         raise GuardaFallo(str(error)) from error
     return _dejar(ctx, pendiente)
@@ -183,7 +182,7 @@ async def preparar_asignacion(ctx: 'Contexto', candidato_id: Any = None, empresa
         'pago': de_catalogo(pago, catalogo.get('pagos') or [], 'El pago'),
     }
     try:
-        pendiente = formularios.pendiente_ingreso(candidato, catalogo, respuestas, ORIGEN)
+        pendiente = formularios.pendiente_ingreso(candidato, catalogo, respuestas, ctx.origen)
     except ValueError as error:
         raise GuardaFallo(str(error)) from error
     return _dejar(ctx, pendiente)
@@ -229,7 +228,7 @@ async def preparar_cambio_puesto(ctx: 'Contexto', registro_id: Any = None, **cam
     # actualizar-empleado solo toca los campos que llegan con valor: mandar solo
     # lo que cambia no borra nada.
     return _dejar(ctx, CambioPendiente('POST', ruta, '✏️ Cambiar datos de puesto:', detalle=detalle,
-                                       cuerpo=cambios, origen=ORIGEN))
+                                       cuerpo=cambios, origen=ctx.origen))
 
 
 def _encontrar_reclutador(lista: list[dict[str, Any]], nombre: str) -> dict[str, Any] | None:
@@ -272,7 +271,7 @@ async def preparar_reclutador(ctx: 'Contexto', accion: str = '', nombre: str = '
         return _dejar(ctx, CambioPendiente(
             'POST', '/api/reclutadores-nombres', '👤 Dar de alta reclutador:',
             detalle=[f'Nombre: {nombre}', f'Teléfono: {telefono}', f'Equipo: {team}'],
-            cuerpo={'nombre': nombre, 'telefono': telefono, 'team': team}, origen=ORIGEN))
+            cuerpo={'nombre': nombre, 'telefono': telefono, 'team': team}, origen=ctx.origen))
 
     if existente is None:
         raise GuardaFallo(f'No encontré a ningún reclutador llamado «{nombre}».')
@@ -281,7 +280,7 @@ async def preparar_reclutador(ctx: 'Contexto', accion: str = '', nombre: str = '
         await _exigir_permiso(ctx, 'DELETE', ruta)
         return _dejar(ctx, CambioPendiente(
             'DELETE', ruta, '🗑 Dar de baja reclutador:',
-            detalle=[f'Nombre: {existente.get("nombre")}', f'Equipo: {existente.get("team")}'], origen=ORIGEN))
+            detalle=[f'Nombre: {existente.get("nombre")}', f'Equipo: {existente.get("team")}'], origen=ctx.origen))
 
     await _exigir_permiso(ctx, 'PUT', ruta)
     if not telefono and team in (None, ''):
@@ -300,20 +299,20 @@ async def preparar_reclutador(ctx: 'Contexto', accion: str = '', nombre: str = '
     if team not in (None, ''):
         detalle.append(f'Equipo: {existente.get("team")} → {team}')
     return _dejar(ctx, CambioPendiente('PUT', ruta, '✏️ Editar reclutador:', detalle=detalle, cuerpo=cuerpo,
-                                       origen=ORIGEN))
+                                       origen=ctx.origen))
 
 
 async def preparar_eliminacion(ctx: 'Contexto', que: str = '', id: Any = None, registro_id: Any = None) -> str:  # noqa: A002
     if que == 'empleado':
         empleado = ctx.vistos.empleado(id)
-        pendiente = formularios.pendiente_eliminar(empleado, ORIGEN)
+        pendiente = formularios.pendiente_eliminar(empleado, ctx.origen)
     elif que == 'candidato':
         candidato = ctx.vistos.candidato(id)
         pendiente = CambioPendiente(
             'DELETE', f'/api/eliminar-pendiente/{int(id)}', '🗑 Eliminar candidato pendiente:',
             detalle=[f'Nombre: {candidato.get("nombre_completo") or "Sin nombre"}',
                      f'Número temporal: {formularios.normalizar_numero_temporal(candidato.get("numero_temporal")) or "Sin número"}'],
-            origen=ORIGEN)
+            origen=ctx.origen)
     elif que == 'incidencia':
         clave = (_entero(registro_id, 'registro_id'), _entero(id, 'id'))
         incidencia = ctx.vistos.incidencias.get(clave)
@@ -325,7 +324,7 @@ async def preparar_eliminacion(ctx: 'Contexto', que: str = '', id: Any = None, r
             detalle=[f'Empleado: {empleado.get("nombre_completo") or clave[0]}',
                      f'Tipo: {incidencia.get("type")}',
                      f'Fechas: {incidencia.get("fecha_inicio") or "?"} → {incidencia.get("fecha_reingreso") or "?"}'],
-            origen=ORIGEN)
+            origen=ctx.origen)
     else:
         raise GuardaFallo('que debe ser empleado, candidato o incidencia.')
     await _exigir_permiso(ctx, 'DELETE', pendiente.ruta)

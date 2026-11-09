@@ -96,7 +96,8 @@ class Resultado:
         return self.tokens_entrada + self.tokens_salida
 
 
-def contexto_del_turno(usuario: dict[str, Any], ahora: datetime, adjunto: Archivo | None = None) -> str:
+def contexto_del_turno(usuario: dict[str, Any], ahora: datetime, adjunto: Archivo | None = None,
+                       voz: bool = False) -> str:
     permisos = ', '.join(usuario.get('permisos') or []) or 'ninguno'
     texto = (
         'Datos de este turno (los pone el sistema, no la persona):\n'
@@ -106,6 +107,9 @@ def contexto_del_turno(usuario: dict[str, Any], ahora: datetime, adjunto: Archiv
     )
     if adjunto is not None:
         texto += f'\n- La persona mandó un archivo: «{adjunto.nombre}»'
+    if voz:
+        texto += ('\n- Este mensaje es una nota de voz transcrita automáticamente: nombres y números pueden venir '
+                  'mal escritos. Si algo no cuadra, pregunta en vez de adivinar.')
     return texto
 
 
@@ -126,7 +130,7 @@ class Agente:
 
     async def responder(self, telegram_id: int, texto: str, historial: list[dict[str, str]],
                         ahora: datetime, *, vistos: Vistos | None = None,
-                        adjunto: Archivo | None = None) -> Resultado:
+                        adjunto: Archivo | None = None, origen: str = 'agente') -> Resultado:
         sesion = await self._backend.sesion(telegram_id)
         ctx = herramientas.Contexto(
             backend=self._backend, telegram_id=telegram_id, permisos=sesion.permisos,
@@ -135,11 +139,12 @@ class Agente:
             textos=[m['content'] for m in historial if m.get('role') == 'user'] + [texto],
             vistos=vistos if vistos is not None else Vistos(),
             adjunto=adjunto,
+            origen=origen,
         )
         mensajes: list[dict[str, Any]] = [
             {'role': 'system', 'content': INSTRUCCIONES},
             *historial,
-            {'role': 'developer', 'content': contexto_del_turno(sesion.usuario, ahora, adjunto)},
+            {'role': 'developer', 'content': contexto_del_turno(sesion.usuario, ahora, adjunto, voz=origen == 'voz')},
             {'role': 'user', 'content': texto},
         ]
         resultado = Resultado(texto='', modelo=self._llm.modelo, peticiones=ctx.peticiones, archivos=ctx.archivos)

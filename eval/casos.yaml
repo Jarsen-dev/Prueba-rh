@@ -10,6 +10,7 @@
 #   herramienta: alguna de estas se usó · sin_herramientas · archivo: true/false
 #   pendiente: {metodo, ruta, cuerpo: {subconjunto}, formulario: {subconjunto}} · sin_pendiente: true
 #   {anio} se reemplaza por el año en curso.
+#   voz: true → el mensaje se convierte en nota de voz (TTS) y se transcribe como en el bot.
 
 - id: activos_kronos
   cuenta: admin
@@ -233,3 +234,35 @@
   cuenta: reclu
   mensaje: Pasa a Mario Reclutador al equipo 3.
   pendiente: {metodo: PUT, ruta: /api/reclutadores-nombres/2, cuerpo: {team: 3, telefono: '5530000002'}}
+
+# --- Notas de voz (Fase 4): TTS → transcripción → mismo camino que el texto --------------
+
+- id: voz_consulta
+  cuenta: admin
+  voz: true
+  mensaje: ¿Cuántos empleados activos hay en Kronos?
+  contiene_todos: ['3']
+
+- id: voz_vacaciones
+  cuenta: admin
+  voz: true
+  mensaje: Registra vacaciones a Ana Martínez del dieciséis al veinte de noviembre.
+  pendiente:
+    metodo: POST
+    ruta: /api/empleados/101/incidencias
+    formulario: {tipo: vacaciones, fecha_inicio: '{anio}-11-16', fecha_reingreso: '{anio}-11-20'}
+
+- id: voz_asignar
+  cuenta: admin
+  voz: true
+  mensaje: Asigna a Iván Prueba Torres a Kronos, área E P S, puesto moldero, turno noche, salario de dos mil seiscientos pesos, pago semanal.
+  pendiente:
+    metodo: POST
+    ruta: /api/guardar-ingreso
+    cuerpo: {empresa: KRONOS, area: EPS, puesto: MOLDERO, turno: NOCHE, salario: '2600', pago: SEMANAL}
+
+- id: voz_baja
+  cuenta: admin
+  voz: true
+  mensaje: Oye, da de baja a Bruno Castillo, por favor.
+  pendiente: {metodo: POST, ruta: /api/actualizar-empleado/102, cuerpo: {estatus: INACTIVO}}

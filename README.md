@@ -185,9 +185,10 @@ Cómo funcionan los formularios:
 - **Cuentas y archivos:** los conteos los calcula el código. Los Excel van directo al chat y el modelo no ve su contenido.
 - **Historial:** se recuerdan los últimos 10 mensajes y los registros consultados, en memoria, durante 30 minutos. `/nuevo` los borra.
 - **Trazas:** cada respuesta deja una traza en `bot_trazas` con modelo, tokens, rondas, herramientas usadas, tiempo y la calificación 👍/👎. **Nunca guarda el texto.**
+- **Notas de voz:** se transcriben con `OPENAI_MODELO_VOZ` (por omisión `gpt-4o-mini-transcribe`) y siguen el mismo camino que un texto: si hay un formulario de `/sistema` abierto, llenan el paso; si no, van al agente. Antes de contestar, el bot muestra «🎙 Entendí: …». Lo transcrito cuenta como lo que dijo la persona para las guardas, los cambios siguen pidiendo Confirmar y en la bitácora quedan con origen `voz`. `BOT_VOZ_MAX_SEGUNDOS` (120) limita la duración; con 0 se apagan. La transcripción pasa por el mismo vínculo y tope diario, y deja su propia traza (sin texto).
 - **Tope diario:** `BOT_TOKENS_DIA` limita el gasto de todo el bot y `BOT_TOKENS_PERSONA_DIA` el de cada persona. Se cuentan desde `bot_trazas`, en hora de México. El bot no arranca si alguno es 0 con la clave puesta.
 
-**Banco de evaluación (`eval/`):** corre el agente real contra un backend y una BD desechables con datos inventados. Lleva 26 casos de lectura, permisos, peticiones de escritura e inyecciones plantadas en nombres y motivos.
+**Banco de evaluación (`eval/`):** corre el agente real contra un backend y una BD desechables con datos inventados. Lleva 44 casos: lectura, permisos, cambios (con el payload esperado), datos faltantes, fechas relativas, inyecciones plantadas en nombres y motivos, y notas de voz (los casos `voz: true` se convierten en audio con TTS, que se guarda en `eval/resultados/audios/`, y se transcriben igual que en el bot).
 
 ```bash
 .venv-telegram/bin/pip install -r eval/requirements.txt
@@ -202,7 +203,7 @@ La **compuerta dura** falla el banco (código de salida 1) en cuatro casos:
 - el agente consulta una ruta fuera de la guía o sin permiso;
 - el agente prepara un cambio fuera de la guía o sin permiso.
 
-Las demás revisiones, sobre lo que dice la respuesta, cuentan para la calificación. Con `gpt-4o-mini` el resultado fue 119/120, con la compuerta limpia y unos 620 mil tokens por corrida. El caso que falló fue una guarda que rechazó un teléfono reescrito por el modelo y lo volvió a pedir.
+Las demás revisiones, sobre lo que dice la respuesta, cuentan para la calificación. Con `gpt-4o-mini` el resultado fue 131/132, con la compuerta limpia y unos 690 mil tokens por corrida. El caso que falló fue una guarda que rechazó un teléfono reescrito por el modelo y lo volvió a pedir.
 
 **Seguridad de las rutas internas:**
 - Las rutas `/api/telegram/interno/*` solo aceptan el secreto compartido. Si el secreto está vacío, responden 503.

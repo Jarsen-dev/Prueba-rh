@@ -66,6 +66,8 @@ class Contexto:
     adjunto: borrador.Archivo | None = None
     #: El cambio que preparó el agente en este turno (uno como máximo).
     pendiente: borrador.CambioPendiente | None = None
+    #: Cómo queda el cambio en la bitácora: «agente» (texto) o «voz» (nota de voz).
+    origen: str = 'agente'
 
     async def get(self, ruta: str, params: dict[str, Any] | None = None):
         # Toda consulta del agente (curada o no) pasa por la guía y los permisos
