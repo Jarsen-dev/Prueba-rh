@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Registro de Inducción</title>
+    <link rel="icon" type="image/png" href="../favicon.png">
+    <style>
+        body {
+            background-color: #e2e8f0;
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            font-size: 10pt;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            font-family: Arial, sans-serif;
+        }
+
+        #btn-descargar-contrato,
+        #btn-imprimir-registro {
+            background-color: #3182ce;
+            color: white;
+        }
+
+        #btn-regresar {
+            background-color: #3182ce;
+            color: white;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .page {
+            background: white;
+            width: 21.6cm;
+            min-height: 27.9cm;
+            padding: 1.4cm 1.3cm;
+            margin: 10mm auto;
+            box-sizing: border-box;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #1a202c;
+        }
+
+        .register-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .register-logo {
+            width: 108px;
+            height: auto;
+            margin-top: -0.5cm;
+        }
+
+        .register-title {
+            margin: 0 0 24px;
+            font-family: "Times New Roman", Times, serif;
+            font-size: 18pt;
+            text-align: center;
+        }
+
+        .register-schedule {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 18px;
+            margin-bottom: 24px;
+        }
+
+        .schedule-field {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .schedule-line {
+            flex: 1;
+            min-width: 24px;
+            height: 18px;
+            border-bottom: 1px solid #1a202c;
+        }
+
+        .register-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .register-table th,
+        .register-table td {
+            border: 1px solid #1a202c;
+            padding: 7px 8px;
+        }
+
+        .register-table th:first-child,
+        .register-table td:first-child {
+            width: 55%;
+            text-align: left;
+        }
+
+        .register-table th:nth-child(2),
+        .register-table td:nth-child(2) {
+            width: 25%;
+            text-align: left;
+        }
+
+        .register-table th:last-child,
+        .register-table td:last-child {
+            width: 20%;
+        }
+
+        .register-status {
+            color: #b91c1c;
+            margin-top: 12px;
+        }
+
+        .register-status:empty {
+            display: none;
+        }
+
+        @media print {
+            @page {
+                size: letter;
+                margin: 0;
+            }
+
+            html,
+            body {
+                background: none;
+                padding: 0;
+                margin: 0;
+                display: block;
+            }
+            .controls {
+                display: none;
+            }
+            .page {
+                box-shadow: none;
+                margin: 0;
+                width: 21.59cm;
+                min-height: 27.94cm;
+                height: auto;
+            }
+            .register-table thead {
+                display: table-header-group;
+            }
+            .register-table tr {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+            .register-status,
+            .register-status:empty {
+                display: none;
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <a id="btn-regresar" class="btn" href="#">Regresar</a>
+        <button id="btn-imprimir-registro" class="btn">Imprimir / Guardar PDF</button>
+    </div>
+
+    <main class="page">
+        <div class="register-header">
+            <img class="register-logo" src="https://lh3.googleusercontent.com/d/1YuA-V3W27vrLeDszpzRYNJnwMKGvpHpA" alt="Cheong Woon Mexico">
+        </div>
+        <h1 class="register-title">REGISTRO DE INDUCCIÓN</h1>
+        <div class="register-schedule">
+            <div class="schedule-field"><strong>Fecha:</strong><span id="lbl-fecha-actual"></span></div>
+            <div class="schedule-field"><strong>Hora de inicio:</strong><span class="schedule-line"></span></div>
+            <div class="schedule-field"><strong>Hora de fin:</strong><span class="schedule-line"></span></div>
+        </div>
+        <table class="register-table">
+            <thead>
+                <tr>
+                    <th scope="col">Empleados</th>
+                    <th scope="col">Área</th>
+                    <th scope="col">Firma</th>
+                </tr>
+            </thead>
+            <tbody id="empleados-registro"></tbody>
+        </table>
+        <p id="estado-registro" class="register-status" role="status" aria-live="polite"></p>
+    </main>
+
+
+    <script src="../data-manager.js"></script>
+    <script>
+        const PORT = '8001';
+        const currentHost = window.location.hostname;
+        const API_BASES = [`http://${currentHost}:${PORT}`, `http://localhost:${PORT}`];
+        const parametros = new URLSearchParams(window.location.search);
+        const ids = [...new Set((parametros.get('ids') || '').split(',').filter((id) => /^\d+$/.test(id) && Number(id) > 0))];
+        const filasEmpleados = document.getElementById('empleados-registro');
+        const estadoRegistro = document.getElementById('estado-registro');
+
+        const returnUrl = ['Cheong Woon.html', 'Kronos.html'].includes(parametros.get('return_url'))
+            ? parametros.get('return_url')
+            : 'Cheong Woon.html';
+        document.getElementById('btn-regresar').href = `../${encodeURI(returnUrl)}`;
+        document.getElementById('lbl-fecha-actual').textContent = new Date().toLocaleDateString('es-MX', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+        });
+        document.getElementById('btn-imprimir-registro').addEventListener('click', () => window.print());
+
+        function obtenerEmpleadoLocal(registroId) {
+            const manager = window.DataManager;
+            if (!manager || typeof manager.getEmpleados !== 'function') return null;
+            return (manager.getEmpleados() || []).find((emp) => String(emp.registro_id || '') === registroId) || null;
+        }
+
+        async function cargarEmpleado(registroId) {
+            const local = obtenerEmpleadoLocal(registroId);
+            let ultimoError = null;
+            for (const baseUrl of API_BASES) {
+                try {
+                    const response = await fetch(`${baseUrl}/obtener-empleado/${encodeURIComponent(registroId)}`);
+                    const texto = await response.text();
+                    if (!response.ok) {
+                        ultimoError = new Error(`Error ${response.status}: ${texto || 'No se pudieron cargar los datos.'}`);
+                        continue;
+                    }
+                    const data = JSON.parse(texto || '{}');
+                    return {
+                        ...(local || {}),
+                        ...data,
+                        nombre_completo: data.nombre_completo || local?.nombre_completo || '',
+                        area: data.area || data.departamento || local?.area || local?.departamento || '',
+                    };
+                } catch (error) {
+                    ultimoError = error;
+                }
+            }
+            if (local) return local;
+            throw new Error(`No se pudo cargar el empleado ${registroId}: ${ultimoError ? ultimoError.message : 'Error desconocido.'}`);
+        }
+
+        function obtenerNombre(data) {
+            return data.nombre_completo || [
+                data.nombre,
+                data.apellido_paterno,
+                data.apellido_materno,
+            ].filter(Boolean).join(' ');
+        }
+
+        function agregarFila(data) {
+            const fila = document.createElement('tr');
+            const nombre = document.createElement('td');
+            const area = document.createElement('td');
+            const firma = document.createElement('td');
+            nombre.textContent = obtenerNombre(data);
+            area.textContent = data.area || data.departamento || '';
+            fila.append(nombre, area, firma);
+            filasEmpleados.append(fila);
+        }
+
+        async function cargarRegistro() {
+            if (!ids.length) {
+                throw new Error('No se recibieron empleados para el registro de inducción.');
+            }
+
+            const empleados = await Promise.all(ids.map(cargarEmpleado));
+            empleados.forEach(agregarFila);
+        }
+
+        cargarRegistro().catch((error) => {
+            estadoRegistro.textContent = error.message;
+            console.error('No se pudo preparar el registro de inducción:', error);
+        });
+    </script>
+</body>
+</html>
