@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <script src="auth-fetch.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CW Connect</title>
@@ -388,12 +389,13 @@
             <div class="access-table-wrap">
                 <table class="access-users-table">
                     <thead>
-                        <tr><th>Usuario</th><th>Asignación</th><th>Acción</th></tr>
+                        <tr><th>Usuario</th><th>Asignación</th><th>Telegram</th><th>Acción</th></tr>
                     </thead>
                     <tbody id="tabla-usuarios-registrados-body"></tbody>
                 </table>
             </div>
             <p id="access-users-feedback" class="access-feedback" role="status" aria-live="polite"></p>
+            <p id="access-legacy-import" class="access-feedback" hidden></p>
         </div>
     </section>
     <script src="data-manager.js"></script>

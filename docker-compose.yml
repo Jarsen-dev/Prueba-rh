@@ -24,13 +24,22 @@ services:
       EMPLOYEE_DOCS_ROOT: /app/uploads
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      AUTH_ESTRICTO: "${AUTH_ESTRICTO:-0}"
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-}
+      AUTH_COOKIE_SECURE: "${AUTH_COOKIE_SECURE:-0}"
+      ADMIN_INICIAL_USUARIO: ${ADMIN_INICIAL_USUARIO:-}
+      ADMIN_INICIAL_PASSWORD: ${ADMIN_INICIAL_PASSWORD:-}
+      TELEGRAM_BOT_SECRETO_INTERNO: ${TELEGRAM_BOT_SECRETO_INTERNO:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      TELEGRAM_MINUTOS_CODIGO: "${TELEGRAM_MINUTOS_CODIGO:-10}"
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - ./backend/uploads:/app/uploads
     ports:
-      - "8001:8000"
+      # Solo en el propio servidor: desde fuera se entra por nginx (3001).
+      - "127.0.0.1:8001:8000"
 
   chatbot:
     image: rh-system-backend:local
@@ -51,6 +60,29 @@ services:
       - ./Chatbot_Wpp:/app/Chatbot_Wpp:ro
     ports:
       - "5002:5000"
+
+  telegram_bot:
+    build: ./telegram_bot
+    restart: unless-stopped
+    # Un solo proceso: Telegram rechaza a dos lectores del mismo token (409).
+    # Sin env_file ni puertos: no recibe credenciales de BD ni secretos ajenos;
+    # sale a Telegram por long polling y entra al backend por la red interna.
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_SECRETO_INTERNO: ${TELEGRAM_BOT_SECRETO_INTERNO:-}
+      BACKEND_URL: http://backend:8000
+      # Agente (texto libre). Sin OPENAI_API_KEY solo funcionan el menú y los comandos.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      BOT_TOKENS_DIA: ${BOT_TOKENS_DIA:-300000}
+      BOT_TOKENS_PERSONA_DIA: ${BOT_TOKENS_PERSONA_DIA:-60000}
+      BOT_VOZ_MAX_SEGUNDOS: ${BOT_VOZ_MAX_SEGUNDOS:-120}
+      BOT_AVISOS: ${BOT_AVISOS:-1}
+      OPENAI_MODELO_VOZ: ${OPENAI_MODELO_VOZ:-gpt-4o-mini-transcribe}
+    depends_on:
+      backend:
+        condition: service_healthy
+    profiles: ["telegram"]
 
   frontend:
     build: ./frontend

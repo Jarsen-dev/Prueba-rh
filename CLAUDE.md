@@ -1,0 +1,67 @@
+# CLAUDE.md
+
+Sistema de RH de Cheong Woon México (empresas: **Cheong Woon** y **Kronos**): registro público de candidatos, portal interno de RH, expediente digital de empleados, indicadores de reclutamiento, generación de documentos/gafetes y bots (WhatsApp y Telegram). Todo el código, UI y mensajes están en español.
+
+## Repositorio
+
+- `origin` = fork propio (`Jarsen-dev/Prueba-rh`), `upstream` = repo del compañero (`SystemChWn/Prueba-rh`). Para sincronizar: `git fetch upstream && git merge --ff-only upstream/main`.
+- Rama `docker-branch`: rama vieja (anterior a la reorganización actual); su contenido ya está superado por `main`.
+
+## Stack y estructura
+
+- **Frontend** (`frontend/`): HTML/CSS/JS estático, sin build ni framework. Servido por nginx, que reenvía `/api/` al backend (`frontend/nginx.conf`). Página de inicio: `portalrh.html`.
+- **Backend** (`backend/utily.py`): una sola app Flask (~3000 líneas, ~49 rutas) servida con gunicorn (`utily:app`). Usa psycopg2 directo (sin ORM), pandas/openpyxl para exportar Excel y OpenAI para escanear documentos. Los módulos nuevos van aparte y se registran al final de `utily.py`: `auth.py` (sesión y permisos por ruta) y `bitacora.py`.
+- **BD**: PostgreSQL 16. Esquema en `db/init.sql`, que **solo se aplica cuando el volumen está vacío**. No hay migraciones: los cambios de esquema van como `ALTER TABLE` manual o con `CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` defensivos dentro de `utily.py` (p. ej. `asegurar_tabla_incidencias`).
+- **Chatbot WhatsApp** (`Chatbot_Wpp/bot.py`): Flask + Meta Cloud API; corre con la imagen del backend (servicio `chatbot`). `whatsapp-puente.js` es un puente alternativo con wppconnect/Puppeteer.
+- **Bot de Telegram** (`telegram_bot/`): contenedor propio (perfil compose `telegram`), un solo proceso con long polling. No tiene credenciales de BD: pide al backend una sesión de 15 min de la cuenta vinculada (`/api/telegram/interno/*`, secreto `X-Bot-Secreto`, 404 en nginx) y llama a la API con `Authorization: Bearer`. Vinculación y rutas en `backend/telegram_api.py`. Nada se escribe sin botón Confirmar (`bot/borrador.py`). Menú sin IA `/sistema` en `bot/menu/` (`navegacion.py` = árbol por permiso, `pantallas.py` = handlers con prefijos de `callback_data` y botones que llevan índices al estado, `asistente.py` = motor paso a paso, `formularios.py` = payloads idénticos al panel). Catálogos de ingreso en `backend/catalogos.py` (deben coincidir con `Ingreso.html`). Agente (Fases 2-4, con OCR): `bot/agente.py` (bucle OpenAI Responses vía `bot/llm.py`), `bot/herramientas.py` (consultas, siempre filtradas por la guía y permisos), `bot/escrituras.py` (`preparar_*`: solo arman un `CambioPendiente`; nunca escriben), `bot/guardas.py` (ids vistos, fechas/números dichos por la persona, catálogos), `bot/seguridad.py` (oculta/enmascara datos personales antes del modelo), `bot/conversacion.py` (presupuesto, historial, trazas, notas de voz), `bot/voz.py` (transcripción; lo transcrito sigue el camino del texto con origen `voz`), `bot/memoria.py` + `backend/memoria.py` (notas por persona que el agente recibe en cada turno; no dan permisos), `bot/tareas.py` (tareas programadas: `backend/tareas.py` guarda y calcula la siguiente ejecución, el bot corre el agente con `solo_lectura=True`), lotes (`borrador.Lote`: varios `preparar_*` en un mensaje → un Confirmar, origen `trabajo:N`), `bot/avisos.py` (resumen diario sin IA: ciclo de 60 s, `/interno/avisos/turno` reclama a quién le toca, `GET /api/avisos` de `backend/avisos.py` con la sesión de cada persona; fin de contrato = ingreso + 67 días hábiles como `contrato.html`), `bot/documentos.py` (OCR vía `/api/escanear-documento` → diff de datos personales; lo leído nunca va al modelo; `CambioPendiente.detalle_final` enmascara el chat y `siguiente` encadena guardar en el expediente). La guía de rutas que puede usar está en `backend/guia_api.py`: **toda ruta nueva debe documentarse ahí o quedar oculta** (`test_guia.py`); después regenera `telegram_bot/tests/guia.json` (comando en el README). Banco de evaluación con el modelo real en `eval/` (ver README).
+
+### Páginas principales del frontend
+
+| Archivo | Función |
+|---|---|
+| `portalrh.html` + `access-control.js` | Login contra `/api/auth/login` y guardia de página por rol (`admin`, `reclutamiento`, `notificaciones`) |
+| `auth-fetch.js` | Se carga primero en toda página protegida: añade el Bearer a los `fetch` al backend y manda al login en 401 |
+| `registro.html` | Formulario público de candidatos (CP → colonia vía `cp.csv`, firma, encuesta, escaneo de documentos) |
+| `Ingreso.html` | Asignación de empresa/área/puesto/turno/salario a candidatos |
+| `InicioReclu.html` | Indicadores de reclutamiento (Chart.js), equipos, enlaces temporales |
+| `iniciorh.html` | Inicio del portal de RH |
+| `Cheong Woon.html`, `Kronos.html` | Listados de empleados por empresa, filtros, exportación a Excel |
+| `empleado.html` | Expediente individual: datos, documentos, incidencias/vacaciones |
+| `documentos/*.html`, `formatos-lote.html` | Contratos, cartas IMSS/compromiso, checklist, evaluación, gafetes |
+| `data-manager.js`, `control-accesos.js`, `shared.css` | Utilidades compartidas |
+
+Los nombres de archivo tienen mayúsculas y espacios (`Cheong Woon.html`); respetarlos exactamente en enlaces.
+
+### Tablas (`db/init.sql`)
+
+`registro` (candidatos/empleados; nombre en `nombre_completo`), `encuesta_reclutamiento`, `ingresos_puesto`, `incidencias_empleado`, `chatbot_credenciales`, `usuarios_acceso`, `personal_reclutamiento`, `bitacora`, `telegram_codigos`, `telegram_vinculos` (incluye preferencias de avisos), `bot_trazas` (métricas del agente, sin texto), `bot_tareas` (tareas programadas), `bot_memoria` (notas del asistente por persona).
+
+## Ejecutar
+
+```bash
+docker compose up -d --build     # frontend :3001, backend :8001, chatbot :5002, postgres 127.0.0.1:5434
+docker compose logs -f backend
+```
+
+Nunca usar `docker compose down -v` (borra la BD). El frontend se monta como volumen, así que los cambios de HTML/JS se ven sin reconstruir; el backend **sí** requiere `--build` (el Dockerfile copia solo `utily.py`).
+
+Variables en `.env` (no versionado; plantilla en `.env.example`): `AUTH_SECRET_KEY`, `AUTH_ESTRICTO`, `AUTH_COOKIE_SECURE`, `ADMIN_INICIAL_USUARIO/PASSWORD`, `POSTGRES_DB/USER/PASSWORD/HOST/PORT`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `WHATSAPP_*`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_BOT_SECRETO_INTERNO`, `TELEGRAM_MINUTOS_CODIGO`, `DB_WRITE_LOCK`, `EMPLOYEE_DOCS_ROOT`.
+
+## Tests
+
+`unittest` con mocks (no requieren BD real):
+
+```bash
+cd backend && python -m unittest discover -p 'test_*.py'
+python -m unittest Chatbot_Wpp/test_bot.py
+cd telegram_bot && ../.venv-telegram/bin/python -m pytest   # pytest + pytest-asyncio
+```
+
+## Notas y deuda conocida
+
+- Muchas rutas existen duplicadas con y sin prefijo `/api` (compatibilidad); mantener ambas al modificarlas.
+- **Sesión:** toda ruta nueva debe clasificarse en `auth.PERMISOS_POR_ENDPOINT` (si no, exige `admin` y `test_auth.py` falla). Los tokens de canal `telegram` duran 15 min y exigen un vínculo vigente en `telegram_vinculos` en cada petición.
+- `backend/uploads/` contiene archivos de empleados (datos personales); evitar versionar más archivos reales ahí.
+- `.env` estuvo versionado en el historial de git (eliminado en el commit `2361fe4`); si contenía credenciales reales, deberían rotarse.
+- El README está parcialmente desactualizado (menciona `backend/app.py` y `cheong-woon.html`).
+- Plan del agente de Telegram (niveles 0–3): `~/.claude/plans/perfecto-ahora-necesito-que-twinkling-elephant.md`. Se toma como referencia `~/security_evaluations/telegram_bot`.
