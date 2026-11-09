@@ -133,8 +133,18 @@ El botón de captura permite seleccionar imágenes JPG, PNG o WEBP, y archivos P
 
 El historial interno del expediente de empleado se guarda en la tabla `incidencias_empleado`, con el tipo, fechas, duración, motivos, hora/opción de entrada o salida y los archivos adjuntos que correspondan. Los avisos de incidencia por WhatsApp no se envían.
 
+## Cuentas y sesión del panel
+
+Las cuentas del panel viven en el servidor (tabla `usuarios_acceso`, contraseñas con hash). `portalrh.html` inicia sesión con `/api/auth/login`, que devuelve una sesión firmada de 8 horas. La sesión viaja en una cookie `HttpOnly` y además como `Authorization: Bearer`, que añade `frontend/auth-fetch.js`. Cambiar la contraseña de una cuenta cierra sus sesiones abiertas.
+
+- **Primera cuenta:** define `ADMIN_INICIAL_USUARIO` y `ADMIN_INICIAL_PASSWORD` en `.env`. Se crea sola al primer intento de login si la tabla está vacía. Después cambia la contraseña desde el panel.
+- **Usuarios del sistema anterior:** antes las cuentas se guardaban en el navegador (localStorage). Al entrar a `iniciorh.html` como admin desde ese navegador aparece el botón «Importar al servidor», que las sube una sola vez y luego borra la copia local.
+- **Permisos:** cada ruta del backend tiene un permiso en `backend/auth.py` (`PERMISOS_POR_ENDPOINT`): público, `reclutamiento` o `admin`. Una ruta nueva sin clasificar exige `admin`, y `test_auth.py` falla hasta que se clasifique.
+- **Modo gradual:** con `AUTH_ESTRICTO=0` (por omisión) una petición sin sesión todavía pasa, y el backend registra un warning. Con `AUTH_ESTRICTO=1` responde 401. Actívalo cuando todos usen el nuevo login.
+- **Bitácora:** las escrituras con sesión quedan en la tabla `bitacora` (usuario, canal, método, ruta y resultado; nunca el contenido).
+
 ## Limitaciones conocidas
 
-- El login de `portalrh.html` es una validación fija en el cliente (`admin` / `123`), sin backend ni sesión real — cualquiera puede saltarlo navegando directo a `iniciorh.html`. No se corrigió en esta reorganización; queda pendiente.
-- `cheong-woon.html` llama a `/api/baja-empleado`, endpoint que todavía no está implementado en el backend.
+- Varias páginas llaman primero a `http://<host>:8001` (el backend directo) antes que a nginx, así que el puerto 8001 sigue publicado.
+- `api/datos-grafica` responde 500 cuando la base no tiene datos (la función termina sin devolver respuesta).
 - No hay HTTPS ni dominio configurado — nginx sirve solo HTTP en el puerto 3001. Si el servidor ya tiene un reverse proxy compartido (nginx/Traefik) para el otro proyecto, este stack puede integrarse detrás de él apuntando ese proxy a `localhost:3001`.

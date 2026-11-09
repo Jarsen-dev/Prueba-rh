@@ -121,3 +121,31 @@ ALTER TABLE personal_reclutamiento
     ADD COLUMN IF NOT EXISTS telefono VARCHAR(50);
 ALTER TABLE personal_reclutamiento
     ALTER COLUMN telefono TYPE VARCHAR(50);
+
+-- Sesión, vinculación con Telegram y bitácora (backend/auth.py los crea también al arrancar).
+CREATE TABLE IF NOT EXISTS telegram_codigos (
+    codigo_hash   CHAR(64) PRIMARY KEY,
+    usuario_id    INTEGER NOT NULL REFERENCES usuarios_acceso(id) ON DELETE CASCADE,
+    expira_en     TIMESTAMPTZ NOT NULL,
+    usado_en      TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS telegram_vinculos (
+    id                 SERIAL PRIMARY KEY,
+    usuario_id         INTEGER NOT NULL UNIQUE REFERENCES usuarios_acceso(id) ON DELETE CASCADE,
+    telegram_id        BIGINT NOT NULL UNIQUE,
+    telegram_username  VARCHAR(64),
+    creado_en          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ultimo_uso_en      TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS bitacora (
+    id          BIGSERIAL PRIMARY KEY,
+    fecha       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    usuario_id  INTEGER REFERENCES usuarios_acceso(id) ON DELETE SET NULL,
+    usuario     VARCHAR(100),
+    canal       VARCHAR(20) NOT NULL DEFAULT 'web',
+    origen      VARCHAR(40),
+    metodo      VARCHAR(10) NOT NULL,
+    ruta        TEXT NOT NULL,
+    estado_http INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_bitacora_fecha ON bitacora (fecha DESC);

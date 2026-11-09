@@ -1,25 +1,9 @@
 (function () {
-    const storageKey = 'cwAccessUsers';
-
-    function readUsers() {
-        try {
-            const users = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            return Array.isArray(users) ? users.map((user) => ({
-                id: user.id,
-                usuario: user.usuario,
-                password: user.password,
-                permisos: normalizePermissions(user.permisos),
-                nombre_notificacion: user.nombre_notificacion || '',
-                telefono_notificacion: user.telefono_notificacion || '',
-            })) : [];
-        } catch (_) {
-            return [];
-        }
-    }
-
-    function writeUsers(users) {
-        localStorage.setItem(storageKey, JSON.stringify(users));
-    }
+    // Las cuentas viven en el servidor (tabla usuarios_acceso). Lo único que
+    // queda en localStorage es la lista heredada, solo para importarla una vez.
+    const legacyStorageKey = 'cwAccessUsers';
+    const tokenKey = 'rhToken';
+    const userKey = 'accesoUsuario';
 
     function normalizePermissions(permissions) {
         const allowed = new Set(['admin', 'reclutamiento', 'notificaciones']);
@@ -31,65 +15,93 @@
             .filter((permission) => allowed.has(permission)))];
     }
 
-    function normalizeUser(data, existing = {}) {
-        const permissions = normalizePermissions(data.permisos);
-        return {
-            id: existing.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-            usuario: String(data.usuario || '').trim(),
-            password: String(data.password || '').trim(),
-            permisos: permissions,
-            nombre_notificacion: permissions.includes('notificaciones') ? String(data.nombre_notificacion || '').trim() : '',
-            telefono_notificacion: permissions.includes('notificaciones') ? String(data.telefono_notificacion || '').trim() : '',
-        };
+    async function api(method, path, body) {
+        const options = { method, headers: {}, credentials: 'same-origin' };
+        if (body !== undefined) {
+            options.headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(body);
+        }
+        const response = await fetch(path, options);
+        const text = await response.text();
+        let data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch (_) { data = {}; }
+        if (!response.ok) {
+            const error = new Error(data.error || `Error ${response.status}`);
+            error.status = response.status;
+            throw error;
+        }
+        return data;
     }
 
-    function validateUser(user, users, userId = null) {
-        if (!user.usuario || !user.password || !user.permisos.length) {
+    function readLegacyUsers() {
+        try {
+            const users = JSON.parse(localStorage.getItem(legacyStorageKey) || '[]');
+            return Array.isArray(users) ? users.filter((user) => user && user.usuario && user.password) : [];
+        } catch (_) {
+            return [];
+        }
+    }
+
+    function validateUser(user) {
+        if (!user.usuario || !user.password || !normalizePermissions(user.permisos).length) {
             throw new Error('Usuario, contraseña y al menos un permiso son obligatorios.');
         }
         if (user.password.length < 6) {
             throw new Error('La contraseña debe tener al menos 6 caracteres.');
         }
-        if (users.some((item) => item.usuario.toLowerCase() === user.usuario.toLowerCase() && item.id !== userId)) {
-            throw new Error('Ese usuario ya está registrado.');
-        }
-        if (user.permisos.includes('notificaciones') && (!user.nombre_notificacion || !user.telefono_notificacion)) {
-            throw new Error('Nombre y teléfono son obligatorios para Notificaciones.');
-        }
+    }
+
+    function payload(data) {
+        const permisos = normalizePermissions(data.permisos);
+        return {
+            usuario: String(data.usuario || '').trim(),
+            password: String(data.password || '').trim(),
+            permisos,
+            nombre_notificacion: permisos.includes('notificaciones') ? String(data.nombre_notificacion || '').trim() : '',
+            telefono_notificacion: permisos.includes('notificaciones') ? String(data.telefono_notificacion || '').trim() : '',
+        };
     }
 
     window.AccessControlUsers = {
-        list() {
-            return readUsers();
+        async list() {
+            const data = await api('GET', '/api/access-users');
+            return Array.isArray(data.usuarios) ? data.usuarios : [];
         },
-        create(data) {
-            const users = readUsers();
-            const user = normalizeUser(data);
-            validateUser(user, users);
-            users.push(user);
-            writeUsers(users);
-            return user;
+        async create(data) {
+            const user = payload(data);
+            validateUser(user);
+            return api('POST', '/api/access-users', user);
         },
-        update(userId, data) {
-            const users = readUsers();
-            const index = users.findIndex((user) => user.id === userId);
-            if (index < 0) throw new Error('Usuario no encontrado.');
-            const user = normalizeUser(data, users[index]);
-            validateUser(user, users, userId);
-            users[index] = user;
-            writeUsers(users);
-            return user;
+        async update(userId, data) {
+            const user = payload(data);
+            validateUser(user);
+            return api('PUT', `/api/access-users/${encodeURIComponent(userId)}`, user);
         },
-        remove(userId) {
-            const users = readUsers();
-            const filteredUsers = users.filter((user) => user.id !== userId);
-            if (filteredUsers.length === users.length) throw new Error('Usuario no encontrado.');
-            writeUsers(filteredUsers);
+        async remove(userId) {
+            return api('DELETE', `/api/access-users/${encodeURIComponent(userId)}`);
         },
-        authenticate(usuario, password) {
-            const usuarioSistema = String(usuario || '').trim();
-            const passwordSistema = String(password || '').trim();
-            return readUsers().find((user) => user.usuario === usuarioSistema && user.password === passwordSistema) || null;
+        async authenticate(usuario, password) {
+            try {
+                const user = await api('POST', '/api/auth/login', {
+                    usuario: String(usuario || '').trim(),
+                    password: String(password || '').trim(),
+                });
+                try { localStorage.setItem(tokenKey, user.token || ''); } catch (_) {}
+                delete user.token;
+                return user;
+            } catch (error) {
+                if (error.status === 401) return null;
+                throw error;
+            }
+        },
+        async logout() {
+            try { localStorage.removeItem(tokenKey); } catch (_) {}
+            sessionStorage.removeItem(userKey);
+            try { await api('POST', '/api/auth/logout'); } catch (_) {}
+        },
+        legacyList: readLegacyUsers,
+        clearLegacy() {
+            try { localStorage.removeItem(legacyStorageKey); } catch (_) {}
         },
     };
 
@@ -106,31 +118,20 @@
     const allowedPermissions = pagePermissions[pageName];
     if (!allowedPermissions) return;
 
-    try {
-        const accessUser = JSON.parse(sessionStorage.getItem('accesoUsuario') || '{}');
-        const currentUser = AccessControlUsers.list().find((user) => (
-            accessUser.id && user.id === accessUser.id
-        ) || (
-            accessUser.usuario
-            && user.usuario.toLowerCase() === String(accessUser.usuario).trim().toLowerCase()
-        ));
-        if (!currentUser) {
-            window.location.replace('portalrh.html');
-            return;
-        }
+    function goToLogin() {
+        sessionStorage.removeItem(userKey);
+        window.location.replace('portalrh.html');
+    }
 
-        sessionStorage.setItem('accesoUsuario', JSON.stringify(currentUser));
-        const permissions = normalizePermissions(currentUser.permisos);
+    function applyPermissions(permissions) {
         document.documentElement.classList.toggle(
             'recruitment-limited',
             permissions.includes('reclutamiento') && !permissions.includes('admin')
         );
-        const hasPermission = permissions.some((permission) => allowedPermissions.includes(permission));
-        if (!hasPermission) {
-            window.location.replace('portalrh.html');
-            return;
+        if (!permissions.some((permission) => allowedPermissions.includes(permission))) {
+            goToLogin();
+            return false;
         }
-
         const filterNavigation = () => {
             document.querySelectorAll('.nav-links a[href]').forEach((link) => {
                 const target = new URL(link.href, window.location.href);
@@ -146,7 +147,25 @@
         } else {
             filterNavigation();
         }
+        return true;
+    }
+
+    try {
+        // Comprobación inmediata con lo guardado al iniciar sesión…
+        const accessUser = JSON.parse(sessionStorage.getItem(userKey) || '{}');
+        if (!accessUser.id || !applyPermissions(normalizePermissions(accessUser.permisos))) {
+            goToLogin();
+            return;
+        }
+        // …y confirmación con el servidor (sesión vigente y permisos actuales).
+        api('GET', '/api/auth/me').then((me) => {
+            const permissions = normalizePermissions(me.permisos);
+            sessionStorage.setItem(userKey, JSON.stringify({ ...accessUser, permisos: permissions }));
+            applyPermissions(permissions);
+        }).catch((error) => {
+            if (error.status === 401) goToLogin();
+        });
     } catch (_) {
-        window.location.replace('portalrh.html');
+        goToLogin();
     }
 })();

@@ -24,6 +24,11 @@ services:
       EMPLOYEE_DOCS_ROOT: /app/uploads
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      AUTH_ESTRICTO: "${AUTH_ESTRICTO:-0}"
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-}
+      AUTH_COOKIE_SECURE: "${AUTH_COOKIE_SECURE:-0}"
+      ADMIN_INICIAL_USUARIO: ${ADMIN_INICIAL_USUARIO:-}
+      ADMIN_INICIAL_PASSWORD: ${ADMIN_INICIAL_PASSWORD:-}
     depends_on:
       postgres:
         condition: service_healthy

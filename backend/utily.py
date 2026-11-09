@@ -10,11 +10,14 @@ from copy import copy
 from datetime import datetime
 import psycopg2
 import openpyxl
-from flask import Flask, jsonify, request, send_from_directory, send_file
+from flask import Flask, g, jsonify, request, send_from_directory, send_file
 from io import BytesIO
 from dotenv import load_dotenv
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
+
+import auth
+import bitacora
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
@@ -1123,7 +1126,8 @@ def iniciar_sesion_acceso():
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                asegurar_tabla_usuarios_acceso(cur)
+                asegurar_esquema_sesion(cur)
+                sembrar_admin_inicial(cur)
                 cur.execute(
                     """SELECT id, usuario, password_hash, permisos,
                               nombre_notificacion, telefono_notificacion
@@ -1134,9 +1138,50 @@ def iniciar_sesion_acceso():
             conn.commit()
         if not encontrado or not check_password_hash(encontrado[2], password):
             return jsonify({'error': 'Usuario o contraseña incorrectos.'}), 401
-        return jsonify(usuario_acceso_dict(encontrado))
+        token = auth.emitir_token(encontrado[0], encontrado[2], auth.CANAL_WEB)
+        cuerpo = usuario_acceso_dict(encontrado)
+        cuerpo['token'] = token
+        cuerpo['expira_en_minutos'] = auth.MINUTOS_POR_CANAL[auth.CANAL_WEB]
+        return auth.poner_cookie_sesion(jsonify(cuerpo), token)
     except Exception as error:
         return jsonify({'error': str(error)}), 500
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def cerrar_sesion_acceso():
+    return auth.borrar_cookie_sesion(jsonify({'ok': True}))
+
+
+@app.route('/api/auth/me', methods=['GET'])
+def sesion_actual():
+    usuario = g.usuario
+    return jsonify({
+        'id': usuario['id'],
+        'usuario': usuario['usuario'],
+        'permisos': usuario['permisos'],
+        'canal': usuario['canal'],
+    })
+
+
+def asegurar_esquema_sesion(cur):
+    auth.asegurar_esquema_auth(cur, asegurar_tabla_usuarios_acceso)
+
+
+def sembrar_admin_inicial(cur):
+    """Si no hay ninguna cuenta, crea la de ADMIN_INICIAL_USUARIO/ADMIN_INICIAL_PASSWORD."""
+    usuario = (os.getenv('ADMIN_INICIAL_USUARIO') or '').strip()
+    password = (os.getenv('ADMIN_INICIAL_PASSWORD') or '').strip()
+    if not usuario or len(password) < 8:
+        return
+    cur.execute('SELECT EXISTS (SELECT 1 FROM usuarios_acceso)')
+    if cur.fetchone()[0]:
+        return
+    cur.execute(
+        """INSERT INTO usuarios_acceso (usuario, password_hash, permisos)
+           VALUES (%s, %s, '["admin"]'::jsonb) ON CONFLICT (usuario) DO NOTHING""",
+        (usuario, generate_password_hash(password)),
+    )
+    app.logger.warning('Se creó la cuenta inicial %s; cambia su contraseña.', usuario)
 
 
 def obtener_columnas(cur, tabla):
@@ -3040,6 +3085,10 @@ def exportar_excel():
         return jsonify({'error': str(e)}), 500
 
 # =======================================================
+# Sesión y bitácora (se registran al final para cubrir todas las rutas).
+auth.init_auth(app, lambda: get_db_connection(), normalizar_permisos, asegurar_esquema_sesion)
+bitacora.init_bitacora(app, lambda: get_db_connection(), asegurar_esquema_sesion)
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
     app.run(host='0.0.0.0', port=port, debug=True)

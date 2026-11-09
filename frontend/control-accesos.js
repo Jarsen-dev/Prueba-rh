@@ -54,7 +54,7 @@ function renderUsuariosRegistrados() {
         );
 
         const actionCell = document.createElement('td');
-        if (usuarioEnEdicion === usuario.id) {
+        if (String(usuarioEnEdicion) === String(usuario.id)) {
             actionCell.append(
                 crearBotonAcceso('Eliminar', 'delete-access', 'delete-access-button'),
                 crearBotonAcceso('Cancelar', 'cancel-edit', 'cancel-edit')
@@ -67,9 +67,54 @@ function renderUsuariosRegistrados() {
     });
 }
 
-function cargarUsuariosRegistrados() {
-    usuariosRegistrados = window.AccessControlUsers.list();
+async function cargarUsuariosRegistrados() {
+    try {
+        usuariosRegistrados = await window.AccessControlUsers.list();
+    } catch (error) {
+        usuariosRegistrados = [];
+        mostrarMensajeAcceso('access-users-feedback', `No se pudo cargar la lista: ${error.message}`, 'error');
+    }
     renderUsuariosRegistrados();
+    renderImportacionLegada();
+}
+
+function renderImportacionLegada() {
+    const contenedor = document.getElementById('access-legacy-import');
+    if (!contenedor) return;
+    const existentes = new Set(usuariosRegistrados.map((usuario) => usuario.usuario.toLowerCase()));
+    const pendientes = window.AccessControlUsers.legacyList()
+        .filter((usuario) => !existentes.has(String(usuario.usuario).trim().toLowerCase()));
+    contenedor.replaceChildren();
+    if (!pendientes.length) {
+        if (window.AccessControlUsers.legacyList().length) window.AccessControlUsers.clearLegacy();
+        contenedor.hidden = true;
+        return;
+    }
+    contenedor.hidden = false;
+    const texto = document.createElement('span');
+    texto.textContent = `Este navegador tiene ${pendientes.length} usuario(s) del sistema anterior que aún no están en el servidor. `;
+    const boton = crearBotonAcceso('Importar al servidor', 'import-legacy');
+    boton.addEventListener('click', () => importarUsuariosLegados(pendientes, boton));
+    contenedor.append(texto, boton);
+}
+
+async function importarUsuariosLegados(pendientes, boton) {
+    boton.disabled = true;
+    const errores = [];
+    for (const usuario of pendientes) {
+        try {
+            await window.AccessControlUsers.create(usuario);
+        } catch (error) {
+            if (error.status !== 409) errores.push(`${usuario.usuario}: ${error.message}`);
+        }
+    }
+    if (errores.length) {
+        mostrarMensajeAcceso('access-users-feedback', `No se importaron: ${errores.join('; ')}`, 'error');
+    } else {
+        window.AccessControlUsers.clearLegacy();
+        mostrarMensajeAcceso('access-users-feedback', 'Usuarios importados al servidor.', 'success');
+    }
+    await cargarUsuariosRegistrados();
 }
 
 function establecerModoEdicion(usuario) {
@@ -101,7 +146,7 @@ function establecerModoEdicion(usuario) {
 }
 
 function iniciarEdicionUsuario(usuarioId) {
-    const usuario = usuariosRegistrados.find((item) => item.id === usuarioId);
+    const usuario = usuariosRegistrados.find((item) => String(item.id) === String(usuarioId));
     if (!usuario) {
         mostrarMensajeAcceso('access-users-feedback', 'No se encontró el usuario seleccionado.', 'error');
         return;
@@ -131,7 +176,7 @@ function cancelarEdicionUsuario() {
     mostrarMensajeAcceso('access-create-feedback', '');
 }
 
-function guardarNuevoUsuario(event) {
+async function guardarNuevoUsuario(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const feedbackId = 'access-create-feedback';
@@ -140,10 +185,10 @@ function guardarNuevoUsuario(event) {
 
     try {
         if (usuarioEnEdicion) {
-            const usuario = usuariosRegistrados.find((item) => item.id === usuarioEnEdicion);
+            const usuario = usuariosRegistrados.find((item) => String(item.id) === String(usuarioEnEdicion));
             if (!usuario) throw new Error('No se encontró el usuario seleccionado.');
             if (!password) throw new Error('Escribe una nueva contraseña.');
-            window.AccessControlUsers.update(usuario.id, {
+            await window.AccessControlUsers.update(usuario.id, {
                 usuario: usuario.usuario,
                 password,
                 permisos: usuario.permisos,
@@ -154,19 +199,19 @@ function guardarNuevoUsuario(event) {
             datosFormularioAntesDeEditar = null;
             form.reset();
             establecerModoEdicion(null);
-            cargarUsuariosRegistrados();
+            await cargarUsuariosRegistrados();
             mostrarMensajeAcceso(feedbackId, 'La contraseña se actualizó correctamente.', 'success');
             mostrarMensajeAcceso('access-users-feedback', '');
             return;
         }
 
-        window.AccessControlUsers.create({
+        await window.AccessControlUsers.create({
             usuario: document.getElementById('acceso-usuario').value.trim(),
             password,
             permisos: [permission],
         });
         form.reset();
-        cargarUsuariosRegistrados();
+        await cargarUsuariosRegistrados();
         mostrarMensajeAcceso(feedbackId, 'El acceso se guardó correctamente.', 'success');
         mostrarMensajeAcceso('access-users-feedback', '');
     } catch (error) {
@@ -174,19 +219,19 @@ function guardarNuevoUsuario(event) {
     }
 }
 
-function eliminarUsuarioAcceso(usuarioId) {
-    const usuario = usuariosRegistrados.find((item) => item.id === usuarioId);
+async function eliminarUsuarioAcceso(usuarioId) {
+    const usuario = usuariosRegistrados.find((item) => String(item.id) === String(usuarioId));
     if (!usuario || !window.confirm(`¿Eliminar el acceso de ${usuario.usuario}?`)) return;
 
     try {
-        window.AccessControlUsers.remove(usuario.id);
-        if (usuarioEnEdicion === usuario.id) {
+        await window.AccessControlUsers.remove(usuario.id);
+        if (String(usuarioEnEdicion) === String(usuario.id)) {
             usuarioEnEdicion = null;
             datosFormularioAntesDeEditar = null;
             document.getElementById('form-nuevo-acceso').reset();
             establecerModoEdicion(null);
         }
-        cargarUsuariosRegistrados();
+        await cargarUsuariosRegistrados();
         mostrarMensajeAcceso('access-users-feedback', 'El acceso se eliminó correctamente.', 'success');
         mostrarMensajeAcceso('access-create-feedback', '');
     } catch (error) {
