@@ -141,6 +141,12 @@
                     <a href="https://drive.google.com/file/d/1gWuv28J-7WjbfsaOdUMSIb0Mbb6KHRqO/view?usp=sharing" target="_blank" rel="noopener noreferrer">Indisciplina</a>
                 </div>
             </details>
+            <details class="acciones-menu admin-only">
+                <summary>Formatos del día</summary>
+                <div class="acciones-dropdown">
+                    <button id="btn-evaluacion-del-dia" type="button">Evaluación de inducción y adaptación laboral</button>
+                </div>
+            </details>
             <button id="btn-descargar-excel" type="button" class="accion-principal admin-only">Listado General</button>
             <div id="seleccion-formatos" class="seleccion-formatos">
                 <span id="seleccion-contador" class="seleccion-contador">Selecciona un documento automatizado</span>
@@ -240,6 +246,51 @@
                 turno: local.turno || emp.turno || '',
                 estatus: String(emp.estatus || (local && local.estatus) || 'ACTIVO').toUpperCase(),
             };
+        }
+
+        function obtenerClaveFecha(valor) {
+            const texto = String(valor || '').trim();
+            const iso = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+
+            const local = texto.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+            if (local) {
+                const dia = Number(local[1]);
+                const mes = Number(local[2]);
+                const anio = Number(local[3]);
+                const fecha = new Date(anio, mes - 1, dia);
+                if (fecha.getFullYear() !== anio || fecha.getMonth() !== mes - 1 || fecha.getDate() !== dia) return '';
+                return `${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+            }
+
+            return '';
+        }
+
+        function generarEvaluacionesDelDia() {
+            const ahora = new Date();
+            const fechaHoy = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
+            const ingresosDeHoy = empleadosCache
+                .map(getEmpleadoConLocal)
+                .filter((emp) => obtenerClaveFecha(emp.fecha_ingreso || emp.fecha_registro) === fechaHoy);
+            const empleadosConId = ingresosDeHoy.filter((emp) => /^\d+$/.test(String(emp.registro_id || '')));
+
+            if (!empleadosConId.length) {
+                alert(ingresosDeHoy.length
+                    ? 'Los empleados que ingresaron hoy no tienen un número de registro válido para generar la evaluación.'
+                    : 'No hay empleados con fecha de ingreso de hoy.');
+                return;
+            }
+            if (empleadosConId.length !== ingresosDeHoy.length) {
+                alert('No se generará la evaluación porque uno o más empleados que ingresaron hoy no tienen un número de registro válido.');
+                return;
+            }
+
+            const params = new URLSearchParams({
+                tipo: 'evaluacion',
+                ids: empleadosConId.map((emp) => emp.registro_id).join(','),
+                return_url: 'Kronos.html',
+            });
+            window.location.href = `formatos-lote.html?${params.toString()}`;
         }
 
         function matchesSearch(emp) {
@@ -526,6 +577,8 @@
                 if (!isRecruitmentLimited) descargarExcelEmpleados('KRONOS');
             });
         }
+
+        document.getElementById('btn-evaluacion-del-dia').addEventListener('click', generarEvaluacionesDelDia);
 
         document.querySelectorAll('[data-formato]').forEach((button) => {
             button.addEventListener('click', () => iniciarSeleccionFormato(button.dataset.formato));

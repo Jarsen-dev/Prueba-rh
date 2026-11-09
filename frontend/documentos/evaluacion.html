@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>CW Connect</title>
+    <link rel="icon" type="image/png" href="../favicon.png">
+    <style>
+        body {
+            background-color: #e2e8f0;
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            font-size: 11pt;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            font-family: Arial, sans-serif;
+        }
+
+        #btn-descargar-contrato {
+            background-color: #3182ce;
+            color: white;
+        }
+
+        #btn-regresar {
+            background-color: #3182ce;
+            color: white;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .page {
+            background: white;
+            width: 21.6cm;
+            height: 27.9cm;
+            padding: 1.4cm 1.3cm 1.5cm;
+            margin: 10mm auto;
+            box-sizing: border-box;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            position: relative;
+            font-size: 10pt;
+            line-height: 1.5;
+            color: #1a202c;
+            text-align: justify;
+            overflow: visible; 
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        .employee-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 20px;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+
+        .employee-field {
+            display: flex;
+            flex: 1;
+            align-items: baseline;
+            gap: 5px;
+            min-width: 0;
+            white-space: nowrap;
+        }
+
+        .personal-row .employee-field:first-child {
+            flex: 1.6;
+        }
+
+        .personal-row .employee-field:last-child {
+            flex: 0.8;
+        }
+
+        .employee-value {
+            flex: 1;
+            min-height: 18px;
+            border-bottom: 1px solid #1a202c;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .evaluation-instruction {
+            margin: 8px 0;
+            text-align: left;
+        }
+
+        .evaluation-question {
+            margin: 0 0 10px;
+            font-weight: bold;
+            text-align: left;
+        }
+
+        .rating-options {
+            display: flex;
+            justify-content: center;
+            gap: 28px;
+            text-align: left;
+        }
+
+        .rating-option {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            cursor: pointer;
+        }
+
+        .rating-option input {
+            width: 15px;
+            height: 15px;
+            margin: 0;
+            accent-color: #1a202c;
+        }
+
+        .induction-table {
+            width: max-content;
+            margin-left: auto;
+            margin-right: auto;
+            margin-top: 12px;
+            border-collapse: collapse;
+            table-layout: auto;
+            font-size: 11pt;
+            text-align: left;
+        }
+
+        .induction-table th,
+        .induction-table td {
+            padding: 3px 5px;
+        }
+
+        .induction-table th:first-child,
+        .induction-table td:first-child {
+            white-space: nowrap;
+        }
+
+        .induction-table th:nth-child(2),
+        .induction-table th:nth-child(3),
+        .induction-table td:nth-child(2),
+        .induction-table td:nth-child(3) {
+            width: 34px;
+            text-align: center;
+        }
+
+        .induction-table input {
+            width: 14px;
+            height: 18px;
+            margin: 0;
+            vertical-align: middle;
+            accent-color: #1a202c;
+        }
+
+        .logo-date-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 6px;
+        }
+
+        .logo-container {
+            max-width: 270px;
+            width: 70%;
+            margin-top: -0.65cm;
+        }
+
+        .logo-container img {
+            width: 40%;
+            height: auto;
+        }
+
+        .document-date {
+            text-align: right;
+            font-weight: 500;
+        }
+
+        .document-title {
+            margin: -8px 0 22px;
+            font-family: "Times New Roman", Times, serif;
+            font-size: 16pt;
+            text-align: center;
+        }
+
+        .comment-line {
+            height: 24px;
+            border-bottom: 1px solid #1a202c;
+        }
+
+        @media print {
+            @page {
+                size: letter;
+                margin: 0;
+            }
+
+            html,
+            body {
+                background: none;
+                padding: 0;
+                margin: 0;
+                display: block;
+            }
+            .controls {
+                display: none;
+            }
+            .page {
+                box-shadow: none;
+                margin: 0;
+                width: 21.59cm;
+                height: 27.94cm;
+                break-inside: avoid;
+            }
+            .page + .page {
+                page-break-before: always;
+                break-before: page;
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+<!-- PÁGINA 1 -->
+
+    <div class="controls">
+        <a id="btn-regresar" class="btn" href="#">Regresar</a>
+        <button id="btn-descargar-contrato" class="btn">Descargar / Imprimir Contrato</button>
+    </div>
+
+    <div class="page" id="contrato-page-1" style="line-height: 1.2; font-size: 11pt; font-family: Arial, sans-serif;">
+        
+        <!-- Logo y Fecha -->
+        <div class="logo-date-row">
+            <div class="logo-container">
+                <img src="https://lh3.googleusercontent.com/d/1YuA-V3W27vrLeDszpzRYNJnwMKGvpHpA" alt="Cheong Woon Mexico">
+            </div>
+            <div class="document-date">
+                Fecha: <span id="lbl-fecha-actual"></span>
+            </div>
+        </div>
+        <h1 class="document-title">EVALUACIÓN DE INDUCCIÓN Y ADAPTACIÓN LABORAL</h1>
+        <div class="employee-row personal-row">
+            <div class="employee-field">
+                <strong>Nombre:</strong>
+                <span class="employee-value" id="lbl-nombre"></span>
+            </div>
+            <div class="employee-field">
+                <strong>N° Emp:</strong>
+                <span class="employee-value" id="lbl-no-empleado"></span>
+            </div>
+        </div>
+        <div class="employee-row">
+            <div class="employee-field">
+                <strong>Departamento:</strong>
+                <span class="employee-value" id="lbl-departamento"></span>
+            </div>
+            <div class="employee-field">
+                <strong>Líder:</strong>
+                <span class="employee-value" id="lbl-lider"></span>
+            </div>
+        </div>
+        <div class="evaluation-instruction">Indica con una ✔ la opción deseada.</div>
+        <div class="evaluation-question">¿Qué te pareció el trabajo?</div>
+        <div class="rating-options">
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Excelente"> Excelente</label>
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Bueno"> Bueno</label>
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Regular"> Regular</label>
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Malo"> Malo</label>
+        </div>
+        <table class="induction-table">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th scope="col">Sí</th>
+                    <th scope="col">No</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>¿Recibiste correctamente la inducción de la empresa al momento de entrar?</td>
+                    <td><input type="checkbox" name="induccion-empresa" value="si" aria-label="Sí: inducción de la empresa"></td>
+                    <td><input type="checkbox" name="induccion-empresa" value="no" aria-label="No: inducción de la empresa"></td>
+                </tr>
+                <tr>
+                    <td>¿Se te presentó a tu jefe inmediato?</td>
+                    <td><input type="checkbox" name="presentacion-jefe" value="si" aria-label="Sí: presentación del jefe inmediato"></td>
+                    <td><input type="checkbox" name="presentacion-jefe" value="no" aria-label="No: presentación del jefe inmediato"></td>
+                </tr>
+                <tr>
+                    <td>¿El trato del supervisor fue correcto y adecuado?</td>
+                    <td><input type="checkbox" name="trato-supervisor" value="si" aria-label="Sí: trato del supervisor"></td>
+                    <td><input type="checkbox" name="trato-supervisor" value="no" aria-label="No: trato del supervisor"></td>
+                </tr>
+                <tr>
+                    <td>¿El trato del personal de Recursos Humanos fue correcto y adecuado?</td>
+                    <td><input type="checkbox" name="trato-recursos-humanos" value="si" aria-label="Sí: trato de Recursos Humanos"></td>
+                    <td><input type="checkbox" name="trato-recursos-humanos" value="no" aria-label="No: trato de Recursos Humanos"></td>
+                </tr>
+                <tr>
+                    <td>¿El trato del personal coreano fue correcto y adecuado?</td>
+                    <td><input type="checkbox" name="trato-personal-coreano" value="si" aria-label="Sí: trato del personal coreano"></td>
+                    <td><input type="checkbox" name="trato-personal-coreano" value="no" aria-label="No: trato del personal coreano"></td>
+                </tr>
+                <tr>
+                    <td>¿El trato de tu jefe inmediato fue correcto y adecuado?</td>
+                    <td><input type="checkbox" name="trato-jefe-inmediato" value="si" aria-label="Sí: trato del jefe inmediato"></td>
+                    <td><input type="checkbox" name="trato-jefe-inmediato" value="no" aria-label="No: trato del jefe inmediato"></td>
+                </tr>
+                <tr>
+                    <td>¿Estás cómodo en tu área de trabajo?</td>
+                    <td><input type="checkbox" name="comodidad-area" value="si" aria-label="Sí: comodidad en el área de trabajo"></td>
+                    <td><input type="checkbox" name="comodidad-area" value="no" aria-label="No: comodidad en el área de trabajo"></td>
+                </tr>
+                <tr>
+                    <td>¿Te capacitaron en tu área de trabajo?</td>
+                    <td><input type="checkbox" name="capacitacion-area" value="si" aria-label="Sí: capacitación en el área de trabajo"></td>
+                    <td><input type="checkbox" name="capacitacion-area" value="no" aria-label="No: capacitación en el área de trabajo"></td>
+                </tr>
+                <tr>
+                    <td>¿Te dieron indicaciones de las actividades que realizarías?</td>
+                    <td><input type="checkbox" name="indicaciones-actividades" value="si" aria-label="Sí: indicaciones de actividades"></td>
+                    <td><input type="checkbox" name="indicaciones-actividades" value="no" aria-label="No: indicaciones de actividades"></td>
+                </tr>
+                <tr>
+                    <td>¿Te informaron sobre los permisos sanitarios?</td>
+                    <td><input type="checkbox" name="permisos-sanitarios" value="si" aria-label="Sí: información sobre permisos sanitarios"></td>
+                    <td><input type="checkbox" name="permisos-sanitarios" value="no" aria-label="No: información sobre permisos sanitarios"></td>
+                </tr>
+                <tr>
+                    <td>¿Te informaron sobre los permisos de entrada y salida a destiempo?</td>
+                    <td><input type="checkbox" name="permisos-entrada-salida" value="si" aria-label="Sí: información sobre permisos de entrada y salida a destiempo"></td>
+                    <td><input type="checkbox" name="permisos-entrada-salida" value="no" aria-label="No: información sobre permisos de entrada y salida a destiempo"></td>
+                </tr>
+            </tbody>
+        </table>
+        <br>
+        <div class="evaluation-question">¿Qué tan clara fue la explicación sobre el servicio de comedor?</div>
+        <div class="rating-options">
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Excelente"> Excelente</label>
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Bueno"> Bueno</label>
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Regular"> Regular</label>
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Malo"> Malo</label>
+        </div>
+        <br>
+        <div class="evaluation-question">Cómo calificas el servicio de transporte proporcionado por la empresa</div>
+        <div class="rating-options">
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Excelente"> Excelente</label>
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Bueno"> Bueno</label>
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Regular"> Regular</label>
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Malo"> Malo</label>
+        </div>
+        <br>
+        <div class="evaluation-question">¿Cómo percibes el ambiente de trabajo en tu área?</div>
+        <div class="rating-options">
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Excelente"> Excelente</label>
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Bueno"> Bueno</label>
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Regular"> Regular</label>
+            <label class="rating-option"><input type="checkbox" name="evaluacion-trabajo" value="Malo"> Malo</label>
+        </div>
+        <br>
+        <div class="evaluation-question">Tienes algún comentario o sugerencia para mejorar la experiencia de bienvenida e integración del nuevo personal?</div>
+        <div class="comment-line"></div>
+        <div class="comment-line"></div>
+    </div>
+
+
+    <script src="../data-manager.js"></script>
+    <script>
+        const currentHost = window.location.hostname;
+        const PORT = '8001';
+        const API_URL = `http://${currentHost}:${PORT}`;
+        const API_BASES = [API_URL, `http://localhost:${PORT}`];
+        const urlParams = new URLSearchParams(window.location.search);
+        const idEmpleado = urlParams.get('id') || urlParams.get('registro_id') || localStorage.getItem('ultimoRegistroId') || '';
+
+        function buildEmpleadoEndpoint(idValue) {
+            const encodedId = encodeURIComponent(idValue);
+            const bases = API_BASES.map((baseUrl) => `${baseUrl}/obtener-empleado/${encodedId}`);
+            return bases.filter((value, index, arr) => arr.indexOf(value) === index);
+        }
+
+        function getEmployeeRecordFromCache() {
+            try {
+                const manager = window.DataManager;
+                if (manager && typeof manager.getEmpleados === 'function') {
+                    const empleados = manager.getEmpleados() || [];
+                    return empleados.find((item) => String(item.registro_id || '') === String(idEmpleado))
+                        || empleados.find((item) => String(item.curp || '').toUpperCase() === String(idEmpleado).toUpperCase())
+                        || null;
+                }
+            } catch (_) {
+                return null;
+            }
+        }
+
+        const btnRegresar = document.getElementById('btn-regresar');
+        if (btnRegresar) {
+            if (idEmpleado) {
+                btnRegresar.href = `../empleado.html?registro_id=${encodeURIComponent(idEmpleado)}&tab=informacion`;
+            } else {
+                btnRegresar.href = '../empleado.html?tab=informacion';
+            }
+        }
+
+        function formatearNombreApellidosTexto(texto) {
+            if (!texto) return '';
+            let textoLimpio = String(texto).trim();
+            let palabras = textoLimpio.split(/\s+/);
+
+            if (palabras.length <= 2) {
+                return textoLimpio.toUpperCase();
+            }
+
+            let apellidos = palabras.slice(-2).join(' ');
+            let nombres = palabras.slice(0, -2).join(' ');
+
+            return `${apellidos} ${nombres}`.toUpperCase();
+        }
+
+        function setText(id, value) {
+            const el = document.getElementById(id);
+            if (!el) return;
+
+            const texto = value === null || value === undefined ? '' : String(value).trim();
+            el.textContent = id === 'lbl-nombre' ? formatearNombreApellidosTexto(texto) : texto;
+        }
+
+        function aplicarDatosCarta(data) {
+            setText('lbl-nombre', data.nombre_completo || '');
+            setText('lbl-no-empleado', data.no_empleado || data.numero_empleado || '');
+            setText('lbl-departamento', data.departamento || data.area || '');
+            setText('lbl-lider', '');
+        }
+
+        document.getElementById('lbl-fecha-actual').textContent = new Date().toLocaleDateString('es-MX', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+        });
+
+        async function cargarEmpleadoCarta() {
+            const cached = getEmployeeRecordFromCache();
+            if (cached) aplicarDatosCarta(cached);
+            if (!idEmpleado) return;
+
+            const endpoints = buildEmpleadoEndpoint(idEmpleado);
+
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await fetch(endpoint);
+                    if (!response.ok) continue;
+
+                    const data = await response.json();
+                    aplicarDatosCarta({ ...(cached || {}), ...data });
+                    return;
+                } catch (_) { }
+            }
+        }
+
+        const btnDescargar = document.getElementById('btn-descargar-contrato');
+        if (btnDescargar) {
+            btnDescargar.addEventListener('click', () => {
+                window.print();
+            });
+        }
+
+        cargarEmpleadoCarta();
+    </script>
+</body>
+</html>
