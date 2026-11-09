@@ -2679,6 +2679,24 @@ def admin_preview_encuestas():
         traceback.print_exc()
         return (f"ERROR: {str(e)}", 500)
 
+def expresion_fecha_local(cur, tabla, columna, tz):
+    """SQL de la fecha en hora local y sus parámetros, según el tipo real de la columna.
+
+    Una columna DATE (o TIMESTAMP sin zona) ya es una fecha local: pasarla por
+    ``timezone()`` la toma como medianoche UTC y la mueve al día anterior en
+    México, así que lo del día 1 caía en el mes anterior. Solo un TIMESTAMPTZ
+    se convierte a la zona pedida.
+    """
+    cur.execute(
+        "SELECT data_type FROM information_schema.columns WHERE table_name = %s AND column_name = %s",
+        (tabla, columna),
+    )
+    fila = cur.fetchone()
+    if fila and fila[0] == 'timestamp with time zone':
+        return f'timezone(%s, {columna})', (tz,)
+    return columna, ()
+
+
 @app.route('/api/datos-grafica')
 def api_datos_grafica():
     periodo = request.args.get('periodo')
@@ -2687,6 +2705,8 @@ def api_datos_grafica():
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                fecha_sql, fecha_params = expresion_fecha_local(cur, 'encuesta_reclutamiento', 'fecha_registro', tz)
+                fecha_sql_e = fecha_sql.replace('fecha_registro', 'e.fecha_registro')
                 if periodo == 'mes':
                     mes = int(request.args.get('mes', '1'))
 
@@ -2715,8 +2735,8 @@ def api_datos_grafica():
                               END as fuente_norm,
                               COUNT(*)
                             FROM encuesta_reclutamiento
-                            WHERE EXTRACT(MONTH FROM timezone(%s, fecha_registro)) = %s
-                              AND EXTRACT(YEAR FROM timezone(%s, fecha_registro)) = EXTRACT(YEAR FROM timezone(%s, now()))
+                            WHERE EXTRACT(MONTH FROM {F}) = %s
+                              AND EXTRACT(YEAR FROM {F}) = EXTRACT(YEAR FROM timezone(%s, now()))
                             GROUP BY fuente_norm
                         """
                     else:
@@ -2736,11 +2756,11 @@ def api_datos_grafica():
                               END as fuente_norm,
                               COUNT(*)
                             FROM encuesta_reclutamiento
-                            WHERE EXTRACT(MONTH FROM timezone(%s, fecha_registro)) = %s
-                              AND EXTRACT(YEAR FROM timezone(%s, fecha_registro)) = EXTRACT(YEAR FROM timezone(%s, now()))
+                            WHERE EXTRACT(MONTH FROM {F}) = %s
+                              AND EXTRACT(YEAR FROM {F}) = EXTRACT(YEAR FROM timezone(%s, now()))
                             GROUP BY fuente_norm
                         """
-                    cur.execute(query, (tz, mes, tz, tz))
+                    cur.execute(query.replace('{F}', fecha_sql), (*fecha_params, mes, *fecha_params, tz))
                     filas_raw = cur.fetchall()
                     resultados = {}
                     for row in filas_raw:
@@ -2764,12 +2784,12 @@ def api_datos_grafica():
                             COUNT(e.id) AS total
                                                 FROM encuesta_reclutamiento e
                                                 WHERE NULLIF(TRIM(e.nombre_reclutador), '') IS NOT NULL
-                                                    AND EXTRACT(MONTH FROM timezone(%s, e.fecha_registro)) = %s
-                                                    AND EXTRACT(YEAR FROM timezone(%s, e.fecha_registro)) = EXTRACT(YEAR FROM timezone(%s, now()))
+                                                    AND EXTRACT(MONTH FROM {FE}) = %s
+                                                    AND EXTRACT(YEAR FROM {FE}) = EXTRACT(YEAR FROM timezone(%s, now()))
                                                 GROUP BY TRIM(e.nombre_reclutador)
                                                 ORDER BY total DESC, TRIM(e.nombre_reclutador) ASC
                     """
-                    cur.execute(query, (tz, mes, tz, tz))
+                    cur.execute(query.replace('{FE}', fecha_sql_e), (*fecha_params, mes, *fecha_params, tz))
                     filas = cur.fetchall()
 
                     datos = [
@@ -2784,12 +2804,12 @@ def api_datos_grafica():
 
                 elif periodo == '12meses':
                     query = """
-                        SELECT EXTRACT(MONTH FROM timezone(%s, fecha_registro)) as mes, COUNT(*)
+                        SELECT EXTRACT(MONTH FROM {F}) as mes, COUNT(*)
                         FROM encuesta_reclutamiento
-                        WHERE EXTRACT(YEAR FROM timezone(%s, fecha_registro)) = EXTRACT(YEAR FROM timezone(%s, now()))
+                        WHERE EXTRACT(YEAR FROM {F}) = EXTRACT(YEAR FROM timezone(%s, now()))
                         GROUP BY mes
                     """
-                    cur.execute(query, (tz, tz, tz))
+                    cur.execute(query.replace('{F}', fecha_sql), (*fecha_params, *fecha_params, tz))
                     filas = cur.fetchall()
 
                     meses_counts = [0] * 12
@@ -3025,8 +3045,13 @@ def manejar_reclutadores():
                 """)
                 rows = cur.fetchall()
 
+        # La lista es pública (el formulario de registro la usa), pero los teléfonos
+        # solo los ve el personal con sesión de admin o reclutamiento.
+        usuario = getattr(g, 'usuario', None)
+        ver_telefonos = bool(usuario and set(usuario.get('permisos') or []) & {'admin', 'reclutamiento'})
         reclutadores = [
-            {'id': row[0], 'nombre': row[1], 'team': row[2], 'telefono': row[3], 'activo': True}
+            {'id': row[0], 'nombre': row[1], 'team': row[2], 'activo': True,
+             **({'telefono': row[3]} if ver_telefonos else {})}
             for row in rows if row[1]
         ]
         return jsonify(reclutadores), 200
