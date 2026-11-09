@@ -33,6 +33,9 @@ from bot.interfaz import (  # noqa: F401 - reexportados para quien importe desde
     teclado_confirmar,
     texto_error,
 )
+from bot import conversacion
+from bot.agente import Agente
+from bot.llm import ClienteOpenAI
 from bot.menu import formularios, pantallas
 
 logger = logging.getLogger(__name__)
@@ -47,7 +50,10 @@ TEXTO_AYUDA = (
     '/cancelar — descarta el cambio o formulario pendiente\n'
     '/yo — tu cuenta y permisos\n'
     '/desvincular — desconecta este Telegram de tu cuenta\n'
+    '/nuevo — empieza una conversación nueva con el asistente\n'
     '/ayuda — esta lista\n\n'
+    'También puedes escribirme preguntas, por ejemplo «¿cuántos activos hay en Kronos?» o '
+    '«ingresos de este mes por fuente». Por escrito solo consulto; para registrar o cambiar algo usa /sistema.\n\n'
     'Lo que puedes ver y hacer depende de los permisos de tu cuenta en el panel. '
     'Nada se guarda sin que pulses Confirmar.'
 )
@@ -57,6 +63,7 @@ COMANDOS = [
     BotCommand('consultar', 'Consultar un empleado'),
     BotCommand('eliminar', 'Eliminar un empleado'),
     BotCommand('cancelar', 'Descartar lo pendiente'),
+    BotCommand('nuevo', 'Conversación nueva con el asistente'),
     BotCommand('yo', 'Mi cuenta y permisos'),
     BotCommand('desvincular', 'Desconectar este Telegram'),
     BotCommand('ayuda', 'Ayuda'),
@@ -200,6 +207,11 @@ async def cmd_cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await responder(update, 'Descartado.' if habia else 'No tenías nada pendiente.')
 
 
+async def cmd_nuevo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    conversacion.olvidar_conversacion(_estados(context), update.effective_user.id)
+    await responder(update, 'Listo, empezamos de cero.')
+
+
 async def al_boton(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     consulta = update.callback_query
     await consulta.answer()
@@ -252,9 +264,10 @@ async def al_boton(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def al_texto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if await pantallas.atender_texto(update, context, update.effective_message.text or ''):
+    texto = update.effective_message.text or ''
+    if await pantallas.atender_texto(update, context, texto):
         return
-    await responder(update, 'Usa /sistema para el menú con botones, o /ayuda para ver los comandos.')
+    await conversacion.atender(update, context, texto)
 
 
 async def al_archivo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -282,6 +295,16 @@ async def al_iniciar(app: Application) -> None:
         base_url=settings.BACKEND_URL, secreto=settings.TELEGRAM_BOT_SECRETO_INTERNO, http=http
     )
     app.bot_data['estados'] = Estados()
+    if settings.agente_activo:
+        app.bot_data['agente'] = Agente(
+            llm=ClienteOpenAI(api_key=settings.OPENAI_API_KEY, modelo=settings.OPENAI_MODEL,
+                              base_url=settings.OPENAI_BASE_URL, http=http),
+            backend=app.bot_data['backend'],
+            enmascarar=settings.BOT_ENMASCARAR_DATOS,
+        )
+        logger.info('Agente activo con %s.', settings.OPENAI_MODEL)
+    else:
+        logger.info('Sin OPENAI_API_KEY: solo menú y comandos.')
     await app.bot.set_my_commands(COMANDOS)
 
 
@@ -310,6 +333,7 @@ def construir(settings: Settings) -> Application:
         'consultar': cmd_consultar,
         'eliminar': cmd_eliminar,
         'cancelar': cmd_cancelar,
+        'nuevo': cmd_nuevo,
         'sistema': pantallas.cmd_sistema,
         'menu': pantallas.cmd_sistema,
     }
@@ -321,6 +345,7 @@ def construir(settings: Settings) -> Application:
     app.add_handler(CallbackQueryHandler(pantallas.al_boton_accion_empleado, pattern=r'^ea:[a-z]{2,5}$'))
     app.add_handler(CallbackQueryHandler(pantallas.al_boton_candidato, pattern=r'^cp?:\d{1,4}$'))
     app.add_handler(CallbackQueryHandler(pantallas.al_boton_asistente, pattern=r'^a:(\d{1,3}|[bsx])$'))
+    app.add_handler(CallbackQueryHandler(conversacion.al_calificar, pattern=r'^cal:\d{1,12}:[+-]$'))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & PRIVADO, al_texto))
     app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & PRIVADO, al_archivo))
     app.add_error_handler(al_error)

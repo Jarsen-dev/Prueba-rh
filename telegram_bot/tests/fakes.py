@@ -14,10 +14,27 @@ from bot.estado import Estados
 class FakeBackend:
     """Responde según (método, ruta) y registra cada llamada."""
 
-    def __init__(self, permisos=('admin',), rutas=None):
+    def __init__(self, permisos=('admin',), rutas=None, guia=None, presupuesto=(0, 0)):
         self.permisos = list(permisos)
         self.rutas = rutas or {}
         self.llamadas = []
+        self._guia = guia or {'endpoints': []}
+        self._presupuesto = presupuesto
+        self.trazas = []
+        self.calificaciones = []
+
+    async def guia(self):
+        return self._guia
+
+    async def presupuesto(self, telegram_id):
+        return self._presupuesto
+
+    async def registrar_traza(self, telegram_id, traza):
+        self.trazas.append(traza)
+        return len(self.trazas)
+
+    async def calificar(self, telegram_id, traza_id, valor):
+        self.calificaciones.append((telegram_id, traza_id, valor))
 
     async def sesion(self, telegram_id, renovar=False):
         return Sesion('tok', datetime.now(UTC) + timedelta(minutes=15), {'usuario': 'ana', 'permisos': self.permisos})
@@ -32,6 +49,28 @@ class FakeBackend:
         if isinstance(respuesta, RespuestaBackend):
             return respuesta
         return RespuestaBackend(200, 'application/json', datos=respuesta)
+
+
+class FakeLLM:
+    """Modelo con guion: cada elemento es texto final o una lista de (herramienta, argumentos)."""
+
+    def __init__(self, guion, modelo='gpt-4o-mini'):
+        self.guion = list(guion)
+        self.modelo = modelo
+        self.recibidos = []
+
+    async def completar(self, mensajes, *, herramientas=None, max_tokens=1200, clave_cache=None):
+        from bot.llm import LlamadaHerramienta, RespuestaLLM
+        self.recibidos.append([dict(m) for m in mensajes])
+        paso = self.guion.pop(0)
+        if isinstance(paso, Exception):
+            raise paso
+        if isinstance(paso, str):
+            return RespuestaLLM(self.modelo, paso, [], {'role': 'assistant', 'content': paso}, 100, 10)
+        llamadas = [LlamadaHerramienta(f'c{i}', n, a) for i, (n, a) in enumerate(paso)]
+        mensaje = {'role': 'assistant', 'content': '', 'tool_calls': [
+            {'id': l.id, 'type': 'function', 'function': {'name': l.nombre, 'arguments': '{}'}} for l in llamadas]}
+        return RespuestaLLM(self.modelo, '', llamadas, mensaje, 100, 10)
 
 
 class Chat:

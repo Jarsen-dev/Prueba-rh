@@ -11,6 +11,10 @@ Bot (solo con X-Bot-Secreto; nginx responde 404 a /api/telegram/interno/):
   POST /api/telegram/interno/vincular      consume el código y vincula
   POST /api/telegram/interno/sesion        token de 15 min de la cuenta vinculada
   POST /api/telegram/interno/desvincular
+  GET  /api/telegram/interno/guia          guía de la API para el agente (guia_api.py)
+  POST /api/telegram/interno/trazas        métricas de un turno del agente (sin contenido)
+  POST /api/telegram/interno/trazas/<id>/calificacion   👍/👎 de la persona
+  GET  /api/telegram/interno/presupuesto   tokens gastados hoy (global y por persona)
 
 El bot no tiene credenciales de BD ni permisos propios: con la sesión que
 recibe llama a la misma API que el panel y le aplican los mismos permisos.
@@ -25,9 +29,10 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import psycopg2
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request
 
 import auth
+import guia_api
 
 CABECERA_SECRETO = 'X-Bot-Secreto'
 ALFABETO_CODIGO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'  # sin 0/O ni 1/I
@@ -92,6 +97,49 @@ def _telegram_id(datos):
     except (TypeError, ValueError):
         return None
     return telegram_id if telegram_id > 0 else None
+
+
+RESULTADOS_TRAZA = {'ok', 'error', 'presupuesto', 'rondas'}
+ZONA_PRESUPUESTO = 'America/Mexico_City'
+
+
+def _entero(valor, minimo=0, maximo=10_000_000):
+    if isinstance(valor, bool):
+        return None
+    try:
+        numero = int(valor)
+    except (TypeError, ValueError):
+        return None
+    return numero if minimo <= numero <= maximo else None
+
+
+def _traza_valida(datos):
+    """Solo métricas: ningún campo de texto libre llega a la tabla."""
+    modelo = str(datos.get('modelo') or '').strip()
+    if not modelo or len(modelo) > 60 or not re.fullmatch(r'[A-Za-z0-9._:\-]+', modelo):
+        return None
+    herramientas = datos.get('herramientas') or []
+    if not isinstance(herramientas, list) or not all(
+        isinstance(h, str) and re.fullmatch(r'[a-z_]{1,40}', h) for h in herramientas
+    ):
+        return None
+    resultado = datos.get('resultado')
+    if resultado not in RESULTADOS_TRAZA:
+        return None
+    numeros = {c: _entero(datos.get(c, 0)) for c in ('tokens_entrada', 'tokens_salida', 'tokens_cache', 'rondas')}
+    if None in numeros.values():
+        return None
+    try:
+        segundos = float(datos.get('segundos') or 0)
+    except (TypeError, ValueError):
+        return None
+    return {
+        'modelo': modelo,
+        'herramientas': ','.join(herramientas)[:400],
+        'resultado': resultado,
+        'segundos': max(0.0, min(segundos, 3600.0)),
+        **numeros,
+    }
 
 
 def crear_blueprint(get_db_connection, normalizar_permisos, asegurar_esquema):
@@ -310,5 +358,88 @@ def crear_blueprint(get_db_connection, normalizar_permisos, asegurar_esquema):
         if fila:
             g.usuario = {'id': fila[0], 'usuario': fila[1], 'permisos': [], 'canal': auth.CANAL_TELEGRAM}
         return jsonify({'ok': True, 'desvinculado': bool(fila)})
+
+    # --- Agente -----------------------------------------------------------
+
+    _guia = {}
+
+    @bp.route('/interno/guia', methods=['GET'])
+    @exigir_bot
+    def interno_guia():
+        if 'valor' not in _guia:
+            _guia['valor'] = guia_api.construir_guia(current_app)
+        return jsonify(_guia['valor'])
+
+    def _usuario_de(cur, telegram_id):
+        cur.execute('SELECT usuario_id FROM telegram_vinculos WHERE telegram_id = %s', (telegram_id,))
+        fila = cur.fetchone()
+        return fila[0] if fila else None
+
+    @bp.route('/interno/trazas', methods=['POST'])
+    @exigir_bot
+    def interno_trazas():
+        datos = request.get_json(silent=True) or {}
+        telegram_id = _telegram_id(datos)
+        traza = _traza_valida(datos)
+        if not telegram_id or traza is None:
+            return jsonify({'error': 'Traza inválida.'}), 400
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                asegurar_esquema(cur)
+                cur.execute(
+                    """INSERT INTO bot_trazas (usuario_id, modelo, tokens_entrada, tokens_salida, tokens_cache,
+                                               rondas, herramientas, segundos, resultado)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                    (_usuario_de(cur, telegram_id), traza['modelo'], traza['tokens_entrada'],
+                     traza['tokens_salida'], traza['tokens_cache'], traza['rondas'],
+                     traza['herramientas'], traza['segundos'], traza['resultado']),
+                )
+                traza_id = cur.fetchone()[0]
+            conn.commit()
+        return jsonify({'id': traza_id}), 201
+
+    @bp.route('/interno/trazas/<int:traza_id>/calificacion', methods=['POST'], endpoint='interno_calificar')
+    @exigir_bot
+    def interno_calificar(traza_id):
+        datos = request.get_json(silent=True) or {}
+        telegram_id = _telegram_id(datos)
+        valor = datos.get('valor')
+        if not telegram_id or valor not in (1, -1):
+            return jsonify({'error': 'Calificación inválida.'}), 400
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """UPDATE bot_trazas t SET calificacion = %s
+                       FROM telegram_vinculos v
+                       WHERE t.id = %s AND v.telegram_id = %s AND t.usuario_id = v.usuario_id
+                       RETURNING t.id""",
+                    (valor, traza_id, telegram_id),
+                )
+                fila = cur.fetchone()
+            conn.commit()
+        if not fila:
+            return jsonify({'error': 'Traza no encontrada.'}), 404
+        return jsonify({'ok': True})
+
+    @bp.route('/interno/presupuesto', methods=['GET'])
+    @exigir_bot
+    def interno_presupuesto():
+        telegram_id = _telegram_id(request.args)
+        if not telegram_id:
+            return jsonify({'error': 'telegram_id inválido.'}), 400
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                asegurar_esquema(cur)
+                cur.execute(
+                    """SELECT COALESCE(SUM(t.tokens_entrada + t.tokens_salida), 0),
+                              COALESCE(SUM(t.tokens_entrada + t.tokens_salida)
+                                       FILTER (WHERE t.usuario_id = (SELECT usuario_id FROM telegram_vinculos
+                                                                     WHERE telegram_id = %s)), 0)
+                       FROM bot_trazas t
+                       WHERE t.fecha >= date_trunc('day', now() AT TIME ZONE %s) AT TIME ZONE %s""",
+                    (telegram_id, ZONA_PRESUPUESTO, ZONA_PRESUPUESTO),
+                )
+                total, persona = cur.fetchone()
+        return jsonify({'tokens_hoy': int(total), 'tokens_hoy_persona': int(persona)})
 
     return bp

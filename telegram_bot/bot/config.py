@@ -16,12 +16,28 @@ class Settings(BaseSettings):
     #: Para «hoy» y «mañana» en las fechas de los formularios.
     ZONA_HORARIA: str = 'America/Mexico_City'
 
+    # --- Agente (texto libre). Sin OPENAI_API_KEY solo funcionan el menú y los comandos.
+    OPENAI_API_KEY: str = ''
+    OPENAI_MODEL: str = 'gpt-4o-mini'
+    OPENAI_BASE_URL: str = 'https://api.openai.com/v1'
+    #: Tope de tokens (entrada + salida) por día para todo el bot y por persona.
+    BOT_TOKENS_DIA: int = 300_000
+    BOT_TOKENS_PERSONA_DIA: int = 60_000
+    #: CURP, RFC, NSS, teléfonos, correo y domicilio se enmascaran antes de llegar al modelo.
+    BOT_ENMASCARAR_DATOS: bool = True
+
+    @property
+    def agente_activo(self) -> bool:
+        return bool(self.OPENAI_API_KEY.strip())
+
     def problemas(self) -> list[str]:
         faltan = []
         if not self.TELEGRAM_BOT_TOKEN.strip():
             faltan.append('TELEGRAM_BOT_TOKEN está vacío.')
         if not self.TELEGRAM_BOT_SECRETO_INTERNO.strip():
             faltan.append('TELEGRAM_BOT_SECRETO_INTERNO está vacío (debe ser el mismo que en el backend).')
+        if self.agente_activo and (self.BOT_TOKENS_DIA <= 0 or self.BOT_TOKENS_PERSONA_DIA <= 0):
+            faltan.append('Con OPENAI_API_KEY, BOT_TOKENS_DIA y BOT_TOKENS_PERSONA_DIA deben ser mayores que 0.')
         if self.BOT_MINUTOS_PENDIENTE < 1:
             faltan.append('BOT_MINUTOS_PENDIENTE debe ser al menos 1.')
         return faltan

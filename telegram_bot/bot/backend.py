@@ -100,13 +100,17 @@ class ClienteBackend:
         self._secreto = secreto
         self._http = http
         self._sesiones: dict[int, Sesion] = {}
+        self._guia: dict[str, Any] | None = None
 
     # --- Endpoints internos ------------------------------------------------
 
-    async def _interno(self, ruta: str, json: dict[str, Any]) -> Any:
-        respuesta = await self._http.post(
+    async def _interno(self, ruta: str, json: dict[str, Any] | None = None, *, metodo: str = 'POST',
+                       params: dict[str, Any] | None = None) -> Any:
+        respuesta = await self._http.request(
+            metodo,
             f'{self._base}{PREFIJO_INTERNO}{ruta}',
             json=json,
+            params=params,
             headers={CABECERA_SECRETO: self._secreto},
             timeout=30,
         )
@@ -157,6 +161,26 @@ class ClienteBackend:
 
     def olvidar(self, telegram_id: int) -> None:
         self._sesiones.pop(telegram_id, None)
+
+    # --- Agente (rutas internas, sin sesión de la persona) ------------------
+
+    async def guia(self) -> dict[str, Any]:
+        """La guía de la API; se pide una vez por proceso (cambia solo con un deploy)."""
+        if self._guia is None:
+            self._guia = await self._interno('/guia', metodo='GET')
+        return self._guia
+
+    async def registrar_traza(self, telegram_id: int, traza: dict[str, Any]) -> int | None:
+        cuerpo = await self._interno('/trazas', {'telegram_id': telegram_id, **traza})
+        return cuerpo.get('id') if isinstance(cuerpo, dict) else None
+
+    async def calificar(self, telegram_id: int, traza_id: int, valor: int) -> None:
+        await self._interno(f'/trazas/{int(traza_id)}/calificacion', {'telegram_id': telegram_id, 'valor': valor})
+
+    async def presupuesto(self, telegram_id: int) -> tuple[int, int]:
+        """(tokens gastados hoy por todos, por esta persona)."""
+        cuerpo = await self._interno('/presupuesto', metodo='GET', params={'telegram_id': telegram_id})
+        return int(cuerpo['tokens_hoy']), int(cuerpo['tokens_hoy_persona'])
 
     # --- API como la persona -------------------------------------------------
 

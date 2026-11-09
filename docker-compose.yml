@@ -71,6 +71,11 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_BOT_SECRETO_INTERNO: ${TELEGRAM_BOT_SECRETO_INTERNO:-}
       BACKEND_URL: http://backend:8000
+      # Agente (texto libre). Sin OPENAI_API_KEY solo funcionan el menú y los comandos.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      BOT_TOKENS_DIA: ${BOT_TOKENS_DIA:-300000}
+      BOT_TOKENS_PERSONA_DIA: ${BOT_TOKENS_PERSONA_DIA:-60000}
     depends_on:
       backend:
         condition: service_healthy

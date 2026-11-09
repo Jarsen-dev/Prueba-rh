@@ -31,6 +31,10 @@ class EstadoUsuario:
     tipo_lista: str | None = None
     #: Empleado abierto en la ficha.
     seleccionado: dict[str, Any] | None = None
+    #: Últimos mensajes con el agente (solo textos finales, nunca resultados de herramientas).
+    historial: list[dict[str, str]] = field(default_factory=list)
+    #: El agente está contestando un mensaje de esta persona.
+    ocupado: bool = False
     ultimo_uso: float = field(default_factory=time.monotonic)
     candado: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -44,6 +48,7 @@ class EstadoUsuario:
         ahora = ahora or time.monotonic()
         if ahora - self.ultimo_uso > CADUCIDAD_MENU * 60:
             self.limpiar_menu()
+            self.historial.clear()
         self.ultimo_uso = ahora
 
     def limpiar_menu(self) -> None:
@@ -70,3 +75,4 @@ class Estados:
         if estado is not None:
             estado.pendiente = None
             estado.limpiar_menu()
+            estado.historial.clear()

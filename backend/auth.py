@@ -73,6 +73,10 @@ PERMISOS_POR_ENDPOINT = {
     'telegram.interno_vincular': PUBLICO,
     'telegram.interno_sesion': PUBLICO,
     'telegram.interno_desvincular': PUBLICO,
+    'telegram.interno_guia': PUBLICO,
+    'telegram.interno_trazas': PUBLICO,
+    'telegram.interno_calificar': PUBLICO,
+    'telegram.interno_presupuesto': PUBLICO,
 
     # Solo admin.
     'actualizar_empleado': ADMIN,
@@ -320,6 +324,21 @@ CREATE TABLE IF NOT EXISTS bitacora (
     estado_http INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_bitacora_fecha ON bitacora (fecha DESC);
+CREATE TABLE IF NOT EXISTS bot_trazas (
+    id              BIGSERIAL PRIMARY KEY,
+    fecha           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    usuario_id      INTEGER REFERENCES usuarios_acceso(id) ON DELETE SET NULL,
+    modelo          VARCHAR(60) NOT NULL,
+    tokens_entrada  INTEGER NOT NULL DEFAULT 0,
+    tokens_salida   INTEGER NOT NULL DEFAULT 0,
+    tokens_cache    INTEGER NOT NULL DEFAULT 0,
+    rondas          SMALLINT NOT NULL DEFAULT 0,
+    herramientas    VARCHAR(400) NOT NULL DEFAULT '',
+    segundos        REAL NOT NULL DEFAULT 0,
+    resultado       VARCHAR(20) NOT NULL,
+    calificacion    SMALLINT
+);
+CREATE INDEX IF NOT EXISTS idx_bot_trazas_fecha ON bot_trazas (fecha DESC);
 """
 
 _esquema_listo = False
