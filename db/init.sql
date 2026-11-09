@@ -135,7 +135,10 @@ CREATE TABLE IF NOT EXISTS telegram_vinculos (
     telegram_id        BIGINT NOT NULL UNIQUE,
     telegram_username  VARCHAR(64),
     creado_en          TIMESTAMPTZ NOT NULL DEFAULT now(),
-    ultimo_uso_en      TIMESTAMPTZ
+    ultimo_uso_en      TIMESTAMPTZ,
+    avisos_activos     BOOLEAN NOT NULL DEFAULT TRUE,
+    avisos_hora        SMALLINT NOT NULL DEFAULT 8,
+    avisos_ultimo      DATE
 );
 CREATE TABLE IF NOT EXISTS bitacora (
     id          BIGSERIAL PRIMARY KEY,

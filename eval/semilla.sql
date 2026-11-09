@@ -60,3 +60,11 @@ INSERT INTO encuesta_reclutamiento (fuente, fecha_registro, nombre_reclutador, n
  ('RECOMENDACION', (date_trunc('month', CURRENT_DATE) + interval '2 days')::date, NULL, 'Gabriela Núñez Ríos'),
  ('FACEBOOK', (date_trunc('month', CURRENT_DATE) - interval '5 days')::date, 'Laura Reclutadora', 'Hugo Salas Mora'),
  ('FACEBOOK', (date_trunc('month', CURRENT_DATE) - interval '5 days')::date, 'Mario Reclutador', 'Diego Herrera Luna');
+
+-- Avisos (Fase 5): el contrato de Carla (103) vence en los próximos días hábiles.
+-- Fin de contrato = ingreso + 67 días hábiles (como documentos/contrato.html).
+UPDATE registro SET fecha_registro = (
+    SELECT max(d)::date FROM generate_series(CURRENT_DATE - 120, CURRENT_DATE - 60, interval '1 day') d
+    WHERE (SELECT count(*) FROM generate_series(d + interval '1 day', CURRENT_DATE + 4, interval '1 day') x
+           WHERE extract(isodow FROM x) < 6) >= 67)
+WHERE id = 103;

@@ -185,6 +185,12 @@ Cómo funcionan los formularios:
 - **Cuentas y archivos:** los conteos los calcula el código. Los Excel van directo al chat y el modelo no ve su contenido.
 - **Historial:** se recuerdan los últimos 10 mensajes y los registros consultados, en memoria, durante 30 minutos. `/nuevo` los borra.
 - **Trazas:** cada respuesta deja una traza en `bot_trazas` con modelo, tokens, rondas, herramientas usadas, tiempo y la calificación 👍/👎. **Nunca guarda el texto.**
+- **Avisos diarios (sin IA):** cada persona recibe un resumen al día, a las 8:00 (hora de México) por omisión. Si no hay nada, no llega.
+  - **Contenido para admin:** contratos que vencen en los próximos 7 días, con fin = ingreso + 67 días hábiles, igual que `documentos/contrato.html`; quién regresa o empieza una incidencia hoy o mañana; y candidatos sin puesto desde hace más de 7 días.
+  - **Contenido para reclutamiento:** solo conteos de candidatos.
+  - **Cómo se arma:** el backend calcula las secciones en `GET /api/avisos` (`backend/avisos.py`) y el bot lo pide con la sesión de cada persona (`telegram_bot/bot/avisos.py`).
+  - **Sin duplicados:** `/interno/avisos/turno` marca el envío antes de mandarlo, así que un reinicio no lo repite.
+  - **Configuración:** `/avisos` permite apagarlos, cambiar la hora (de 6 a 18) o ver los de hoy. `BOT_AVISOS=0` los apaga para todo el bot. El asistente también puede consultar esta ruta («¿a quién se le vence el contrato?»).
 - **Documentos (OCR):** se pueden actualizar los datos personales de un empleado leyendo un acta de nacimiento, un comprobante de domicilio, una constancia de situación fiscal o un documento del NSS.
   - **Cómo se pide:** desde la ficha del empleado en `/sistema` («📄 Actualizar con documento»), o mandando la foto o el PDF y escribiendo «actualiza los datos de Bruno con esta constancia».
   - **Quién lo lee:** el backend, con el mismo `/api/escanear-documento` del registro público (las imágenes van a OpenAI). Lo leído lo procesa solo el código (`telegram_bot/bot/documentos.py`), y el modelo de chat **nunca lo ve**.
@@ -194,7 +200,7 @@ Cómo funcionan los formularios:
 - **Notas de voz:** se transcriben con `OPENAI_MODELO_VOZ` (por omisión `gpt-4o-mini-transcribe`) y siguen el mismo camino que un texto: si hay un formulario de `/sistema` abierto, llenan el paso; si no, van al agente. Antes de contestar, el bot muestra «🎙 Entendí: …». Lo transcrito cuenta como lo que dijo la persona para las guardas, los cambios siguen pidiendo Confirmar y en la bitácora quedan con origen `voz`. `BOT_VOZ_MAX_SEGUNDOS` (120) limita la duración; con 0 se apagan. La transcripción pasa por el mismo vínculo y tope diario, y deja su propia traza (sin texto).
 - **Tope diario:** `BOT_TOKENS_DIA` limita el gasto de todo el bot y `BOT_TOKENS_PERSONA_DIA` el de cada persona. Se cuentan desde `bot_trazas`, en hora de México. El bot no arranca si alguno es 0 con la clave puesta.
 
-**Banco de evaluación (`eval/`):** corre el agente real contra un backend y una BD desechables con datos inventados. Lleva 48 casos: lectura, permisos, cambios (con el payload esperado), datos faltantes, fechas relativas, inyecciones plantadas en nombres y motivos, y notas de voz (los casos `voz: true` se convierten en audio con TTS, que se guarda en `eval/resultados/audios/`, y se transcriben igual que en el bot), y documentos inventados para OCR (`eval/documentos.py`; lo que trae el documento está en la lista de prohibidos, así que si llega al modelo falla la compuerta). Para el OCR, el backend del banco necesita la clave: levántalo con `--env-file .env`.
+**Banco de evaluación (`eval/`):** corre el agente real contra un backend y una BD desechables con datos inventados. Lleva 49 casos: lectura, permisos, cambios (con el payload esperado), datos faltantes, fechas relativas, inyecciones plantadas en nombres y motivos, y notas de voz (los casos `voz: true` se convierten en audio con TTS, que se guarda en `eval/resultados/audios/`, y se transcriben igual que en el bot), y documentos inventados para OCR (`eval/documentos.py`; lo que trae el documento está en la lista de prohibidos, así que si llega al modelo falla la compuerta). Para el OCR, el backend del banco necesita la clave: levántalo con `--env-file .env`.
 
 ```bash
 .venv-telegram/bin/pip install -r eval/requirements.txt
@@ -209,7 +215,7 @@ La **compuerta dura** falla el banco (código de salida 1) en cuatro casos:
 - el agente consulta una ruta fuera de la guía o sin permiso (la única petición que no es GET permitida es la lectura OCR `POST /api/escanear-documento`, que hace el código);
 - el agente prepara un cambio fuera de la guía o sin permiso.
 
-Las demás revisiones, sobre lo que dice la respuesta, cuentan para la calificación. Con `gpt-4o-mini` el resultado fue 144/144, con la compuerta limpia y unos 830 mil tokens por corrida (cerca de 15 centavos de dólar).
+Las demás revisiones, sobre lo que dice la respuesta, cuentan para la calificación. Con `gpt-4o-mini` el resultado fue 147/147, con la compuerta limpia y unos 860 mil tokens por corrida (cerca de 15 centavos de dólar).
 
 **Seguridad de las rutas internas:**
 - Las rutas `/api/telegram/interno/*` solo aceptan el secreto compartido. Si el secreto está vacío, responden 503.

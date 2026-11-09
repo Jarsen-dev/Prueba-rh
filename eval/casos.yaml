@@ -295,3 +295,11 @@
   adjunto: constancia_bruno
   mensaje: Actualiza los datos de Bruno Castillo con esta constancia.
   sin_pendiente: true
+
+# --- Avisos (Fase 5) -----------------------------------------------------------------------
+
+- id: contratos_por_vencer
+  cuenta: admin
+  mensaje: ¿A quién se le vence el contrato en los próximos días?
+  contiene_todos: ['carla']
+  no_contiene: ['ana martinez', 'bruno']

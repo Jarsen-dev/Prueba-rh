@@ -77,6 +77,7 @@ services:
       BOT_TOKENS_DIA: ${BOT_TOKENS_DIA:-300000}
       BOT_TOKENS_PERSONA_DIA: ${BOT_TOKENS_PERSONA_DIA:-60000}
       BOT_VOZ_MAX_SEGUNDOS: ${BOT_VOZ_MAX_SEGUNDOS:-120}
+      BOT_AVISOS: ${BOT_AVISOS:-1}
       OPENAI_MODELO_VOZ: ${OPENAI_MODELO_VOZ:-gpt-4o-mini-transcribe}
     depends_on:
       backend:

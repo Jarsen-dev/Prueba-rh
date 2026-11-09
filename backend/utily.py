@@ -20,6 +20,7 @@ import auth
 import bitacora
 import catalogos
 import telegram_api
+import avisos
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
@@ -3156,6 +3157,7 @@ bitacora.init_bitacora(app, lambda: get_db_connection(), asegurar_esquema_sesion
 app.register_blueprint(telegram_api.crear_blueprint(
     lambda: get_db_connection(), normalizar_permisos, asegurar_esquema_sesion
 ))
+app.register_blueprint(avisos.crear_blueprint(lambda: get_db_connection()))
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))

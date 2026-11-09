@@ -101,6 +101,7 @@ def _telegram_id(datos):
 
 RESULTADOS_TRAZA = {'ok', 'error', 'presupuesto', 'rondas'}
 ZONA_PRESUPUESTO = 'America/Mexico_City'
+HORA_MIN_AVISOS, HORA_MAX_AVISOS = 6, 20
 
 
 def _entero(valor, minimo=0, maximo=10_000_000):
@@ -441,5 +442,62 @@ def crear_blueprint(get_db_connection, normalizar_permisos, asegurar_esquema):
                 )
                 total, persona = cur.fetchone()
         return jsonify({'tokens_hoy': int(total), 'tokens_hoy_persona': int(persona)})
+
+    @bp.route('/interno/avisos/turno', methods=['POST'], endpoint='interno_avisos_turno')
+    @exigir_bot
+    def interno_avisos_turno():
+        """Reclama (una sola vez por día) a quienes ya les toca su resumen de avisos.
+
+        Se marcan como enviados ANTES de mandar: si el bot se reinicia, nadie lo recibe dos veces.
+        """
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                asegurar_esquema(cur)
+                cur.execute(
+                    """UPDATE telegram_vinculos
+                       SET avisos_ultimo = (now() AT TIME ZONE %s)::date
+                       WHERE avisos_activos
+                         AND avisos_hora <= EXTRACT(HOUR FROM now() AT TIME ZONE %s)
+                         AND (avisos_ultimo IS NULL OR avisos_ultimo < (now() AT TIME ZONE %s)::date)
+                       RETURNING telegram_id""",
+                    (ZONA_PRESUPUESTO,) * 3,
+                )
+                telegram_ids = [fila[0] for fila in cur.fetchall()]
+            conn.commit()
+        return jsonify({'telegram_ids': telegram_ids})
+
+    @bp.route('/interno/avisos/preferencias', methods=['GET', 'POST'], endpoint='interno_avisos_preferencias')
+    @exigir_bot
+    def interno_avisos_preferencias():
+        datos = request.args if request.method == 'GET' else (request.get_json(silent=True) or {})
+        telegram_id = _telegram_id(datos)
+        if not telegram_id:
+            return jsonify({'error': 'telegram_id inválido.'}), 400
+        cambios, valores = [], []
+        if request.method == 'POST':
+            if 'activos' in datos:
+                if not isinstance(datos['activos'], bool):
+                    return jsonify({'error': 'activos debe ser true o false.'}), 400
+                cambios.append('avisos_activos = %s')
+                valores.append(datos['activos'])
+            if 'hora' in datos:
+                hora = datos['hora']
+                if isinstance(hora, bool) or not isinstance(hora, int) or not HORA_MIN_AVISOS <= hora <= HORA_MAX_AVISOS:
+                    return jsonify({'error': f'hora debe ir de {HORA_MIN_AVISOS} a {HORA_MAX_AVISOS}.'}), 400
+                cambios.append('avisos_hora = %s')
+                valores.append(hora)
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                asegurar_esquema(cur)
+                if cambios:
+                    cur.execute(f"UPDATE telegram_vinculos SET {', '.join(cambios)} WHERE telegram_id = %s",
+                                (*valores, telegram_id))
+                cur.execute('SELECT avisos_activos, avisos_hora FROM telegram_vinculos WHERE telegram_id = %s',
+                            (telegram_id,))
+                fila = cur.fetchone()
+            conn.commit()
+        if not fila:
+            return jsonify({'error': 'Este Telegram no está vinculado.', 'codigo': 'SIN_VINCULO'}), 404
+        return jsonify({'activos': bool(fila[0]), 'hora': int(fila[1])})
 
     return bp

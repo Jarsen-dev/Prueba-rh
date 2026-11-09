@@ -51,6 +51,12 @@ GUIA = [
      'resumen': f'Todos los empleados de una empresa ({EMPRESA}) con número, área, puesto, turno, estatus y fechas. Puede ser largo: prefiere contar_empleados.'},
     {'metodo': 'GET', 'ruta': '/api/empleados/{registro_id}/incidencias',
      'resumen': 'Historial de incidencias de un empleado (vacaciones, incapacidad, suspensión, entrada-salida, indisciplina) con fechas y motivo.'},
+    {'metodo': 'GET', 'ruta': '/api/avisos',
+     'resumen': 'Avisos del día: contratos que vencen pronto (fin = ingreso + 67 días hábiles), quién regresa o '
+                'empieza una incidencia hoy o mañana, y candidatos sin asignar desde hace días. Cada sección '
+                'depende de los permisos.',
+     'parametros': {'dias_contrato': 'ventana de vencimiento en días (por omisión 7)',
+                    'dias_candidato': 'días esperando para contar un candidato como estancado (por omisión 7)'}},
     {'metodo': 'GET', 'ruta': '/api/employee-files',
      'resumen': 'Qué documentos tiene cargados un empleado (solo nombres de documento, no su contenido).',
      'parametros': {'registro_id': 'id del empleado'}},

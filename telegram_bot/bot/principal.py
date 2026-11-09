@@ -34,7 +34,7 @@ from bot.interfaz import (  # noqa: F401 - reexportados para quien importe desde
     teclado_confirmar,
     texto_error,
 )
-from bot import conversacion
+from bot import avisos, conversacion
 from bot.agente import Agente
 from bot.llm import ClienteOpenAI
 from bot.voz import ClienteVoz
@@ -53,6 +53,7 @@ TEXTO_AYUDA = (
     '/yo — tu cuenta y permisos\n'
     '/desvincular — desconecta este Telegram de tu cuenta\n'
     '/nuevo — empieza una conversación nueva con el asistente\n'
+    '/avisos — resumen diario de contratos por vencer, reingresos y candidatos (hora y encendido)\n'
     '/ayuda — esta lista\n\n'
     'También puedes escribirme, por ejemplo «¿cuántos activos hay en Kronos?», «registra vacaciones a Ana del '
     '16 al 20 de noviembre» o «da de baja a Bruno Castillo». Los cambios siempre te los muestro antes con un '
@@ -68,6 +69,7 @@ COMANDOS = [
     BotCommand('eliminar', 'Eliminar un empleado'),
     BotCommand('cancelar', 'Descartar lo pendiente'),
     BotCommand('nuevo', 'Conversación nueva con el asistente'),
+    BotCommand('avisos', 'Avisos diarios: hora y encendido'),
     BotCommand('yo', 'Mi cuenta y permisos'),
     BotCommand('desvincular', 'Desconectar este Telegram'),
     BotCommand('ayuda', 'Ayuda'),
@@ -331,9 +333,13 @@ async def al_iniciar(app: Application) -> None:
     else:
         logger.info('Sin OPENAI_API_KEY: solo menú y comandos.')
     await app.bot.set_my_commands(COMANDOS)
+    if settings.BOT_AVISOS:
+        avisos.iniciar(app)
+        logger.info('Avisos diarios activos.')
 
 
 async def al_terminar(app: Application) -> None:
+    await avisos.detener(app)
     http = app.bot_data.get('http')
     if http is not None:
         await http.aclose()
@@ -359,6 +365,7 @@ def construir(settings: Settings) -> Application:
         'eliminar': cmd_eliminar,
         'cancelar': cmd_cancelar,
         'nuevo': cmd_nuevo,
+        'avisos': avisos.cmd_avisos,
         'sistema': pantallas.cmd_sistema,
         'menu': pantallas.cmd_sistema,
     }
@@ -371,6 +378,7 @@ def construir(settings: Settings) -> Application:
     app.add_handler(CallbackQueryHandler(pantallas.al_boton_candidato, pattern=r'^cp?:\d{1,4}$'))
     app.add_handler(CallbackQueryHandler(pantallas.al_boton_asistente, pattern=r'^a:(\d{1,3}|[bsx])$'))
     app.add_handler(CallbackQueryHandler(conversacion.al_calificar, pattern=r'^cal:\d{1,12}:[+-]$'))
+    app.add_handler(CallbackQueryHandler(avisos.al_boton, pattern=r'^av:(on|off|ver|h\d{1,2})$'))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & PRIVADO, al_texto))
     app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & PRIVADO, al_archivo))
     app.add_handler(MessageHandler((filters.VOICE | filters.AUDIO) & PRIVADO, al_voz))

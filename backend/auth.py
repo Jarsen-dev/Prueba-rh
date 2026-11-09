@@ -77,6 +77,11 @@ PERMISOS_POR_ENDPOINT = {
     'telegram.interno_trazas': PUBLICO,
     'telegram.interno_calificar': PUBLICO,
     'telegram.interno_presupuesto': PUBLICO,
+    'telegram.interno_avisos_turno': PUBLICO,
+    'telegram.interno_avisos_preferencias': PUBLICO,
+
+    # Avisos del día (cada sección se filtra por permiso dentro de la ruta).
+    'avisos.avisos_del_dia': ADMIN_O_RECLUTAMIENTO,
 
     # Solo admin.
     'actualizar_empleado': ADMIN,
@@ -339,6 +344,9 @@ CREATE TABLE IF NOT EXISTS bot_trazas (
     calificacion    SMALLINT
 );
 CREATE INDEX IF NOT EXISTS idx_bot_trazas_fecha ON bot_trazas (fecha DESC);
+ALTER TABLE telegram_vinculos ADD COLUMN IF NOT EXISTS avisos_activos BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE telegram_vinculos ADD COLUMN IF NOT EXISTS avisos_hora SMALLINT NOT NULL DEFAULT 8;
+ALTER TABLE telegram_vinculos ADD COLUMN IF NOT EXISTS avisos_ultimo DATE;
 """
 
 _esquema_listo = False

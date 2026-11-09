@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     BOT_TOKENS_PERSONA_DIA: int = 60_000
     #: CURP, RFC, NSS, teléfonos, correo y domicilio se enmascaran antes de llegar al modelo.
     BOT_ENMASCARAR_DATOS: bool = True
+    #: Resumen diario de avisos (contratos, reingresos, candidatos). No usa IA.
+    BOT_AVISOS: bool = True
     #: Notas de voz (requieren OPENAI_API_KEY). 0 las apaga.
     BOT_VOZ_MAX_SEGUNDOS: int = 120
     OPENAI_MODELO_VOZ: str = 'gpt-4o-mini-transcribe'

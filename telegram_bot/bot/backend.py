@@ -182,6 +182,17 @@ class ClienteBackend:
         cuerpo = await self._interno('/presupuesto', metodo='GET', params={'telegram_id': telegram_id})
         return int(cuerpo['tokens_hoy']), int(cuerpo['tokens_hoy_persona'])
 
+    async def avisos_turno(self) -> list[int]:
+        """Telegram ids a los que ya les toca su resumen de hoy (quedan marcados como enviados)."""
+        cuerpo = await self._interno('/avisos/turno')
+        return [int(t) for t in cuerpo.get('telegram_ids') or []]
+
+    async def avisos_preferencias(self, telegram_id: int, **cambios: Any) -> dict[str, Any]:
+        """Sin cambios, solo consulta. Cambios posibles: activos (bool), hora (6 a 20)."""
+        if cambios:
+            return await self._interno('/avisos/preferencias', {'telegram_id': telegram_id, **cambios})
+        return await self._interno('/avisos/preferencias', metodo='GET', params={'telegram_id': telegram_id})
+
     # --- API como la persona -------------------------------------------------
 
     async def peticion(
