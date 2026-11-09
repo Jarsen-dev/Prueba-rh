@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <script src="auth-fetch.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CW Connect</title>
@@ -183,7 +184,15 @@
                 ['reclutamiento', 'InicioReclu.html'],
             ];
 
-            const usuarioRegistrado = await window.AccessControlUsers.authenticate(u, p);
+            let usuarioRegistrado = null;
+            try {
+                await window.__rhLogout;
+                usuarioRegistrado = await window.AccessControlUsers.authenticate(u, p);
+            } catch (error) {
+                errorMsg.textContent = 'No se pudo conectar con el servidor. Intenta de nuevo.';
+                errorMsg.style.display = 'block';
+                return;
+            }
             if (usuarioRegistrado) {
                 const permisos = Array.isArray(usuarioRegistrado.permisos) ? usuarioRegistrado.permisos : [];
                 const redirect = destinations.find(([permission]) => permisos.includes(permission));
@@ -197,6 +206,7 @@
                 return;
             }
 
+            errorMsg.textContent = '⚠️ Usuario o contraseña incorrectos';
             errorMsg.style.display = 'block';
             setTimeout(() => {
                 errorMsg.style.display = 'none';
@@ -204,7 +214,7 @@
         }
 
         (function configurarLogin() {
-            sessionStorage.removeItem('accesoUsuario');
+            window.__rhLogout = window.AccessControlUsers.logout();
             const form = document.getElementById('loginForm');
             if (form) {
                 form.addEventListener('submit', function(event) {

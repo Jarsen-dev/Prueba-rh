@@ -10,11 +10,19 @@ from copy import copy
 from datetime import datetime
 import psycopg2
 import openpyxl
-from flask import Flask, jsonify, request, send_from_directory, send_file
+from flask import Flask, g, jsonify, request, send_from_directory, send_file
 from io import BytesIO
 from dotenv import load_dotenv
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
+
+import auth
+import bitacora
+import catalogos
+import telegram_api
+import avisos
+import tareas
+import memoria
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
@@ -1123,7 +1131,8 @@ def iniciar_sesion_acceso():
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                asegurar_tabla_usuarios_acceso(cur)
+                asegurar_esquema_sesion(cur)
+                sembrar_admin_inicial(cur)
                 cur.execute(
                     """SELECT id, usuario, password_hash, permisos,
                               nombre_notificacion, telefono_notificacion
@@ -1134,9 +1143,50 @@ def iniciar_sesion_acceso():
             conn.commit()
         if not encontrado or not check_password_hash(encontrado[2], password):
             return jsonify({'error': 'Usuario o contraseña incorrectos.'}), 401
-        return jsonify(usuario_acceso_dict(encontrado))
+        token = auth.emitir_token(encontrado[0], encontrado[2], auth.CANAL_WEB)
+        cuerpo = usuario_acceso_dict(encontrado)
+        cuerpo['token'] = token
+        cuerpo['expira_en_minutos'] = auth.MINUTOS_POR_CANAL[auth.CANAL_WEB]
+        return auth.poner_cookie_sesion(jsonify(cuerpo), token)
     except Exception as error:
         return jsonify({'error': str(error)}), 500
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def cerrar_sesion_acceso():
+    return auth.borrar_cookie_sesion(jsonify({'ok': True}))
+
+
+@app.route('/api/auth/me', methods=['GET'])
+def sesion_actual():
+    usuario = g.usuario
+    return jsonify({
+        'id': usuario['id'],
+        'usuario': usuario['usuario'],
+        'permisos': usuario['permisos'],
+        'canal': usuario['canal'],
+    })
+
+
+def asegurar_esquema_sesion(cur):
+    auth.asegurar_esquema_auth(cur, asegurar_tabla_usuarios_acceso)
+
+
+def sembrar_admin_inicial(cur):
+    """Si no hay ninguna cuenta, crea la de ADMIN_INICIAL_USUARIO/ADMIN_INICIAL_PASSWORD."""
+    usuario = (os.getenv('ADMIN_INICIAL_USUARIO') or '').strip()
+    password = (os.getenv('ADMIN_INICIAL_PASSWORD') or '').strip()
+    if not usuario or len(password) < 8:
+        return
+    cur.execute('SELECT EXISTS (SELECT 1 FROM usuarios_acceso)')
+    if cur.fetchone()[0]:
+        return
+    cur.execute(
+        """INSERT INTO usuarios_acceso (usuario, password_hash, permisos)
+           VALUES (%s, %s, '["admin"]'::jsonb) ON CONFLICT (usuario) DO NOTHING""",
+        (usuario, generate_password_hash(password)),
+    )
+    app.logger.warning('Se creó la cuenta inicial %s; cambia su contraseña.', usuario)
 
 
 def obtener_columnas(cur, tabla):
@@ -2154,6 +2204,69 @@ def obtener_empleado_por_id(id_empleado):
         return (f"ERROR: {str(e)}", 500)
 
 
+@app.route('/api/catalogos/ingreso', methods=['GET'])
+def catalogo_ingreso():
+    """Opciones del formulario de asignación de puesto (las mismas de Ingreso.html)."""
+    return jsonify(catalogos.catalogo_ingreso())
+
+
+@app.route('/api/empleados/buscar', methods=['GET'])
+def buscar_empleados():
+    """Búsqueda corta por número de empleado exacto o por parte del nombre."""
+    no_empleado = str(request.args.get('no_empleado', '')).strip()
+    texto = str(request.args.get('q', '')).strip()
+    if not no_empleado and len(texto) < 3:
+        return jsonify({'error': 'Indica no_empleado o al menos 3 letras del nombre (q).'}), 400
+    try:
+        limite = min(max(int(request.args.get('limite', 10)), 1), 25)
+    except ValueError:
+        limite = 10
+
+    if no_empleado:
+        filtro, parametro = 'BTRIM(ip.no_empleado::text) = %s', no_empleado
+    else:
+        filtro, parametro = 'r.nombre_completo ILIKE %s', f"%{texto.replace('%', '').replace('_', '')}%"
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS estatus VARCHAR(20) DEFAULT 'ACTIVO'")
+                asegurar_columna_nombre_completo(cur)
+                cur.execute(
+                    f"""
+                    SELECT r.id, r.nombre_completo, ip.no_empleado, ip.empresa, ip.puesto,
+                           ip.area, ip.turno,
+                           COALESCE(NULLIF(UPPER(TRIM(r.estatus)), ''), 'ACTIVO') AS estatus
+                    FROM registro r
+                    JOIN LATERAL (
+                        SELECT * FROM ingresos_puesto WHERE registro_id = r.id ORDER BY id DESC LIMIT 1
+                    ) ip ON TRUE
+                    WHERE {filtro}
+                    ORDER BY r.nombre_completo
+                    LIMIT %s
+                    """,
+                    (parametro, limite),
+                )
+                filas = cur.fetchall()
+            conn.commit()
+    except Exception as error:
+        return jsonify({'error': str(error)}), 500
+
+    return jsonify({'empleados': [
+        {
+            'registro_id': f[0],
+            'nombre_completo': f[1],
+            'no_empleado': f[2],
+            'empresa': f[3],
+            'puesto': f[4],
+            'area': f[5],
+            'turno': f[6],
+            'estatus': f[7],
+        }
+        for f in filas
+    ]})
+
+
 @app.route('/api/employee-files', methods=['GET'])
 def listar_archivos_empleado():
     curp = request.args.get('curp', '').strip()
@@ -2566,6 +2679,24 @@ def admin_preview_encuestas():
         traceback.print_exc()
         return (f"ERROR: {str(e)}", 500)
 
+def expresion_fecha_local(cur, tabla, columna, tz):
+    """SQL de la fecha en hora local y sus parámetros, según el tipo real de la columna.
+
+    Una columna DATE (o TIMESTAMP sin zona) ya es una fecha local: pasarla por
+    ``timezone()`` la toma como medianoche UTC y la mueve al día anterior en
+    México, así que lo del día 1 caía en el mes anterior. Solo un TIMESTAMPTZ
+    se convierte a la zona pedida.
+    """
+    cur.execute(
+        "SELECT data_type FROM information_schema.columns WHERE table_name = %s AND column_name = %s",
+        (tabla, columna),
+    )
+    fila = cur.fetchone()
+    if fila and fila[0] == 'timestamp with time zone':
+        return f'timezone(%s, {columna})', (tz,)
+    return columna, ()
+
+
 @app.route('/api/datos-grafica')
 def api_datos_grafica():
     periodo = request.args.get('periodo')
@@ -2574,6 +2705,8 @@ def api_datos_grafica():
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                fecha_sql, fecha_params = expresion_fecha_local(cur, 'encuesta_reclutamiento', 'fecha_registro', tz)
+                fecha_sql_e = fecha_sql.replace('fecha_registro', 'e.fecha_registro')
                 if periodo == 'mes':
                     mes = int(request.args.get('mes', '1'))
 
@@ -2602,8 +2735,8 @@ def api_datos_grafica():
                               END as fuente_norm,
                               COUNT(*)
                             FROM encuesta_reclutamiento
-                            WHERE EXTRACT(MONTH FROM timezone(%s, fecha_registro)) = %s
-                              AND EXTRACT(YEAR FROM timezone(%s, fecha_registro)) = EXTRACT(YEAR FROM timezone(%s, now()))
+                            WHERE EXTRACT(MONTH FROM {F}) = %s
+                              AND EXTRACT(YEAR FROM {F}) = EXTRACT(YEAR FROM timezone(%s, now()))
                             GROUP BY fuente_norm
                         """
                     else:
@@ -2623,11 +2756,11 @@ def api_datos_grafica():
                               END as fuente_norm,
                               COUNT(*)
                             FROM encuesta_reclutamiento
-                            WHERE EXTRACT(MONTH FROM timezone(%s, fecha_registro)) = %s
-                              AND EXTRACT(YEAR FROM timezone(%s, fecha_registro)) = EXTRACT(YEAR FROM timezone(%s, now()))
+                            WHERE EXTRACT(MONTH FROM {F}) = %s
+                              AND EXTRACT(YEAR FROM {F}) = EXTRACT(YEAR FROM timezone(%s, now()))
                             GROUP BY fuente_norm
                         """
-                    cur.execute(query, (tz, mes, tz, tz))
+                    cur.execute(query.replace('{F}', fecha_sql), (*fecha_params, mes, *fecha_params, tz))
                     filas_raw = cur.fetchall()
                     resultados = {}
                     for row in filas_raw:
@@ -2651,12 +2784,12 @@ def api_datos_grafica():
                             COUNT(e.id) AS total
                                                 FROM encuesta_reclutamiento e
                                                 WHERE NULLIF(TRIM(e.nombre_reclutador), '') IS NOT NULL
-                                                    AND EXTRACT(MONTH FROM timezone(%s, e.fecha_registro)) = %s
-                                                    AND EXTRACT(YEAR FROM timezone(%s, e.fecha_registro)) = EXTRACT(YEAR FROM timezone(%s, now()))
+                                                    AND EXTRACT(MONTH FROM {FE}) = %s
+                                                    AND EXTRACT(YEAR FROM {FE}) = EXTRACT(YEAR FROM timezone(%s, now()))
                                                 GROUP BY TRIM(e.nombre_reclutador)
                                                 ORDER BY total DESC, TRIM(e.nombre_reclutador) ASC
                     """
-                    cur.execute(query, (tz, mes, tz, tz))
+                    cur.execute(query.replace('{FE}', fecha_sql_e), (*fecha_params, mes, *fecha_params, tz))
                     filas = cur.fetchall()
 
                     datos = [
@@ -2671,12 +2804,12 @@ def api_datos_grafica():
 
                 elif periodo == '12meses':
                     query = """
-                        SELECT EXTRACT(MONTH FROM timezone(%s, fecha_registro)) as mes, COUNT(*)
+                        SELECT EXTRACT(MONTH FROM {F}) as mes, COUNT(*)
                         FROM encuesta_reclutamiento
-                        WHERE EXTRACT(YEAR FROM timezone(%s, fecha_registro)) = EXTRACT(YEAR FROM timezone(%s, now()))
+                        WHERE EXTRACT(YEAR FROM {F}) = EXTRACT(YEAR FROM timezone(%s, now()))
                         GROUP BY mes
                     """
-                    cur.execute(query, (tz, tz, tz))
+                    cur.execute(query.replace('{F}', fecha_sql), (*fecha_params, *fecha_params, tz))
                     filas = cur.fetchall()
 
                     meses_counts = [0] * 12
@@ -2912,8 +3045,13 @@ def manejar_reclutadores():
                 """)
                 rows = cur.fetchall()
 
+        # La lista es pública (el formulario de registro la usa), pero los teléfonos
+        # solo los ve el personal con sesión de admin o reclutamiento.
+        usuario = getattr(g, 'usuario', None)
+        ver_telefonos = bool(usuario and set(usuario.get('permisos') or []) & {'admin', 'reclutamiento'})
         reclutadores = [
-            {'id': row[0], 'nombre': row[1], 'team': row[2], 'telefono': row[3], 'activo': True}
+            {'id': row[0], 'nombre': row[1], 'team': row[2], 'activo': True,
+             **({'telefono': row[3]} if ver_telefonos else {})}
             for row in rows if row[1]
         ]
         return jsonify(reclutadores), 200
@@ -3040,6 +3178,16 @@ def exportar_excel():
         return jsonify({'error': str(e)}), 500
 
 # =======================================================
+# Sesión y bitácora (se registran al final para cubrir todas las rutas).
+auth.init_auth(app, lambda: get_db_connection(), normalizar_permisos, asegurar_esquema_sesion)
+bitacora.init_bitacora(app, lambda: get_db_connection(), asegurar_esquema_sesion)
+app.register_blueprint(telegram_api.crear_blueprint(
+    lambda: get_db_connection(), normalizar_permisos, asegurar_esquema_sesion
+))
+app.register_blueprint(avisos.crear_blueprint(lambda: get_db_connection()))
+app.register_blueprint(tareas.crear_blueprint(lambda: get_db_connection(), asegurar_esquema_sesion))
+app.register_blueprint(memoria.crear_blueprint(lambda: get_db_connection(), asegurar_esquema_sesion))
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
     app.run(host='0.0.0.0', port=port, debug=True)

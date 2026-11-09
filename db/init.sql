@@ -121,3 +121,72 @@ ALTER TABLE personal_reclutamiento
     ADD COLUMN IF NOT EXISTS telefono VARCHAR(50);
 ALTER TABLE personal_reclutamiento
     ALTER COLUMN telefono TYPE VARCHAR(50);
+
+-- Sesión, vinculación con Telegram y bitácora (backend/auth.py los crea también al arrancar).
+CREATE TABLE IF NOT EXISTS telegram_codigos (
+    codigo_hash   CHAR(64) PRIMARY KEY,
+    usuario_id    INTEGER NOT NULL REFERENCES usuarios_acceso(id) ON DELETE CASCADE,
+    expira_en     TIMESTAMPTZ NOT NULL,
+    usado_en      TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS telegram_vinculos (
+    id                 SERIAL PRIMARY KEY,
+    usuario_id         INTEGER NOT NULL UNIQUE REFERENCES usuarios_acceso(id) ON DELETE CASCADE,
+    telegram_id        BIGINT NOT NULL UNIQUE,
+    telegram_username  VARCHAR(64),
+    creado_en          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ultimo_uso_en      TIMESTAMPTZ,
+    avisos_activos     BOOLEAN NOT NULL DEFAULT TRUE,
+    avisos_hora        SMALLINT NOT NULL DEFAULT 8,
+    avisos_ultimo      DATE
+);
+CREATE TABLE IF NOT EXISTS bitacora (
+    id          BIGSERIAL PRIMARY KEY,
+    fecha       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    usuario_id  INTEGER REFERENCES usuarios_acceso(id) ON DELETE SET NULL,
+    usuario     VARCHAR(100),
+    canal       VARCHAR(20) NOT NULL DEFAULT 'web',
+    origen      VARCHAR(40),
+    metodo      VARCHAR(10) NOT NULL,
+    ruta        TEXT NOT NULL,
+    estado_http INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_bitacora_fecha ON bitacora (fecha DESC);
+CREATE TABLE IF NOT EXISTS bot_trazas (
+    id              BIGSERIAL PRIMARY KEY,
+    fecha           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    usuario_id      INTEGER REFERENCES usuarios_acceso(id) ON DELETE SET NULL,
+    modelo          VARCHAR(60) NOT NULL,
+    tokens_entrada  INTEGER NOT NULL DEFAULT 0,
+    tokens_salida   INTEGER NOT NULL DEFAULT 0,
+    tokens_cache    INTEGER NOT NULL DEFAULT 0,
+    rondas          SMALLINT NOT NULL DEFAULT 0,
+    herramientas    VARCHAR(400) NOT NULL DEFAULT '',
+    segundos        REAL NOT NULL DEFAULT 0,
+    resultado       VARCHAR(20) NOT NULL,
+    calificacion    SMALLINT
+);
+CREATE INDEX IF NOT EXISTS idx_bot_trazas_fecha ON bot_trazas (fecha DESC);
+
+CREATE TABLE IF NOT EXISTS bot_tareas (
+    id            SERIAL PRIMARY KEY,
+    usuario_id    INTEGER NOT NULL REFERENCES usuarios_acceso(id) ON DELETE CASCADE,
+    instruccion   VARCHAR(300) NOT NULL,
+    frecuencia    VARCHAR(10) NOT NULL CHECK (frecuencia IN ('diaria', 'semanal', 'mensual')),
+    dias_semana   VARCHAR(20) NOT NULL DEFAULT '',
+    dia_mes       SMALLINT CHECK (dia_mes BETWEEN 1 AND 28),
+    hora          SMALLINT NOT NULL CHECK (hora BETWEEN 0 AND 23),
+    minuto        SMALLINT NOT NULL DEFAULT 0 CHECK (minuto BETWEEN 0 AND 59),
+    proxima       TIMESTAMPTZ NOT NULL,
+    ultima        TIMESTAMPTZ,
+    creada_en     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_bot_tareas_proxima ON bot_tareas (proxima);
+
+CREATE TABLE IF NOT EXISTS bot_memoria (
+    id          SERIAL PRIMARY KEY,
+    usuario_id  INTEGER NOT NULL REFERENCES usuarios_acceso(id) ON DELETE CASCADE,
+    texto       VARCHAR(200) NOT NULL,
+    creada_en   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_bot_memoria_usuario ON bot_memoria (usuario_id);

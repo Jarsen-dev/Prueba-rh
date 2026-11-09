@@ -1,0 +1,135 @@
+"""Cambios pendientes de confirmar.
+
+Nada se escribe sin que la persona pulse Confirmar. El resumen que ve lo arma
+el código a partir de lo que se va a ejecutar, así que lo que se aprueba es
+exactamente lo que se manda. Un DELETE pide dos confirmaciones.
+"""
+
+import secrets
+import time
+from dataclasses import dataclass, field
+from typing import Any
+
+METODOS_ESCRITURA = frozenset({'POST', 'PUT', 'PATCH', 'DELETE'})
+
+
+def nuevo_id() -> str:
+    return secrets.token_hex(4)
+
+
+@dataclass(frozen=True)
+class Archivo:
+    """Adjunto de un formulario multipart: (campo, nombre, contenido, mime)."""
+    campo: str
+    nombre: str
+    contenido: bytes
+    mime: str
+
+
+@dataclass
+class CambioPendiente:
+    metodo: str
+    ruta: str
+    titulo: str
+    detalle: list[str] = field(default_factory=list)
+    #: Cuerpo JSON, o None si es un formulario.
+    cuerpo: Any = None
+    #: Campos de texto de un formulario multipart (excluye ``cuerpo``).
+    formulario: dict[str, str] | None = None
+    archivo: Archivo | None = None
+    origen: str = 'menu'
+    id: str = field(default_factory=nuevo_id)
+    creado: float = field(default_factory=time.monotonic)
+    confirmaciones_faltantes: int = 1
+    #: Si el detalle trae datos personales completos: lo que queda en el chat al terminar (enmascarado).
+    detalle_final: list[str] | None = None
+    #: Cambio que se ofrece (con su propio Confirmar) cuando este se aplica bien.
+    siguiente: 'CambioPendiente | None' = None
+
+    def __post_init__(self) -> None:
+        self.metodo = self.metodo.upper()
+        if self.metodo not in METODOS_ESCRITURA:
+            raise ValueError(f'{self.metodo} no es un método de escritura.')
+        if not self.ruta.startswith('/api/') or '..' in self.ruta or '//' in self.ruta:
+            raise ValueError('Ruta inválida.')
+        if self.cuerpo is not None and (self.formulario is not None or self.archivo is not None):
+            raise ValueError('Un cambio es JSON o formulario, no ambos.')
+        if self.metodo == 'DELETE':
+            self.confirmaciones_faltantes = 2
+
+    def argumentos_peticion(self) -> dict[str, Any]:
+        """Lo que se manda tal cual al confirmar (``ClienteBackend.peticion``)."""
+        if self.formulario is not None or self.archivo is not None:
+            argumentos: dict[str, Any] = {'data': dict(self.formulario or {})}
+            if self.archivo is not None:
+                a = self.archivo
+                argumentos['files'] = [(a.campo, (a.nombre, a.contenido, a.mime))]
+            return argumentos
+        return {'json': self.cuerpo}
+
+    def resumen(self, final: bool = False) -> str:
+        """``final``: la versión que se queda en el chat al confirmar o cancelar."""
+        detalle = self.detalle_final if final and self.detalle_final is not None else self.detalle
+        lineas = [self.titulo, *(f'• {linea}' for linea in detalle)]
+        if self.archivo is not None:
+            lineas.append(f'• Archivo adjunto: {self.archivo.nombre}')
+        if self.metodo == 'DELETE':
+            lineas.append('')
+            lineas.append('⚠️ Esta acción es permanente.')
+        return '\n'.join(lineas)
+
+    def caducado(self, minutos: int, ahora: float | None = None) -> bool:
+        return ((ahora or time.monotonic()) - self.creado) > minutos * 60
+
+
+#: Cambios que se pueden confirmar juntos en un lote.
+MAX_LOTE = 10
+
+
+@dataclass
+class Lote:
+    """Varios cambios con un solo Confirmar (dos si alguno borra).
+
+    Se aplican uno por uno, en orden. En la bitácora quedan con el origen
+    ``trabajo:<n>``, así se puede ver qué cambios salieron del mismo lote.
+    """
+    cambios: list[CambioPendiente]
+    id: str = field(default_factory=nuevo_id)
+    creado: float = field(default_factory=time.monotonic)
+    trabajo: int = field(default_factory=lambda: secrets.randbelow(10**9) + 1)
+    confirmaciones_faltantes: int = 1
+    siguiente: None = None
+
+    def __post_init__(self) -> None:
+        if not 2 <= len(self.cambios) <= MAX_LOTE:
+            raise ValueError(f'Un lote lleva de 2 a {MAX_LOTE} cambios.')
+        if any(c.siguiente is not None for c in self.cambios):
+            raise ValueError('Un cambio encadenado (como leer un documento) va solo, no en lote.')
+        for cambio in self.cambios:
+            cambio.origen = f'trabajo:{self.trabajo}'
+        if any(c.metodo == 'DELETE' for c in self.cambios):
+            self.confirmaciones_faltantes = 2
+
+    @property
+    def metodo(self) -> str:
+        """Para el teclado: si algo borra, se presenta como borrado."""
+        return 'DELETE' if any(c.metodo == 'DELETE' for c in self.cambios) else 'POST'
+
+    def resumen(self, final: bool = False) -> str:
+        partes = [f'📦 {len(self.cambios)} cambios para confirmar juntos (se aplican en este orden):']
+        for numero, cambio in enumerate(self.cambios, 1):
+            partes.append(f'{numero}. ' + cambio.resumen(final).replace('\n', '\n   '))
+        return '\n\n'.join(partes)
+
+    def caducado(self, minutos: int, ahora: float | None = None) -> bool:
+        return ((ahora or time.monotonic()) - self.creado) > minutos * 60
+
+    def agregar(self, cambio: CambioPendiente) -> None:
+        if len(self.cambios) >= MAX_LOTE:
+            raise ValueError(f'Un lote lleva como máximo {MAX_LOTE} cambios.')
+        if cambio.siguiente is not None:
+            raise ValueError('Un cambio encadenado (como leer un documento) va solo, no en lote.')
+        cambio.origen = f'trabajo:{self.trabajo}'
+        self.cambios.append(cambio)
+        if cambio.metodo == 'DELETE':
+            self.confirmaciones_faltantes = 2
