@@ -1,5 +1,5 @@
 # Banco de evaluación del agente: BD desechable en memoria y backend real.
-# Uso: docker-compose -p rh_eval -f eval/docker-compose.eval.yml up -d --build
+# Uso: docker-compose -p rh_eval --env-file .env -f eval/docker-compose.eval.yml up -d --build
 # Nunca toca la base de datos de prueba-rh (otro proyecto, sin volúmenes).
 services:
   postgres:
@@ -32,6 +32,9 @@ services:
       ADMIN_INICIAL_USUARIO: admin_eval
       ADMIN_INICIAL_PASSWORD: admin_eval_123
       EMPLOYEE_DOCS_ROOT: /tmp/docs
+      # Solo para los casos de OCR (escanear-documento); levanta con --env-file .env.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
     ports:
       - "127.0.0.1:58101:8000"
     depends_on:

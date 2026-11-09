@@ -88,7 +88,13 @@ def numero_mencionado(valor: Any, textos: list[str]) -> str:
         escritos |= {re.sub(r'\D', '', m) for m in re.findall(r'\d[\d\s,.\-]*\d|\d', limpio)}
         escritos |= set(re.findall(r'\d+', limpio))
     if digitos not in escritos:
-        raise GuardaFallo(f'«{valor}» no aparece en lo que escribió la persona. Pregúntale el dato exacto; no lo supongas.')
+        # Si copió mal un número que sí escribió la persona (p. ej. un dígito repetido de más), que lo corrija
+        # solo: esos números salen del texto de la persona, que el modelo ya tiene.
+        parecidos = sorted(e for e in escritos if abs(len(e) - len(digitos)) <= 2 and len(e) >= 3)
+        pista = (f' Los números que sí escribió son: {", ".join(parecidos)}. Si es uno de ellos, vuelve a intentarlo '
+                 'copiándolo exacto.') if parecidos else ''
+        raise GuardaFallo(f'«{valor}» no aparece en lo que escribió la persona.{pista} Si no, pregúntale el dato '
+                          'exacto; no lo supongas.')
     return digitos
 
 

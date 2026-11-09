@@ -137,7 +137,9 @@ async def _turno(update, context, settings: Settings, agente: Agente, estado: Es
         # El mismo pendiente y el mismo botón que el menú: solo al_boton escribe.
         async with estado.candado:
             estado.pendiente = pendiente
-        if pendiente.archivo is not None and pendiente.archivo is estado.adjunto:
+        if estado.adjunto is not None and any(
+                p is not None and p.archivo is not None and p.archivo.contenido is estado.adjunto.contenido
+                for p in (pendiente, pendiente.siguiente)):
             estado.adjunto = None
         await responder(update, pendiente.resumen(), teclado_confirmar(pendiente))
 
@@ -186,8 +188,10 @@ async def guardar_adjunto(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await responder(update, f'⚠️ {error}')
         return True
     context.application.bot_data['estados'].de(update.effective_user.id).adjunto = archivo
-    await responder(update, f'📎 Recibí «{nombre}». Dime a qué incidencia lo adjunto (por ejemplo: «es el acta de '
-                            'la suspensión de Bruno del 12 al 13 de noviembre por faltas»).')
+    await responder(update, f'📎 Recibí «{nombre}». Dime qué hago con él, por ejemplo:\n'
+                            '• «es el acta de la suspensión de Bruno del 12 al 13 de noviembre por faltas»\n'
+                            '• «actualiza los datos de Bruno con esta constancia fiscal» (leo el documento y te '
+                            'muestro el antes y el después)')
     return True
 
 

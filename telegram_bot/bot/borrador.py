@@ -41,6 +41,10 @@ class CambioPendiente:
     id: str = field(default_factory=nuevo_id)
     creado: float = field(default_factory=time.monotonic)
     confirmaciones_faltantes: int = 1
+    #: Si el detalle trae datos personales completos: lo que queda en el chat al terminar (enmascarado).
+    detalle_final: list[str] | None = None
+    #: Cambio que se ofrece (con su propio Confirmar) cuando este se aplica bien.
+    siguiente: 'CambioPendiente | None' = None
 
     def __post_init__(self) -> None:
         self.metodo = self.metodo.upper()
@@ -63,8 +67,10 @@ class CambioPendiente:
             return argumentos
         return {'json': self.cuerpo}
 
-    def resumen(self) -> str:
-        lineas = [self.titulo, *(f'• {linea}' for linea in self.detalle)]
+    def resumen(self, final: bool = False) -> str:
+        """``final``: la versión que se queda en el chat al confirmar o cancelar."""
+        detalle = self.detalle_final if final and self.detalle_final is not None else self.detalle
+        lineas = [self.titulo, *(f'• {linea}' for linea in detalle)]
         if self.archivo is not None:
             lineas.append(f'• Archivo adjunto: {self.archivo.nombre}')
         if self.metodo == 'DELETE':

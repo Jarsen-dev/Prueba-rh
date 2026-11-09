@@ -12,8 +12,10 @@ antes de armar el cambio. Al modelo solo le vuelve una frase neutra, sin los
 datos del cambio.
 """
 
+import re
 from typing import TYPE_CHECKING, Any
 
+from bot import documentos
 from bot.borrador import CambioPendiente
 from bot.guardas import (
     GuardaFallo,
@@ -69,8 +71,8 @@ DEFINICIONES = [
     _funcion('preparar_cambio_puesto',
              'Prepara cambiar empresa, área, puesto, turno, salario o pago de un empleado. Manda SOLO los campos '
              'que la persona pidió cambiar: los demás se quedan como están, así que no los preguntes (si cambia de '
-             'puesto no hace falta pedir turno ni salario). Los datos personales (CURP, teléfono, domicilio…) solo '
-             'se editan en el panel.',
+             'puesto no hace falta pedir turno ni salario). Los datos personales (CURP, domicilio…) no van aquí: '
+             'se actualizan con un documento (preparar_datos_de_documento) o en el panel.',
              {'registro_id': {'type': 'integer'}, **{c: {'type': 'string'} for c in CAMPOS_PUESTO}},
              ['registro_id']),
     _funcion('preparar_reclutador',
@@ -85,6 +87,14 @@ DEFINICIONES = [
              {'que': {'type': 'string', 'enum': ['empleado', 'candidato', 'incidencia']},
               'id': {'type': 'integer'}, 'registro_id': {'type': 'integer'}},
              ['que', 'id']),
+    _funcion('preparar_datos_de_documento',
+             'Prepara actualizar los datos personales de un empleado leyendo el documento que la persona mandó por '
+             'el chat (acta de nacimiento, comprobante de domicilio, constancia de situación fiscal o documento '
+             'del NSS). El sistema lee el documento y le muestra a la persona el antes y el después; tú NO ves lo '
+             'que se leyó. Úsala solo si la persona pide actualizar datos con ese documento.',
+             {'registro_id': {'type': 'integer'},
+              'tipo': {'type': 'string', 'enum': [t.nombre for t in documentos.TIPOS.values()]}},
+             ['registro_id', 'tipo']),
 ]
 
 
@@ -161,7 +171,11 @@ async def _catalogo(ctx: 'Contexto') -> dict[str, Any]:
 
 def _salario(valor: Any, ctx: 'Contexto') -> str:
     numero_mencionado(valor, ctx.textos)
-    texto = ' '.join(str(valor).split())
+    # Como el panel: solo el número («$2,600 pesos» -> «2600»).
+    texto = re.sub(r'(?<=\d),(?=\d{3}\b)', '', str(valor))
+    texto = re.sub(r'(?i)[$\s]|pesos|mxn', '', texto)
+    if not re.fullmatch(r'\d+(\.\d{1,2})?', texto):
+        raise GuardaFallo(f'«{valor}» no es un salario válido; pide solo la cantidad.')
     if len(texto) > formularios.MAX_SALARIO:
         raise GuardaFallo('El salario es demasiado largo.')
     return texto
@@ -331,6 +345,27 @@ async def preparar_eliminacion(ctx: 'Contexto', que: str = '', id: Any = None, r
     return _dejar(ctx, pendiente)
 
 
+async def preparar_datos_de_documento(ctx: 'Contexto', registro_id: Any = None, tipo: str = '') -> str:
+    empleado = ctx.vistos.empleado(registro_id)
+    registro_id = int(registro_id)
+    await _exigir_permiso(ctx, 'POST', f'/api/actualizar-empleado/{registro_id}')
+    await _exigir_permiso(ctx, 'POST', '/api/employee-files')
+    if ctx.adjunto is None:
+        raise GuardaFallo('La persona no ha enviado ningún documento. Pídele que mande la foto o el PDF y luego te '
+                          'diga de quién es.')
+    try:
+        tipo_documento = documentos.tipo_por_texto(tipo)
+        actual = (await ctx.get(f'/api/obtener-empleado/{registro_id}')).datos or {}
+        # La lectura la usa solo el código; nada de lo leído vuelve al modelo.
+        ctx.peticiones.append(('POST', '/api/escanear-documento', {}))
+        leidos = await documentos.escanear(ctx.backend, ctx.telegram_id, tipo_documento, ctx.adjunto)
+        pendiente = documentos.pendiente_de_documento({**empleado, **actual, 'registro_id': registro_id},
+                                                      tipo_documento, leidos, ctx.adjunto, ctx.origen)
+    except ValueError as error:
+        raise GuardaFallo(str(error)) from error
+    return _dejar(ctx, pendiente)
+
+
 IMPLEMENTACIONES = {
     'preparar_estatus': preparar_estatus,
     'preparar_incidencia': preparar_incidencia,
@@ -338,5 +373,6 @@ IMPLEMENTACIONES = {
     'preparar_cambio_puesto': preparar_cambio_puesto,
     'preparar_reclutador': preparar_reclutador,
     'preparar_eliminacion': preparar_eliminacion,
+    'preparar_datos_de_documento': preparar_datos_de_documento,
 }
 assert set(IMPLEMENTACIONES) == {d['function']['name'] for d in DEFINICIONES}

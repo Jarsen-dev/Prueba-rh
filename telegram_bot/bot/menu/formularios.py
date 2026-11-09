@@ -215,6 +215,29 @@ def asistente_incidencia(empleado: dict[str, Any], hoy: Callable[[], date] = dat
     )
 
 
+def asistente_documento(empleado: dict[str, Any], leer: Callable) -> Asistente:
+    """Tipo de documento y archivo; ``leer(tipo, archivo)`` (async) arma el cambio con lo leído."""
+    from bot import documentos
+
+    nombre = _dato(empleado.get('nombre_completo'), 'Sin nombre')
+    nombres = {t.nombre: t for t in documentos.TIPOS.values()}
+
+    def validar(archivo: Archivo, _r: Respuestas) -> Archivo:
+        documentos.validar(archivo)
+        return archivo
+
+    return Asistente(
+        titulo=f'Actualizar con documento — {nombre}',
+        pasos=[
+            Paso('tipo', '¿Qué documento es?', opciones=lambda _r: list(nombres)),
+            Paso('archivo', 'Envía el documento como foto o PDF (completo, con buena luz).', tipo='archivo',
+                 validar=validar),
+        ],
+        # Devuelve una corrutina: la lectura es asíncrona (pantallas la espera).
+        al_terminar=lambda r: leer(nombres[r['tipo']], r['archivo']),
+    )
+
+
 # --- Baja / reactivación y eliminación -----------------------------------------------
 
 def pendiente_estatus(empleado: dict[str, Any], origen: str = 'menu') -> CambioPendiente:

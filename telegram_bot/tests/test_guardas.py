@@ -70,3 +70,18 @@ def test_vistos():
             v.empleado(malo)
     with pytest.raises(GuardaFallo):
         v.candidato(1)
+
+
+def test_numero_mal_copiado_da_pista_con_los_numeros_de_la_persona():
+    import pytest
+    from bot.guardas import GuardaFallo, numero_mencionado
+    with pytest.raises(GuardaFallo, match='5544443333'):
+        numero_mencionado('55444433333', ['cambia el teléfono de laura a 5544443333'])
+
+
+def test_salario_se_normaliza_como_en_el_panel():
+    from bot.escrituras import _salario
+    from types import SimpleNamespace
+    ctx = SimpleNamespace(textos=['salario de $2,600 pesos'])
+    assert _salario('$2,600', ctx) == '2600'
+    assert _salario('2600 pesos', ctx) == '2600'

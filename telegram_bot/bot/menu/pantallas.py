@@ -12,6 +12,7 @@ Los botones llevan índices, nunca ids ni rutas. Ningún camino de aquí escribe
 los formularios terminan en un ``CambioPendiente`` que confirma ``al_boton``.
 """
 
+import inspect
 import logging
 from datetime import date, datetime
 from typing import Any
@@ -34,6 +35,7 @@ from bot.interfaz import (
     teclado_confirmar,
     texto_error,
 )
+from bot import documentos
 from bot.menu import formularios
 from bot.menu.asistente import Asistente
 from bot.menu.navegacion import NODOS, hijos_visibles, padre_de, puede
@@ -170,6 +172,7 @@ async def mostrar_ficha(update, context, estado: EstadoUsuario, empleado: dict[s
         filas += [
             [boton('🗂 Historial de incidencias', 'ea:inc'), boton('➕ Registrar incidencia', 'ea:reg')],
             [boton('⏸ Dar de baja' if activo else '▶️ Reactivar', 'ea:est'), boton('🗑 Eliminar', 'ea:del')],
+            [boton('📄 Actualizar con documento', 'ea:doc')],
         ]
     filas.append([boton('🔎 Buscar otro', 'm:empleados'), *_menu_inicio()])
     await mostrar(update, formatear_empleado(empleado), InlineKeyboardMarkup(filas), editar=editar)
@@ -190,6 +193,18 @@ async def al_boton_empleado(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await mostrar_ficha(update, context, estado, estado.lista[indice], editar=True)
     except ErrorBackend as error:
         await mostrar(update, texto_error(error), editar=True)
+
+
+def lector(context, telegram_id: int, empleado: dict[str, Any]):
+    """La lectura del documento para el formulario: ficha fresca + OCR del backend + diff."""
+    async def leer(tipo, archivo) -> CambioPendiente:
+        backend = _backend(context)
+        registro_id = int(empleado['registro_id'])
+        actual = (await backend.peticion(telegram_id, 'GET', f'/api/obtener-empleado/{registro_id}')).datos or {}
+        leidos = await documentos.escanear(backend, telegram_id, tipo, archivo)
+        return documentos.pendiente_de_documento({**empleado, **actual, 'registro_id': registro_id},
+                                                 tipo, leidos, archivo)
+    return leer
 
 
 async def al_boton_accion_empleado(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -213,6 +228,9 @@ async def al_boton_accion_empleado(update: Update, context: ContextTypes.DEFAULT
             await proponer(update, estado, formularios.pendiente_estatus(empleado))
         elif accion == 'del':
             await proponer(update, estado, formularios.pendiente_eliminar(empleado))
+        elif accion == 'doc':
+            await iniciar_asistente(update, context, estado,
+                                    formularios.asistente_documento(empleado, lector(context, telegram_id, empleado)))
         else:
             await mostrar(update, CADUCADO, editar=True)
     except ErrorBackend as error:
@@ -442,8 +460,15 @@ async def avanzar_asistente(update, estado: EstadoUsuario, *, editar: bool, avis
         estado.asistente = None
         try:
             pendiente = asistente.construir()
+            if inspect.isawaitable(pendiente):
+                await mostrar(update, '🔍 Leyendo el documento…', editar=editar)
+                editar = False
+                pendiente = await pendiente
         except ValueError as error:
             await mostrar(update, f'⚠️ {error}', InlineKeyboardMarkup([_menu_inicio()]), editar=editar)
+            return
+        except ErrorBackend as error:
+            await mostrar(update, texto_error(error), InlineKeyboardMarkup([_menu_inicio()]), editar=editar)
             return
         await proponer(update, estado, pendiente, editar=editar)
         return

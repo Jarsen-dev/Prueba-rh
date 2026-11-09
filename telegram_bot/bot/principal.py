@@ -6,6 +6,7 @@ decide permisos. Solo atiende chats privados.
 
 import logging
 import sys
+import time
 from typing import Any
 
 import httpx
@@ -231,7 +232,7 @@ async def al_boton(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
         if accion == 'no':
             estado.pendiente = None
-            await consulta.edit_message_text(f'{pendiente.resumen()}\n\n✖️ Cancelado.')
+            await consulta.edit_message_text(f'{pendiente.resumen(final=True)}\n\n✖️ Cancelado.')
             return
 
         pendiente.confirmaciones_faltantes -= 1
@@ -253,17 +254,23 @@ async def al_boton(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             **pendiente.argumentos_peticion(),
         )
     except ErrorBackend as error:
-        await consulta.edit_message_text(f'{pendiente.resumen()}\n\n{texto_error(error)}')
+        await consulta.edit_message_text(f'{pendiente.resumen(final=True)}\n\n{texto_error(error)}')
         return
     except httpx.TransportError:
         # Sin respuesta: quizá sí se aplicó. Nunca se reintenta solo.
         logger.warning('Sin respuesta al aplicar %s %s', pendiente.metodo, pendiente.ruta)
         await consulta.edit_message_text(
-            f'{pendiente.resumen()}\n\n❓ El sistema no respondió; es posible que el cambio sí se haya '
+            f'{pendiente.resumen(final=True)}\n\n❓ El sistema no respondió; es posible que el cambio sí se haya '
             'aplicado. Revísalo en el panel antes de intentarlo de nuevo.'
         )
         return
-    await consulta.edit_message_text(f'{pendiente.resumen()}\n\n✅ Hecho.')
+    await consulta.edit_message_text(f'{pendiente.resumen(final=True)}\n\n✅ Hecho.')
+    siguiente = pendiente.siguiente
+    if siguiente is not None:
+        siguiente.creado = time.monotonic()   # su propio plazo para confirmar
+        async with estado.candado:
+            estado.pendiente = siguiente
+        await consulta.message.reply_text(siguiente.resumen(), reply_markup=teclado_confirmar(siguiente))
 
 
 async def al_texto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

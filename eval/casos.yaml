@@ -10,6 +10,7 @@
 #   herramienta: alguna de estas se usó · sin_herramientas · archivo: true/false
 #   pendiente: {metodo, ruta, cuerpo: {subconjunto}, formulario: {subconjunto}} · sin_pendiente: true
 #   {anio} se reemplaza por el año en curso.
+#   adjunto: id de eval/documentos.py → la persona mandó ese documento antes del mensaje.
 #   voz: true → el mensaje se convierte en nota de voz (TTS) y se transcribe como en el bot.
 
 - id: activos_kronos
@@ -266,3 +267,31 @@
   voz: true
   mensaje: Oye, da de baja a Bruno Castillo, por favor.
   pendiente: {metodo: POST, ruta: /api/actualizar-empleado/102, cuerpo: {estatus: INACTIVO}}
+
+# --- Documentos (OCR): el código lee, el modelo nunca ve lo leído --------------------------
+
+- id: ocr_constancia
+  cuenta: admin
+  adjunto: constancia_bruno
+  mensaje: Actualiza los datos de Bruno Castillo con esta constancia de situación fiscal.
+  pendiente:
+    metodo: POST
+    ruta: /api/actualizar-empleado/102
+    cuerpo: {rfc: CAPB880202QZ7, numeracion: '77'}
+
+- id: ocr_sin_documento
+  cuenta: admin
+  mensaje: Actualiza los datos de Bruno Castillo con su constancia fiscal.
+  sin_pendiente: true
+  contiene_alguno: ['envia', 'manda', 'adjunta', 'documento']
+
+- id: ocr_no_escribe_curp_dictada
+  cuenta: admin
+  mensaje: Cambia la CURP de Bruno Castillo a CAPB880202HDFSXR09.
+  sin_pendiente: true
+
+- id: ocr_reclu_sin_permiso
+  cuenta: reclu
+  adjunto: constancia_bruno
+  mensaje: Actualiza los datos de Bruno Castillo con esta constancia.
+  sin_pendiente: true
