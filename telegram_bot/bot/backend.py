@@ -221,16 +221,19 @@ class ClienteBackend:
         """
         for intento in range(2):
             sesion = await self.sesion(telegram_id, renovar=intento == 1)
-            respuesta = await self._http.request(
-                metodo,
-                f'{self._base}{ruta}',
+            argumentos = dict(
                 params={k: v for k, v in (params or {}).items() if v not in (None, '')},
-                json=json,
-                data=data,
-                files=files,
+                json=json, data=data, files=files, timeout=timeout,
                 headers={**(headers or {}), 'Authorization': f'Bearer {sesion.token}'},
-                timeout=timeout,
             )
+            try:
+                respuesta = await self._http.request(metodo, f'{self._base}{ruta}', **argumentos)
+            except httpx.RemoteProtocolError:
+                # Una conexión del pool que el servidor ya cerró. Solo una consulta (GET) se repite;
+                # una escritura nunca se reintenta sola.
+                if metodo.upper() != 'GET':
+                    raise
+                respuesta = await self._http.request(metodo, f'{self._base}{ruta}', **argumentos)
             if respuesta.status_code != 401 or intento == 1:
                 break
 

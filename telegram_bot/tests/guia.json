@@ -54,6 +54,45 @@
   },
   {
    "metodo": "GET",
+   "ruta": "/api/memoria",
+   "resumen": "Notas que la persona pidió al asistente recordar.",
+   "parametros": {},
+   "archivo": false,
+   "escritura": false,
+   "permisos": [
+    "admin",
+    "reclutamiento",
+    "notificaciones"
+   ]
+  },
+  {
+   "metodo": "POST",
+   "ruta": "/api/memoria",
+   "resumen": "Guardar una nota de memoria (texto, hasta 200 caracteres).",
+   "parametros": {},
+   "archivo": false,
+   "escritura": true,
+   "permisos": [
+    "admin",
+    "reclutamiento",
+    "notificaciones"
+   ]
+  },
+  {
+   "metodo": "DELETE",
+   "ruta": "/api/memoria/{nota_id}",
+   "resumen": "Borrar una nota de memoria propia.",
+   "parametros": {},
+   "archivo": false,
+   "escritura": true,
+   "permisos": [
+    "admin",
+    "reclutamiento",
+    "notificaciones"
+   ]
+  },
+  {
+   "metodo": "GET",
    "ruta": "/api/tareas",
    "resumen": "Tareas programadas de la persona (consultas que el asistente corre solo a una hora fija).",
    "parametros": {},

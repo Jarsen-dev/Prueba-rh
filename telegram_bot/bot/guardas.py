@@ -46,6 +46,8 @@ class Vistos:
     candidatos: dict[int, dict[str, Any]] = field(default_factory=dict)
     #: (registro_id, incidencia_id) -> incidencia
     incidencias: dict[tuple[int, int], dict[str, Any]] = field(default_factory=dict)
+    #: Notas de memoria de la persona (id -> nota), cargadas al empezar cada turno.
+    notas: dict[int, dict[str, Any]] = field(default_factory=dict)
     #: Tareas programadas de la persona (id -> tarea).
     tareas: dict[int, dict[str, Any]] = field(default_factory=dict)
 

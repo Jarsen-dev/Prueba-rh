@@ -53,7 +53,8 @@ class ClienteVoz:
             respuesta = await self._http.post(
                 self._url, headers={'Authorization': f'Bearer {self._api_key}'}, timeout=self._timeout,
                 files={'file': (nombre, audio, tipo)},
-                data={'model': self.modelo, 'language': 'es', 'response_format': 'json', 'prompt': VOCABULARIO},
+                # Sin «language»: el modelo detecta el idioma (el vocabulario en español lo inclina al español).
+                data={'model': self.modelo, 'response_format': 'json', 'prompt': VOCABULARIO},
             )
         except httpx.TimeoutException as exc:
             raise ErrorLLM('OpenAI no transcribió a tiempo.') from exc

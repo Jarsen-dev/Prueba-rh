@@ -85,6 +85,10 @@ PERMISOS_POR_ENDPOINT = {
     'tareas.crear_tarea': SESION,
     'tareas.borrar_tarea': SESION,
     'tareas.interno_turno': PUBLICO,
+    # Memoria del asistente: cada quien sus notas.
+    'memoria.listar_memoria': SESION,
+    'memoria.guardar_memoria': SESION,
+    'memoria.borrar_memoria': SESION,
 
     # Avisos del día (cada sección se filtra por permiso dentro de la ruta).
     'avisos.avisos_del_dia': ADMIN_O_RECLUTAMIENTO,

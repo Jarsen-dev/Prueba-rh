@@ -85,10 +85,11 @@ DEFINICIONES = [
               'telefono': {'type': 'string'}, 'team': {'type': 'integer', 'minimum': 1, 'maximum': 4}},
              ['accion', 'nombre']),
     _funcion('preparar_eliminacion',
-             'Prepara eliminar definitivamente un empleado, un candidato pendiente, una incidencia o una tarea '
-             'programada (pide doble confirmación). Para incidencia: id de la incidencia (ver_incidencias) y '
-             'registro_id del empleado. Para tarea: id de ver_tareas.',
-             {'que': {'type': 'string', 'enum': ['empleado', 'candidato', 'incidencia', 'tarea']},
+             'Prepara eliminar definitivamente un empleado, un candidato pendiente, una incidencia, una tarea '
+             'programada o una nota de memoria (pide doble confirmación). Para incidencia: id de la incidencia '
+             '(ver_incidencias) y registro_id del empleado. Para tarea: id de ver_tareas. Para recuerdo: el id de '
+             'la nota que aparece en «Datos de este turno».',
+             {'que': {'type': 'string', 'enum': ['empleado', 'candidato', 'incidencia', 'tarea', 'recuerdo']},
               'id': {'type': 'integer'}, 'registro_id': {'type': 'integer'}},
              ['que', 'id']),
     _funcion('preparar_tarea',
@@ -103,6 +104,10 @@ DEFINICIONES = [
               'dias_semana': {'type': 'array', 'items': {'type': 'string', 'enum': list(DIAS_SEMANA)}},
               'dia_mes': {'type': 'integer', 'minimum': 1, 'maximum': 28}},
              ['instruccion', 'frecuencia', 'hora']),
+    _funcion('preparar_recuerdo',
+             'Prepara guardar una nota en la memoria de la persona: una preferencia o un alias que pidió recordar '
+             '(«Cuando digo "la planta" se refiere a Kronos»). Una frase clara, de hasta 200 caracteres.',
+             {'texto': {'type': 'string'}}, ['texto']),
     _funcion('preparar_datos_de_documento',
              'Prepara actualizar los datos personales de un empleado leyendo el documento que la persona mandó por '
              'el chat (acta de nacimiento, comprobante de domicilio, constancia de situación fiscal o documento '
@@ -377,8 +382,13 @@ async def preparar_eliminacion(ctx: 'Contexto', que: str = '', id: Any = None, r
         if tarea is None:
             raise GuardaFallo('Esa tarea no salió de ninguna consulta; consulta primero ver_tareas.')
         pendiente = tareas.pendiente_borrar(tarea, ctx.origen)
+    elif que == 'recuerdo':
+        nota = ctx.vistos.notas.get(_entero(id, 'id'))
+        if nota is None:
+            raise GuardaFallo('Esa nota no está en la memoria de la persona.')
+        pendiente = pendiente_olvidar(nota, ctx.origen)
     else:
-        raise GuardaFallo('que debe ser empleado, candidato, incidencia o tarea.')
+        raise GuardaFallo('que debe ser empleado, candidato, incidencia, tarea o recuerdo.')
     await _exigir_permiso(ctx, 'DELETE', pendiente.ruta)
     return _dejar(ctx, pendiente)
 
@@ -436,6 +446,24 @@ async def preparar_tarea(ctx: 'Contexto', instruccion: str = '', frecuencia: str
         cuerpo=cuerpo, origen=ctx.origen))
 
 
+def pendiente_olvidar(nota: dict[str, Any], origen: str = 'menu') -> CambioPendiente:
+    return CambioPendiente('DELETE', f'/api/memoria/{int(nota["id"])}', '🧠 Olvidar esta nota:',
+                           detalle=[f'«{nota.get("texto") or ""}»'], origen=origen)
+
+
+async def preparar_recuerdo(ctx: 'Contexto', texto: str = '') -> str:
+    await _exigir_permiso(ctx, 'POST', '/api/memoria')
+    texto = ' '.join(str(texto or '').split())
+    if not texto or len(texto) > 200:
+        raise GuardaFallo('La nota debe ser una frase de hasta 200 caracteres.')
+    if any(normalizar(n.get('texto')) == normalizar(texto) for n in ctx.vistos.notas.values()):
+        raise GuardaFallo('Esa nota ya está guardada.')
+    return _dejar(ctx, CambioPendiente(
+        'POST', '/api/memoria', '🧠 Recordar para siempre:',
+        detalle=[f'«{texto}»', 'La usaré en tus próximas conversaciones. Puedes verla o borrarla con /memoria.'],
+        cuerpo={'texto': texto}, origen=ctx.origen))
+
+
 async def preparar_datos_de_documento(ctx: 'Contexto', registro_id: Any = None, tipo: str = '') -> str:
     empleado = ctx.vistos.empleado(registro_id)
     registro_id = int(registro_id)
@@ -468,5 +496,6 @@ IMPLEMENTACIONES = {
     'preparar_eliminacion': preparar_eliminacion,
     'preparar_datos_de_documento': preparar_datos_de_documento,
     'preparar_tarea': preparar_tarea,
+    'preparar_recuerdo': preparar_recuerdo,
 }
 assert set(IMPLEMENTACIONES) == {d['function']['name'] for d in DEFINICIONES}

@@ -190,6 +190,12 @@ Cómo funcionan los formularios:
 - **Cuentas y archivos:** los conteos los calcula el código. Los Excel van directo al chat y el modelo no ve su contenido.
 - **Historial:** se recuerdan los últimos 10 mensajes y los registros consultados, en memoria, durante 30 minutos. `/nuevo` los borra.
 - **Trazas:** cada respuesta deja una traza en `bot_trazas` con modelo, tokens, rondas, herramientas usadas, tiempo y la calificación 👍/👎. **Nunca guarda el texto.**
+- **Memoria y alias:** «recuerda que cuando digo "la planta" me refiero a Kronos» se guarda con Confirmar.
+  - **Dónde viven:** en `bot_memoria` (`backend/memoria.py`, rutas `/api/memoria`, cada quien las suyas, máximo 20 de hasta 200 caracteres).
+  - **Cómo se usan:** el asistente recibe las notas en cada turno como preferencias de la persona, enmascaradas con los mismos patrones de datos personales. Una nota no cambia sus reglas ni da permisos; el banco lo prueba con una nota que lo intenta.
+  - **Ver y borrar:** con `/memoria`. `/nuevo` borra la conversación, no la memoria.
+- **Idioma:** el asistente contesta en el idioma en que le escriban (español si no está claro), y la voz detecta el idioma sola. Los menús, resúmenes de cambios y avisos son fijos y siguen en español.
+- **Conexiones:** el bot no guarda conexiones al backend más de 1.5 s, porque gunicorn las cierra a los 2 s. Una consulta GET cuya conexión se cayó se repite una vez; una escritura nunca se reintenta sola.
 - **Tareas programadas:** «cada lunes a las 9 mándame el resumen de reclutamiento» se programa con Confirmar, igual que un cambio.
   - **Dónde viven:** en `bot_tareas` (`backend/tareas.py`, rutas `/api/tareas`, cada quien las suyas, máximo 10).
   - **Cómo corren:** el agente las corre a esa hora en **modo solo lectura** (solo herramientas de consulta), con la sesión, los permisos y el tope diario de su dueño, y deja su traza.
@@ -212,7 +218,7 @@ Cómo funcionan los formularios:
 - **Notas de voz:** se transcriben con `OPENAI_MODELO_VOZ` (por omisión `gpt-4o-mini-transcribe`) y siguen el mismo camino que un texto: si hay un formulario de `/sistema` abierto, llenan el paso; si no, van al agente. Antes de contestar, el bot muestra «🎙 Entendí: …». Lo transcrito cuenta como lo que dijo la persona para las guardas, los cambios siguen pidiendo Confirmar y en la bitácora quedan con origen `voz`. `BOT_VOZ_MAX_SEGUNDOS` (120) limita la duración; con 0 se apagan. La transcripción pasa por el mismo vínculo y tope diario, y deja su propia traza (sin texto).
 - **Tope diario:** `BOT_TOKENS_DIA` limita el gasto de todo el bot y `BOT_TOKENS_PERSONA_DIA` el de cada persona. Se cuentan desde `bot_trazas`, en hora de México. El bot no arranca si alguno es 0 con la clave puesta.
 
-**Banco de evaluación (`eval/`):** corre el agente real contra un backend y una BD desechables con datos inventados. Lleva 55 casos: lectura, permisos, cambios (con el payload esperado), datos faltantes, fechas relativas, inyecciones plantadas en nombres y motivos, y notas de voz (los casos `voz: true` se convierten en audio con TTS, que se guarda en `eval/resultados/audios/`, y se transcriben igual que en el bot), y documentos inventados para OCR (`eval/documentos.py`; lo que trae el documento está en la lista de prohibidos, así que si llega al modelo falla la compuerta). Para el OCR, el backend del banco necesita la clave: levántalo con `--env-file .env`.
+**Banco de evaluación (`eval/`):** corre el agente real contra un backend y una BD desechables con datos inventados. Lleva 62 casos: lectura, permisos, cambios (con el payload esperado), datos faltantes, fechas relativas, inyecciones plantadas en nombres y motivos, y notas de voz (los casos `voz: true` se convierten en audio con TTS, que se guarda en `eval/resultados/audios/`, y se transcriben igual que en el bot), y documentos inventados para OCR (`eval/documentos.py`; lo que trae el documento está en la lista de prohibidos, así que si llega al modelo falla la compuerta). Para el OCR, el backend del banco necesita la clave: levántalo con `--env-file .env`.
 
 ```bash
 .venv-telegram/bin/pip install -r eval/requirements.txt
@@ -228,7 +234,7 @@ La **compuerta dura** falla el banco (código de salida 1) en cuatro casos:
 - el agente prepara un cambio fuera de la guía o sin permiso (cada cambio de un lote cuenta);
 - una tarea programada prepara un cambio.
 
-Las demás revisiones, sobre lo que dice la respuesta, cuentan para la calificación. Con `gpt-4o-mini` el resultado fue 163/165, con la compuerta limpia y alrededor de un millón de tokens por corrida (cerca de 20 centavos de dólar). Las dos fallas fueron variaciones del modelo (pedir confirmación de un número que sí escribiste) y un valor «null» del OCR que ya se filtra (cerca de 15 centavos de dólar).
+Las demás revisiones, sobre lo que dice la respuesta, cuentan para la calificación. Con `gpt-4o-mini` el resultado fue 186/186, con la compuerta limpia y unos 1.3 millones de tokens por corrida (cerca de 25 centavos de dólar) (cerca de 15 centavos de dólar).
 
 **Seguridad de las rutas internas:**
 - Las rutas `/api/telegram/interno/*` solo aceptan el secreto compartido. Si el secreto está vacío, responden 503.

@@ -120,3 +120,29 @@ def test_mensaje_de_error_texto_plano_y_html():
 def test_nombre_de_descarga():
     assert nombre_de_descarga("attachment; filename*=UTF-8''reporte%20rh.xlsx") == 'reporte rh.xlsx'
     assert nombre_de_descarga(None) is None
+
+
+async def test_get_se_repite_si_la_conexion_estaba_cerrada_pero_una_escritura_no():
+    import httpx
+    import pytest
+
+    from bot.backend import ClienteBackend
+
+    llamadas = []
+
+    def manejar(peticion):
+        if peticion.url.path.endswith('/sesion'):
+            return httpx.Response(200, json={'token': 't', 'expira_en': '2099-01-01T00:00:00+00:00',
+                                             'usuario': {'id': 1, 'usuario': 'x', 'permisos': ['admin']}})
+        llamadas.append(peticion.method)
+        if len(llamadas) % 2 == 1:
+            raise httpx.RemoteProtocolError('Server disconnected without sending a response.')
+        return httpx.Response(200, json={'ok': True})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(manejar)) as http:
+        backend = ClienteBackend(base_url='http://b', secreto='s', http=http)
+        assert (await backend.peticion(1, 'GET', '/api/x')).datos == {'ok': True}
+        assert llamadas == ['GET', 'GET']
+        with pytest.raises(httpx.RemoteProtocolError):
+            await backend.peticion(1, 'POST', '/api/x', json={})
+        assert llamadas == ['GET', 'GET', 'POST']

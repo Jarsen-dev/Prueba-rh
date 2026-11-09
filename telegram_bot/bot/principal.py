@@ -35,7 +35,7 @@ from bot.interfaz import (  # noqa: F401 - reexportados para quien importe desde
     teclado_confirmar,
     texto_error,
 )
-from bot import avisos, conversacion, tareas
+from bot import avisos, conversacion, memoria, tareas
 from bot.agente import Agente
 from bot.llm import ClienteOpenAI
 from bot.voz import ClienteVoz
@@ -54,6 +54,7 @@ TEXTO_AYUDA = (
     '/yo — tu cuenta y permisos\n'
     '/desvincular — desconecta este Telegram de tu cuenta\n'
     '/nuevo — empieza una conversación nueva con el asistente\n'
+    '/memoria — lo que el asistente recuerda de ti (preferencias y alias)\n'
     '/tareas — tus tareas programadas (consultas que corro solo a una hora fija)\n'
     '/avisos — resumen diario de contratos por vencer, reingresos y candidatos (hora y encendido)\n'
     '/ayuda — esta lista\n\n'
@@ -73,6 +74,7 @@ COMANDOS = [
     BotCommand('nuevo', 'Conversación nueva con el asistente'),
     BotCommand('avisos', 'Avisos diarios: hora y encendido'),
     BotCommand('tareas', 'Mis tareas programadas'),
+    BotCommand('memoria', 'Lo que el asistente recuerda de mí'),
     BotCommand('yo', 'Mi cuenta y permisos'),
     BotCommand('desvincular', 'Desconectar este Telegram'),
     BotCommand('ayuda', 'Ayuda'),
@@ -218,7 +220,7 @@ async def cmd_cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def cmd_nuevo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     conversacion.olvidar_conversacion(_estados(context), update.effective_user.id)
-    await responder(update, 'Listo, empezamos de cero.')
+    await responder(update, 'Listo, empezamos de cero. (Lo que me pediste recordar sigue en /memoria.)')
 
 
 async def al_boton(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -358,7 +360,8 @@ async def al_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def al_iniciar(app: Application) -> None:
     settings: Settings = app.bot_data['settings']
-    http = httpx.AsyncClient()
+    # gunicorn cierra las conexiones inactivas a los 2 s: no guardarlas más que eso.
+    http = httpx.AsyncClient(limits=httpx.Limits(keepalive_expiry=1.5))
     app.bot_data['http'] = http
     app.bot_data['backend'] = ClienteBackend(
         base_url=settings.BACKEND_URL, secreto=settings.TELEGRAM_BOT_SECRETO_INTERNO, http=http
@@ -415,6 +418,7 @@ def construir(settings: Settings) -> Application:
         'nuevo': cmd_nuevo,
         'avisos': avisos.cmd_avisos,
         'tareas': tareas.cmd_tareas,
+        'memoria': memoria.cmd_memoria,
         'sistema': pantallas.cmd_sistema,
         'menu': pantallas.cmd_sistema,
     }
@@ -429,6 +433,7 @@ def construir(settings: Settings) -> Application:
     app.add_handler(CallbackQueryHandler(conversacion.al_calificar, pattern=r'^cal:\d{1,12}:[+-]$'))
     app.add_handler(CallbackQueryHandler(avisos.al_boton, pattern=r'^av:(on|off|ver|h\d{1,2})$'))
     app.add_handler(CallbackQueryHandler(tareas.al_boton_borrar, pattern=r'^tb:\d{1,2}$'))
+    app.add_handler(CallbackQueryHandler(memoria.al_boton_olvidar, pattern=r'^mb:\d{1,2}$'))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & PRIVADO, al_texto))
     app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & PRIVADO, al_archivo))
     app.add_handler(MessageHandler((filters.VOICE | filters.AUDIO) & PRIVADO, al_voz))

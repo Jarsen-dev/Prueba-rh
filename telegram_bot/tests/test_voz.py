@@ -44,7 +44,7 @@ async def test_cliente_manda_el_audio_en_espanol_con_vocabulario():
                              http=http).transcribir(b'OggS')
     assert t.texto == 'da de baja a bruno'
     assert vistos['url'] == 'https://api.x/v1/audio/transcriptions' and vistos['auth'] == 'Bearer sk-x'
-    assert b'name="language"\r\n\r\nes' in vistos['cuerpo'] and b'Cheong Woon' in vistos['cuerpo']
+    assert b'name="language"' not in vistos['cuerpo'] and b'Cheong Woon' in vistos['cuerpo']   # idioma automático
 
 
 async def test_cliente_convierte_errores():

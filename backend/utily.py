@@ -22,6 +22,7 @@ import catalogos
 import telegram_api
 import avisos
 import tareas
+import memoria
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
@@ -3160,6 +3161,7 @@ app.register_blueprint(telegram_api.crear_blueprint(
 ))
 app.register_blueprint(avisos.crear_blueprint(lambda: get_db_connection()))
 app.register_blueprint(tareas.crear_blueprint(lambda: get_db_connection(), asegurar_esquema_sesion))
+app.register_blueprint(memoria.crear_blueprint(lambda: get_db_connection(), asegurar_esquema_sesion))
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))

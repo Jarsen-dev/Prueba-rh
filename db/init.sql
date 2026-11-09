@@ -182,3 +182,11 @@ CREATE TABLE IF NOT EXISTS bot_tareas (
     creada_en     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_bot_tareas_proxima ON bot_tareas (proxima);
+
+CREATE TABLE IF NOT EXISTS bot_memoria (
+    id          SERIAL PRIMARY KEY,
+    usuario_id  INTEGER NOT NULL REFERENCES usuarios_acceso(id) ON DELETE CASCADE,
+    texto       VARCHAR(200) NOT NULL,
+    creada_en   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_bot_memoria_usuario ON bot_memoria (usuario_id);

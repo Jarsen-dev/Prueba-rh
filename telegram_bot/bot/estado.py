@@ -30,6 +30,8 @@ class EstadoUsuario:
     #: Última lista mostrada (empleados o candidatos) y su tipo.
     lista: list[dict[str, Any]] = field(default_factory=list)
     tipo_lista: str | None = None
+    #: Última lista de /memoria (los botones de olvidar llevan su índice).
+    notas: list[dict[str, Any]] = field(default_factory=list)
     #: Última lista de /tareas (los botones de borrar llevan su índice).
     tareas: list[dict[str, Any]] = field(default_factory=list)
     #: Empleado abierto en la ficha.
