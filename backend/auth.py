@@ -80,6 +80,12 @@ PERMISOS_POR_ENDPOINT = {
     'telegram.interno_avisos_turno': PUBLICO,
     'telegram.interno_avisos_preferencias': PUBLICO,
 
+    # Tareas programadas: cada quien las suyas; el turno lo pide el bot con su secreto.
+    'tareas.listar_tareas': SESION,
+    'tareas.crear_tarea': SESION,
+    'tareas.borrar_tarea': SESION,
+    'tareas.interno_turno': PUBLICO,
+
     # Avisos del día (cada sección se filtra por permiso dentro de la ruta).
     'avisos.avisos_del_dia': ADMIN_O_RECLUTAMIENTO,
 

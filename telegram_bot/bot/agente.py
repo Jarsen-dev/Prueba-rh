@@ -41,8 +41,11 @@ INSTRUCCIONES = (
     'No intentes reconstruirlos; si la persona los necesita completos, que los vea en el panel.\n'
     '- Para registrar, cambiar o eliminar algo usa las herramientas preparar_*: NO guardan nada, solo le muestran '
     'a la persona un resumen con el botón Confirmar. Nunca digas que algo quedó guardado o hecho; di que está '
-    'listo para que lo confirme. Un solo cambio por mensaje: si piden varios, prepara el primero y pide que '
-    'confirmen antes del siguiente.\n'
+    'listo para que lo confirme. Si piden varios cambios en un mensaje (p. ej. vacaciones a tres personas), '
+    'prepáralos todos: se juntan en un lote con un solo Confirmar (máximo 10).\n'
+    '- Si piden algo recurrente («cada lunes a las 9 mándame…», «todos los días…») usa preparar_tarea: queda '
+    'una tarea programada que corre sola esa consulta y le manda el resultado. Las tareas solo consultan, nunca '
+    'hacen cambios. Para verlas o borrarlas: ver_tareas y preparar_eliminacion con que=tarea.\n'
     '- En un cambio NO inventes datos: todo valor que mandes (fechas, salario, teléfono, puesto…) lo dijo la '
     'persona. Lo que no mencionó no se manda ni se pregunta, salvo que la herramienta lo exija (por ejemplo, '
     'asignar puesto a un candidato pide todos los datos; cambiar el puesto de un empleado, solo lo que cambia). '
@@ -100,7 +103,7 @@ class Resultado:
 
 
 def contexto_del_turno(usuario: dict[str, Any], ahora: datetime, adjunto: Archivo | None = None,
-                       voz: bool = False) -> str:
+                       voz: bool = False, tarea: bool = False) -> str:
     permisos = ', '.join(usuario.get('permisos') or []) or 'ninguno'
     texto = (
         'Datos de este turno (los pone el sistema, no la persona):\n'
@@ -110,6 +113,10 @@ def contexto_del_turno(usuario: dict[str, Any], ahora: datetime, adjunto: Archiv
     )
     if adjunto is not None:
         texto += f'\n- La persona mandó un archivo: «{adjunto.nombre}»'
+    if tarea:
+        texto += ('\n- Es una TAREA PROGRAMADA que la persona dejó configurada: contesta la instrucción con los datos '
+                  'de hoy, sin preguntas (nadie va a responder). Solo puedes consultar; si pide un cambio, di que '
+                  'las tareas no hacen cambios.')
     if voz:
         texto += ('\n- Este mensaje es una nota de voz transcrita automáticamente: nombres y números pueden venir '
                   'mal escritos. Si algo no cuadra, pregunta en vez de adivinar.')
@@ -133,7 +140,8 @@ class Agente:
 
     async def responder(self, telegram_id: int, texto: str, historial: list[dict[str, str]],
                         ahora: datetime, *, vistos: Vistos | None = None,
-                        adjunto: Archivo | None = None, origen: str = 'agente') -> Resultado:
+                        adjunto: Archivo | None = None, origen: str = 'agente',
+                        solo_lectura: bool = False) -> Resultado:
         sesion = await self._backend.sesion(telegram_id)
         ctx = herramientas.Contexto(
             backend=self._backend, telegram_id=telegram_id, permisos=sesion.permisos,
@@ -143,11 +151,13 @@ class Agente:
             vistos=vistos if vistos is not None else Vistos(),
             adjunto=adjunto,
             origen=origen,
+            solo_lectura=solo_lectura,
         )
         mensajes: list[dict[str, Any]] = [
             {'role': 'system', 'content': INSTRUCCIONES},
             *historial,
-            {'role': 'developer', 'content': contexto_del_turno(sesion.usuario, ahora, adjunto, voz=origen == 'voz')},
+            {'role': 'developer', 'content': contexto_del_turno(sesion.usuario, ahora, adjunto, voz=origen == 'voz',
+                                                                    tarea=solo_lectura)},
             {'role': 'user', 'content': texto},
         ]
         resultado = Resultado(texto='', modelo=self._llm.modelo, peticiones=ctx.peticiones, archivos=ctx.archivos)
@@ -157,7 +167,8 @@ class Agente:
             if self._guardar_enviados:
                 resultado.enviados.append([dict(m) for m in mensajes])
             respuesta = await self._llm.completar(
-                mensajes, herramientas=herramientas.DEFINICIONES, clave_cache=clave_de_cache(telegram_id)
+                mensajes, clave_cache=clave_de_cache(telegram_id),
+                herramientas=herramientas.DEFINICIONES_LECTURA if solo_lectura else herramientas.DEFINICIONES,
             )
             resultado.rondas = ronda + 1
             resultado.tokens_entrada += respuesta.tokens_entrada

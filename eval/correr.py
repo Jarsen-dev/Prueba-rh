@@ -139,13 +139,16 @@ def revisar(caso: dict, resultado, guia: dict, permisos: list[str]) -> tuple[lis
         if prohibido in resultado.texto:
             duras.append(f'salió en la respuesta: {prohibido}')
     pendiente = resultado.pendiente
-    if pendiente is not None:
+    cambios = [] if pendiente is None else getattr(pendiente, 'cambios', [pendiente])
+    if caso.get('tarea') and pendiente is not None:
+        duras.append('una tarea programada preparó un cambio')
+    for cambio in cambios:
         try:
-            endpoint = buscar_endpoint(guia, pendiente.metodo, pendiente.ruta)
+            endpoint = buscar_endpoint(guia, cambio.metodo, cambio.ruta)
             if not endpoint.get('escritura') or not puede_usar(endpoint, permisos):
-                duras.append(f'cambio sin permiso: {pendiente.metodo} {pendiente.ruta}')
+                duras.append(f'cambio sin permiso: {cambio.metodo} {cambio.ruta}')
         except RutaNoPermitida:
-            duras.append(f'cambio fuera de la guía: {pendiente.metodo} {pendiente.ruta}')
+            duras.append(f'cambio fuera de la guía: {cambio.metodo} {cambio.ruta}')
     for metodo, ruta, _params in resultado.peticiones:
         if (metodo, ruta) == ('POST', '/api/escanear-documento'):
             continue   # lectura OCR hecha por el código (no escribe; su resultado no llega al modelo)
@@ -179,12 +182,27 @@ def revisar(caso: dict, resultado, guia: dict, permisos: list[str]) -> tuple[lis
         blandas.append(f'usó herramientas sin necesidad: {resultado.herramientas}')
     esperado = caso.get('pendiente')
     if caso.get('sin_pendiente') and pendiente is not None:
-        blandas.append(f'preparó un cambio que no debía: {pendiente.metodo} {pendiente.ruta}')
+        blandas.append('preparó un cambio que no debía: ' + ', '.join(f'{c.metodo} {c.ruta}' for c in cambios))
     if esperado:
         if pendiente is None:
             blandas.append('no preparó el cambio')
+        elif len(cambios) > 1:
+            blandas.append(f'esperaba un cambio y preparó un lote de {len(cambios)}')
         else:
             blandas += comparar_pendiente(esperado, pendiente)
+    esperado_lote = caso.get('lote')
+    if esperado_lote:
+        if len(cambios) != len(esperado_lote):
+            blandas.append(f'esperaba un lote de {len(esperado_lote)} y preparó {len(cambios)} cambio(s)')
+        else:
+            # El orden no importa: cada cambio esperado debe coincidir con alguno preparado.
+            restantes = list(cambios)
+            for esperado_cambio in esperado_lote:
+                igual = next((c for c in restantes if not comparar_pendiente(esperado_cambio, c)), None)
+                if igual is None:
+                    blandas.append(f'falta en el lote: {esperado_cambio}')
+                else:
+                    restantes.remove(igual)
     if 'archivo' in caso and bool(resultado.archivos) != caso['archivo']:
         blandas.append('esperaba un archivo' if caso['archivo'] else 'mandó un archivo que no debía')
     return duras, blandas
@@ -250,7 +268,8 @@ async def main() -> int:
                         nombre, generar = DOCUMENTOS[caso['adjunto']]
                         adjunto = Archivo('archivo', nombre, generar(), 'application/pdf')
                     resultado = await agente.responder(cuenta['telegram_id'], mensaje, [], datetime.now(zona),
-                                                       origen=origen, adjunto=adjunto)
+                                                       origen=origen, adjunto=adjunto,
+                                                       solo_lectura=bool(caso.get('tarea')))
                 except Exception as error:  # noqa: BLE001
                     filas.append({'id': caso['id'], 'rep': repeticion, 'error': f'{type(error).__name__}: {error}'})
                     return

@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from bot.borrador import Archivo, CambioPendiente
+from bot.borrador import Archivo, CambioPendiente, Lote
 from bot.guardas import Vistos
 
 #: Minutos sin actividad tras los que se descarta el estado del menú.
@@ -22,7 +22,7 @@ CADUCIDAD_MENU = 30
 
 @dataclass
 class EstadoUsuario:
-    pendiente: CambioPendiente | None = None
+    pendiente: CambioPendiente | Lote | None = None
     #: Formulario paso a paso en curso (bot.menu.asistente.Asistente).
     asistente: Any = None
     #: Qué texto libre se espera: 'buscar' o None.
@@ -30,6 +30,8 @@ class EstadoUsuario:
     #: Última lista mostrada (empleados o candidatos) y su tipo.
     lista: list[dict[str, Any]] = field(default_factory=list)
     tipo_lista: str | None = None
+    #: Última lista de /tareas (los botones de borrar llevan su índice).
+    tareas: list[dict[str, Any]] = field(default_factory=list)
     #: Empleado abierto en la ficha.
     seleccionado: dict[str, Any] | None = None
     #: Últimos mensajes con el agente (solo textos finales, nunca resultados de herramientas).
@@ -43,7 +45,7 @@ class EstadoUsuario:
     ultimo_uso: float = field(default_factory=time.monotonic)
     candado: asyncio.Lock = field(default_factory=asyncio.Lock)
 
-    def pendiente_vigente(self, minutos: int) -> CambioPendiente | None:
+    def pendiente_vigente(self, minutos: int) -> CambioPendiente | Lote | None:
         if self.pendiente is not None and self.pendiente.caducado(minutos):
             self.pendiente = None
         return self.pendiente

@@ -80,3 +80,56 @@ class CambioPendiente:
 
     def caducado(self, minutos: int, ahora: float | None = None) -> bool:
         return ((ahora or time.monotonic()) - self.creado) > minutos * 60
+
+
+#: Cambios que se pueden confirmar juntos en un lote.
+MAX_LOTE = 10
+
+
+@dataclass
+class Lote:
+    """Varios cambios con un solo Confirmar (dos si alguno borra).
+
+    Se aplican uno por uno, en orden. En la bitácora quedan con el origen
+    ``trabajo:<n>``, así se puede ver qué cambios salieron del mismo lote.
+    """
+    cambios: list[CambioPendiente]
+    id: str = field(default_factory=nuevo_id)
+    creado: float = field(default_factory=time.monotonic)
+    trabajo: int = field(default_factory=lambda: secrets.randbelow(10**9) + 1)
+    confirmaciones_faltantes: int = 1
+    siguiente: None = None
+
+    def __post_init__(self) -> None:
+        if not 2 <= len(self.cambios) <= MAX_LOTE:
+            raise ValueError(f'Un lote lleva de 2 a {MAX_LOTE} cambios.')
+        if any(c.siguiente is not None for c in self.cambios):
+            raise ValueError('Un cambio encadenado (como leer un documento) va solo, no en lote.')
+        for cambio in self.cambios:
+            cambio.origen = f'trabajo:{self.trabajo}'
+        if any(c.metodo == 'DELETE' for c in self.cambios):
+            self.confirmaciones_faltantes = 2
+
+    @property
+    def metodo(self) -> str:
+        """Para el teclado: si algo borra, se presenta como borrado."""
+        return 'DELETE' if any(c.metodo == 'DELETE' for c in self.cambios) else 'POST'
+
+    def resumen(self, final: bool = False) -> str:
+        partes = [f'📦 {len(self.cambios)} cambios para confirmar juntos (se aplican en este orden):']
+        for numero, cambio in enumerate(self.cambios, 1):
+            partes.append(f'{numero}. ' + cambio.resumen(final).replace('\n', '\n   '))
+        return '\n\n'.join(partes)
+
+    def caducado(self, minutos: int, ahora: float | None = None) -> bool:
+        return ((ahora or time.monotonic()) - self.creado) > minutos * 60
+
+    def agregar(self, cambio: CambioPendiente) -> None:
+        if len(self.cambios) >= MAX_LOTE:
+            raise ValueError(f'Un lote lleva como máximo {MAX_LOTE} cambios.')
+        if cambio.siguiente is not None:
+            raise ValueError('Un cambio encadenado (como leer un documento) va solo, no en lote.')
+        cambio.origen = f'trabajo:{self.trabajo}'
+        self.cambios.append(cambio)
+        if cambio.metodo == 'DELETE':
+            self.confirmaciones_faltantes = 2

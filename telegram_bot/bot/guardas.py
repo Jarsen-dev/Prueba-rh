@@ -46,6 +46,8 @@ class Vistos:
     candidatos: dict[int, dict[str, Any]] = field(default_factory=dict)
     #: (registro_id, incidencia_id) -> incidencia
     incidencias: dict[tuple[int, int], dict[str, Any]] = field(default_factory=dict)
+    #: Tareas programadas de la persona (id -> tarea).
+    tareas: dict[int, dict[str, Any]] = field(default_factory=dict)
 
     def empleado(self, registro_id: Any) -> dict[str, Any]:
         try:

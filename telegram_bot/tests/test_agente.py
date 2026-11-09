@@ -117,7 +117,8 @@ async def test_errores_vuelven_como_texto():
 
 def test_herramientas_de_lectura_y_de_preparar():
     assert herramientas.LECTURA == {'buscar_empleado', 'ver_empleado', 'contar_empleados', 'resumen_reclutamiento',
-                                    'buscar_endpoints', 'consultar_api', 'ver_pendientes', 'ver_incidencias'}
+                                    'buscar_endpoints', 'consultar_api', 'ver_pendientes', 'ver_incidencias',
+                                    'ver_tareas'}
     assert all(n.startswith('preparar_') for n in herramientas.NOMBRES - herramientas.LECTURA)
 
 

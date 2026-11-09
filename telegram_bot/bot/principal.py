@@ -23,6 +23,7 @@ from telegram.ext import (
 )
 
 from bot.backend import ClienteBackend, ErrorBackend
+from bot.borrador import CambioPendiente, Lote
 from bot.config import Settings, obtener_settings
 from bot.estado import Estados
 from bot.interfaz import (  # noqa: F401 - reexportados para quien importe desde principal
@@ -34,7 +35,7 @@ from bot.interfaz import (  # noqa: F401 - reexportados para quien importe desde
     teclado_confirmar,
     texto_error,
 )
-from bot import avisos, conversacion
+from bot import avisos, conversacion, tareas
 from bot.agente import Agente
 from bot.llm import ClienteOpenAI
 from bot.voz import ClienteVoz
@@ -53,6 +54,7 @@ TEXTO_AYUDA = (
     '/yo — tu cuenta y permisos\n'
     '/desvincular — desconecta este Telegram de tu cuenta\n'
     '/nuevo — empieza una conversación nueva con el asistente\n'
+    '/tareas — tus tareas programadas (consultas que corro solo a una hora fija)\n'
     '/avisos — resumen diario de contratos por vencer, reingresos y candidatos (hora y encendido)\n'
     '/ayuda — esta lista\n\n'
     'También puedes escribirme, por ejemplo «¿cuántos activos hay en Kronos?», «registra vacaciones a Ana del '
@@ -70,6 +72,7 @@ COMANDOS = [
     BotCommand('cancelar', 'Descartar lo pendiente'),
     BotCommand('nuevo', 'Conversación nueva con el asistente'),
     BotCommand('avisos', 'Avisos diarios: hora y encendido'),
+    BotCommand('tareas', 'Mis tareas programadas'),
     BotCommand('yo', 'Mi cuenta y permisos'),
     BotCommand('desvincular', 'Desconectar este Telegram'),
     BotCommand('ayuda', 'Ayuda'),
@@ -247,24 +250,18 @@ async def al_boton(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Se quita antes de ejecutar: un doble clic no repite el cambio.
         estado.pendiente = None
 
-    try:
-        await _backend(context).peticion(
-            telegram_id,
-            pendiente.metodo,
-            pendiente.ruta,
-            headers={'X-Origen-Telegram': pendiente.origen},
-            **pendiente.argumentos_peticion(),
-        )
-    except ErrorBackend as error:
-        await consulta.edit_message_text(f'{pendiente.resumen(final=True)}\n\n{texto_error(error)}')
+    if isinstance(pendiente, Lote):
+        await _aplicar_lote(consulta, context, telegram_id, pendiente)
         return
-    except httpx.TransportError:
-        # Sin respuesta: quizá sí se aplicó. Nunca se reintenta solo.
-        logger.warning('Sin respuesta al aplicar %s %s', pendiente.metodo, pendiente.ruta)
+    resultado = await _aplicar(context, telegram_id, pendiente)
+    if resultado == 'sin_respuesta':
         await consulta.edit_message_text(
             f'{pendiente.resumen(final=True)}\n\n❓ El sistema no respondió; es posible que el cambio sí se haya '
             'aplicado. Revísalo en el panel antes de intentarlo de nuevo.'
         )
+        return
+    if resultado != 'ok':
+        await consulta.edit_message_text(f'{pendiente.resumen(final=True)}\n\n{resultado}')
         return
     await consulta.edit_message_text(f'{pendiente.resumen(final=True)}\n\n✅ Hecho.')
     siguiente = pendiente.siguiente
@@ -273,6 +270,54 @@ async def al_boton(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         async with estado.candado:
             estado.pendiente = siguiente
         await consulta.message.reply_text(siguiente.resumen(), reply_markup=teclado_confirmar(siguiente))
+
+
+async def _aplicar(context, telegram_id: int, cambio: CambioPendiente) -> str:
+    """'ok', 'sin_respuesta' (quizá sí se aplicó) o el mensaje de error del sistema."""
+    try:
+        await _backend(context).peticion(
+            telegram_id, cambio.metodo, cambio.ruta,
+            headers={'X-Origen-Telegram': cambio.origen}, **cambio.argumentos_peticion(),
+        )
+    except ErrorBackend as error:
+        return texto_error(error)
+    except httpx.TransportError:
+        # Sin respuesta: quizá sí se aplicó. Nunca se reintenta solo.
+        logger.warning('Sin respuesta al aplicar %s %s', cambio.metodo, cambio.ruta)
+        return 'sin_respuesta'
+    return 'ok'
+
+
+def _titulo_corto(cambio: CambioPendiente) -> str:
+    """«Reactivar (estatus ACTIVO) · Diego Herrera Luna»: el título y a quién (primer dato del detalle)."""
+    titulo = cambio.titulo.rstrip(':')
+    detalle = cambio.detalle_final if cambio.detalle_final is not None else cambio.detalle
+    return f'{titulo} · {detalle[0].split(": ", 1)[-1]}' if detalle else titulo
+
+
+async def _aplicar_lote(consulta, context, telegram_id: int, lote: Lote) -> None:
+    """Uno por uno y en orden. Un rechazo no detiene el resto; una falta de respuesta sí."""
+    total = len(lote.cambios)
+    lineas = []
+    for numero, cambio in enumerate(lote.cambios, 1):
+        try:
+            await consulta.edit_message_text(f'⏳ Aplicando {numero} de {total}…')
+        except Exception:  # noqa: BLE001 - el avance es cosmético
+            pass
+        titulo = _titulo_corto(cambio)
+        resultado = await _aplicar(context, telegram_id, cambio)
+        if resultado == 'ok':
+            lineas.append(f'✅ {numero}. {titulo}')
+            continue
+        if resultado == 'sin_respuesta':
+            lineas.append(f'❓ {numero}. {titulo}: el sistema no respondió; revísalo en el panel.')
+            lineas += [f'⏸ {n}. {_titulo_corto(c)}: no se intentó.'
+                       for n, c in enumerate(lote.cambios[numero:], numero + 1)]
+            break
+        lineas.append(f'⚠️ {numero}. {titulo}: {resultado}')
+    hechos = sum(1 for linea in lineas if linea.startswith('✅'))
+    await consulta.edit_message_text(
+        f'{lote.resumen(final=True)}\n\n📦 Resultado: {hechos} de {total} aplicados.\n' + '\n'.join(lineas))
 
 
 async def al_texto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -336,10 +381,13 @@ async def al_iniciar(app: Application) -> None:
     if settings.BOT_AVISOS:
         avisos.iniciar(app)
         logger.info('Avisos diarios activos.')
+    if settings.agente_activo:
+        tareas.iniciar(app)
 
 
 async def al_terminar(app: Application) -> None:
     await avisos.detener(app)
+    await tareas.detener(app)
     http = app.bot_data.get('http')
     if http is not None:
         await http.aclose()
@@ -366,6 +414,7 @@ def construir(settings: Settings) -> Application:
         'cancelar': cmd_cancelar,
         'nuevo': cmd_nuevo,
         'avisos': avisos.cmd_avisos,
+        'tareas': tareas.cmd_tareas,
         'sistema': pantallas.cmd_sistema,
         'menu': pantallas.cmd_sistema,
     }
@@ -379,6 +428,7 @@ def construir(settings: Settings) -> Application:
     app.add_handler(CallbackQueryHandler(pantallas.al_boton_asistente, pattern=r'^a:(\d{1,3}|[bsx])$'))
     app.add_handler(CallbackQueryHandler(conversacion.al_calificar, pattern=r'^cal:\d{1,12}:[+-]$'))
     app.add_handler(CallbackQueryHandler(avisos.al_boton, pattern=r'^av:(on|off|ver|h\d{1,2})$'))
+    app.add_handler(CallbackQueryHandler(tareas.al_boton_borrar, pattern=r'^tb:\d{1,2}$'))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & PRIVADO, al_texto))
     app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & PRIVADO, al_archivo))
     app.add_handler(MessageHandler((filters.VOICE | filters.AUDIO) & PRIVADO, al_voz))

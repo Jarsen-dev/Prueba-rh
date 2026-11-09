@@ -11,6 +11,7 @@ from telegram.ext import ContextTypes
 from bot import herramientas
 from bot.agente import Agente, Resultado
 from bot.backend import ErrorBackend
+from bot.borrador import Lote
 from bot.config import Settings
 from bot.estado import Estados, EstadoUsuario
 from bot.interfaz import boton, responder, teclado_confirmar, texto_error
@@ -137,9 +138,10 @@ async def _turno(update, context, settings: Settings, agente: Agente, estado: Es
         # El mismo pendiente y el mismo botón que el menú: solo al_boton escribe.
         async with estado.candado:
             estado.pendiente = pendiente
+        usados = [*(pendiente.cambios if isinstance(pendiente, Lote) else [pendiente]), pendiente.siguiente]
         if estado.adjunto is not None and any(
                 p is not None and p.archivo is not None and p.archivo.contenido is estado.adjunto.contenido
-                for p in (pendiente, pendiente.siguiente)):
+                for p in usados):
             estado.adjunto = None
         await responder(update, pendiente.resumen(), teclado_confirmar(pendiente))
 

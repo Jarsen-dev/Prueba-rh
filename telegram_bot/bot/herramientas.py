@@ -65,9 +65,11 @@ class Contexto:
     #: Archivo que mandó la persona por Telegram (el modelo solo sabe su nombre).
     adjunto: borrador.Archivo | None = None
     #: El cambio que preparó el agente en este turno (uno como máximo).
-    pendiente: borrador.CambioPendiente | None = None
+    pendiente: borrador.CambioPendiente | borrador.Lote | None = None
     #: Cómo queda el cambio en la bitácora: «agente» (texto) o «voz» (nota de voz).
     origen: str = 'agente'
+    #: Tarea programada: solo herramientas de consulta, nunca cambios.
+    solo_lectura: bool = False
 
     async def get(self, ruta: str, params: dict[str, Any] | None = None):
         # Toda consulta del agente (curada o no) pasa por la guía y los permisos
@@ -107,6 +109,10 @@ def registrar_vistos(vistos: Vistos, ruta: str, datos: Any) -> None:
         for c in datos:
             if isinstance(c, dict) and isinstance(c.get('id'), int):
                 vistos.candidatos[c['id']] = {k: c.get(k) for k in ('id', 'nombre_completo', 'numero_temporal')}
+    elif ruta == '/api/tareas' and isinstance(datos, dict):
+        for t in datos.get('tareas') or []:
+            if isinstance(t, dict) and isinstance(t.get('id'), int):
+                vistos.tareas[t['id']] = {k: t.get(k) for k in ('id', 'instruccion', 'descripcion')}
     elif (m := re.fullmatch(r'/api/empleados/(\d+)/incidencias', ruta)) and isinstance(datos, dict):
         for i in datos.get('incidencias') or []:
             if isinstance(i, dict) and isinstance(i.get('id'), int):
@@ -152,6 +158,8 @@ DEFINICIONES = [
     _funcion('ver_incidencias',
              'Historial de incidencias de un empleado por registro_id, con el id de cada incidencia.',
              {'registro_id': {'type': 'integer'}}, ['registro_id']),
+    _funcion('ver_tareas',
+             'Las tareas programadas de la persona (id, qué hace y cuándo corre).', {}),
     _funcion('buscar_endpoints',
              'Busca en la guía de la API las consultas disponibles para tu cuenta (ruta, resumen y parámetros). '
              'Úsala antes de consultar_api cuando ninguna otra herramienta sirve.',
@@ -271,6 +279,11 @@ async def ver_incidencias(ctx: Contexto, registro_id: Any = None) -> str:
     return para_modelo(respuesta.datos, enmascarar=ctx.enmascarar)
 
 
+async def ver_tareas(ctx: Contexto) -> str:
+    respuesta = await ctx.get('/api/tareas')
+    return para_modelo(respuesta.datos, enmascarar=ctx.enmascarar)
+
+
 async def buscar_endpoints(ctx: Contexto, consulta: str = '') -> str:
     guia = await ctx.backend.guia()
     encontrados = buscar_en_guia(guia, consulta, ctx.permisos, solo_lectura=True)
@@ -309,6 +322,7 @@ async def consultar_api(ctx: Contexto, ruta: str = '', parametros: dict[str, Any
 IMPLEMENTACIONES: dict[str, Callable[..., Awaitable[str]]] = {
     'ver_pendientes': ver_pendientes,
     'ver_incidencias': ver_incidencias,
+    'ver_tareas': ver_tareas,
     'buscar_empleado': buscar_empleado,
     'ver_empleado': ver_empleado,
     'contar_empleados': contar_empleados,
@@ -318,6 +332,8 @@ IMPLEMENTACIONES: dict[str, Callable[..., Awaitable[str]]] = {
 }
 LECTURA = frozenset(IMPLEMENTACIONES)
 assert LECTURA == NOMBRES
+#: Lo único que ve el agente cuando corre una tarea programada.
+DEFINICIONES_LECTURA = list(DEFINICIONES)
 
 # Las de escritura se agregan aquí para que el agente tenga una sola lista.
 from bot import escrituras  # noqa: E402
@@ -330,7 +346,7 @@ NOMBRES = frozenset(IMPLEMENTACIONES)
 async def ejecutar(ctx: Contexto, nombre: str, argumentos: dict[str, Any]) -> str:
     """Corre una herramienta; los errores vuelven al modelo como texto, nunca como excepción."""
     funcion = IMPLEMENTACIONES.get(nombre)
-    if funcion is None:
+    if funcion is None or (ctx.solo_lectura and nombre not in LECTURA):
         return f'La herramienta «{nombre}» no existe.'
     try:
         return await funcion(ctx, **{k: v for k, v in argumentos.items() if isinstance(k, str)})

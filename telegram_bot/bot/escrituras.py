@@ -15,8 +15,8 @@ datos del cambio.
 import re
 from typing import TYPE_CHECKING, Any
 
-from bot import documentos
-from bot.borrador import CambioPendiente
+from bot import documentos, tareas
+from bot.borrador import CambioPendiente, Lote
 from bot.guardas import (
     GuardaFallo,
     de_catalogo,
@@ -34,7 +34,10 @@ if TYPE_CHECKING:
 
 LISTO = ('Preparé el cambio «{titulo}». La persona ya ve el resumen con el botón Confirmar. TODAVÍA NO ESTÁ '
          'GUARDADO: díselo en una línea y pídele que revise el resumen y confirme.')
+LISTO_LOTE = ('Agregué «{titulo}» al lote: ya son {total} cambios con un solo botón Confirmar. TODAVÍA NO ESTÁ '
+              'GUARDADO. Si faltan más cambios de los que pidió, prepáralos; al terminar díselo en una línea.')
 TIPOS = list(formularios.TITULOS_INCIDENCIA)
+DIAS_SEMANA = ('lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo')
 CAMPOS_PUESTO = ('empresa', 'area', 'puesto', 'turno', 'salario', 'pago')
 NOMBRE_CAMPO = {'empresa': 'Empresa', 'area': 'Área', 'puesto': 'Puesto', 'turno': 'Turno', 'salario': 'Salario',
                 'pago': 'Pago'}
@@ -82,11 +85,24 @@ DEFINICIONES = [
               'telefono': {'type': 'string'}, 'team': {'type': 'integer', 'minimum': 1, 'maximum': 4}},
              ['accion', 'nombre']),
     _funcion('preparar_eliminacion',
-             'Prepara eliminar definitivamente un empleado, un candidato pendiente o una incidencia (pide doble '
-             'confirmación). Para incidencia: id de la incidencia (ver_incidencias) y registro_id del empleado.',
-             {'que': {'type': 'string', 'enum': ['empleado', 'candidato', 'incidencia']},
+             'Prepara eliminar definitivamente un empleado, un candidato pendiente, una incidencia o una tarea '
+             'programada (pide doble confirmación). Para incidencia: id de la incidencia (ver_incidencias) y '
+             'registro_id del empleado. Para tarea: id de ver_tareas.',
+             {'que': {'type': 'string', 'enum': ['empleado', 'candidato', 'incidencia', 'tarea']},
               'id': {'type': 'integer'}, 'registro_id': {'type': 'integer'}},
              ['que', 'id']),
+    _funcion('preparar_tarea',
+             'Prepara una tarea programada: una CONSULTA que el asistente correrá solo y le mandará a la persona '
+             '(nunca hace cambios). instruccion: lo que hay que consultar, en una frase clara y autosuficiente, '
+             'p. ej. «Dame el resumen de reclutamiento del mes con las fuentes». La hora (0-23, hora de México) y '
+             'los días los dice la persona.',
+             {'instruccion': {'type': 'string'},
+              'frecuencia': {'type': 'string', 'enum': ['diaria', 'semanal', 'mensual']},
+              'hora': {'type': 'integer', 'minimum': 0, 'maximum': 23},
+              'minuto': {'type': 'integer', 'minimum': 0, 'maximum': 59},
+              'dias_semana': {'type': 'array', 'items': {'type': 'string', 'enum': list(DIAS_SEMANA)}},
+              'dia_mes': {'type': 'integer', 'minimum': 1, 'maximum': 28}},
+             ['instruccion', 'frecuencia', 'hora']),
     _funcion('preparar_datos_de_documento',
              'Prepara actualizar los datos personales de un empleado leyendo el documento que la persona mandó por '
              'el chat (acta de nacimiento, comprobante de domicilio, constancia de situación fiscal o documento '
@@ -99,9 +115,11 @@ DEFINICIONES = [
 
 
 async def _exigir_permiso(ctx: 'Contexto', metodo: str, ruta: str) -> None:
-    if ctx.pendiente is not None:
-        raise GuardaFallo('Ya preparaste un cambio en este mensaje; solo va uno por mensaje. Dile a la persona que '
-                          'confirme ese y luego pida el siguiente.')
+    if ctx.solo_lectura:
+        raise GuardaFallo('Una tarea programada solo consulta; no puede preparar cambios.')
+    if ctx.pendiente is not None and ctx.pendiente.siguiente is not None:
+        raise GuardaFallo('La actualización con documento va sola. Dile a la persona que la confirme y luego pida '
+                          'lo demás.')
     try:
         endpoint = buscar_endpoint(await ctx.backend.guia(), metodo, ruta)
     except RutaNoPermitida as error:
@@ -111,8 +129,23 @@ async def _exigir_permiso(ctx: 'Contexto', metodo: str, ruta: str) -> None:
 
 
 def _dejar(ctx: 'Contexto', pendiente: CambioPendiente) -> str:
-    ctx.pendiente = pendiente
-    return LISTO.format(titulo=pendiente.titulo.rstrip(':'))
+    """El primer cambio queda solo; los siguientes del mismo mensaje forman un lote con un solo Confirmar."""
+    actual = ctx.pendiente
+    if actual is None:
+        ctx.pendiente = pendiente
+        return LISTO.format(titulo=pendiente.titulo.rstrip(':'))
+    previos = actual.cambios if isinstance(actual, Lote) else [actual]
+    clave = (pendiente.metodo, pendiente.ruta, repr(pendiente.cuerpo), repr(pendiente.formulario))
+    if any((c.metodo, c.ruta, repr(c.cuerpo), repr(c.formulario)) == clave for c in previos):
+        raise GuardaFallo('Ese cambio ya está preparado en este mensaje.')
+    try:
+        if isinstance(actual, Lote):
+            actual.agregar(pendiente)
+        else:
+            ctx.pendiente = Lote([actual, pendiente])
+    except ValueError as error:
+        raise GuardaFallo(f'{error} Prepara los demás después de que la persona confirme.') from error
+    return LISTO_LOTE.format(titulo=pendiente.titulo.rstrip(':'), total=len(ctx.pendiente.cambios))
 
 
 def _entero(valor: Any, que: str) -> int:
@@ -339,15 +372,75 @@ async def preparar_eliminacion(ctx: 'Contexto', que: str = '', id: Any = None, r
                      f'Tipo: {incidencia.get("type")}',
                      f'Fechas: {incidencia.get("fecha_inicio") or "?"} → {incidencia.get("fecha_reingreso") or "?"}'],
             origen=ctx.origen)
+    elif que == 'tarea':
+        tarea = ctx.vistos.tareas.get(_entero(id, 'id'))
+        if tarea is None:
+            raise GuardaFallo('Esa tarea no salió de ninguna consulta; consulta primero ver_tareas.')
+        pendiente = tareas.pendiente_borrar(tarea, ctx.origen)
     else:
-        raise GuardaFallo('que debe ser empleado, candidato o incidencia.')
+        raise GuardaFallo('que debe ser empleado, candidato, incidencia o tarea.')
     await _exigir_permiso(ctx, 'DELETE', pendiente.ruta)
     return _dejar(ctx, pendiente)
+
+
+def _hora_mencionada(hora: int, textos: list[str]) -> None:
+    """«a las 9», «a las 18:00» o «6 de la tarde» (18)."""
+    for candidata in [hora] + ([hora - 12] if hora > 12 else []):
+        try:
+            numero_mencionado(candidata, textos)
+            return
+        except GuardaFallo:
+            continue
+    raise GuardaFallo(f'La hora {hora}:00 no aparece en lo que escribió la persona; pregúntale a qué hora.')
+
+
+async def preparar_tarea(ctx: 'Contexto', instruccion: str = '', frecuencia: str = '', hora: Any = None,
+                         minuto: Any = 0, dias_semana: list | None = None, dia_mes: Any = None) -> str:
+    await _exigir_permiso(ctx, 'POST', '/api/tareas')
+    instruccion = ' '.join(str(instruccion or '').split())
+    if not instruccion or len(instruccion) > 300:
+        raise GuardaFallo('La instrucción debe ser una frase de hasta 300 caracteres.')
+    if frecuencia not in ('diaria', 'semanal', 'mensual'):
+        raise GuardaFallo('frecuencia debe ser diaria, semanal o mensual.')
+    hora, minuto = _entero(hora, 'La hora'), _entero(minuto or 0, 'El minuto')
+    if not 0 <= hora <= 23 or not 0 <= minuto <= 59:
+        raise GuardaFallo('La hora va de 0 a 23 y el minuto de 0 a 59.')
+    _hora_mencionada(hora, ctx.textos)
+    if minuto:
+        numero_mencionado(minuto, ctx.textos)
+    cuerpo: dict[str, Any] = {'instruccion': instruccion, 'frecuencia': frecuencia, 'hora': hora, 'minuto': minuto}
+    if frecuencia == 'semanal':
+        dichos = normalizar(' '.join(ctx.textos))
+        dias = []
+        for dia in dias_semana or []:
+            nombre = normalizar(dia)
+            if nombre not in DIAS_SEMANA:
+                raise GuardaFallo(f'«{dia}» no es un día de la semana.')
+            if nombre not in dichos:
+                raise GuardaFallo(f'La persona no mencionó el {dia}; pregúntale qué días.')
+            dias.append(DIAS_SEMANA.index(nombre))
+        if not dias:
+            raise GuardaFallo('Falta qué días de la semana; pregúntaselo.')
+        cuerpo['dias_semana'] = sorted(set(dias))
+    if frecuencia == 'mensual':
+        dia_mes = _entero(dia_mes, 'El día del mes')
+        if not 1 <= dia_mes <= 28:
+            raise GuardaFallo('El día del mes va del 1 al 28.')
+        numero_mencionado(dia_mes, ctx.textos)
+        cuerpo['dia_mes'] = dia_mes
+    cuando = tareas.descripcion(frecuencia, hora, minuto, cuerpo.get('dias_semana'), cuerpo.get('dia_mes'))
+    return _dejar(ctx, CambioPendiente(
+        'POST', '/api/tareas', '🗓 Programar tarea:',
+        detalle=[f'Cuándo: {cuando} (hora de México)', f'Qué: «{instruccion}»',
+                 'Solo consulta: nunca hace cambios. Puedes verlas o borrarlas con /tareas.'],
+        cuerpo=cuerpo, origen=ctx.origen))
 
 
 async def preparar_datos_de_documento(ctx: 'Contexto', registro_id: Any = None, tipo: str = '') -> str:
     empleado = ctx.vistos.empleado(registro_id)
     registro_id = int(registro_id)
+    if ctx.pendiente is not None:
+        raise GuardaFallo('La actualización con documento va sola; pídela en otro mensaje después de confirmar.')
     await _exigir_permiso(ctx, 'POST', f'/api/actualizar-empleado/{registro_id}')
     await _exigir_permiso(ctx, 'POST', '/api/employee-files')
     if ctx.adjunto is None:
@@ -374,5 +467,6 @@ IMPLEMENTACIONES = {
     'preparar_reclutador': preparar_reclutador,
     'preparar_eliminacion': preparar_eliminacion,
     'preparar_datos_de_documento': preparar_datos_de_documento,
+    'preparar_tarea': preparar_tarea,
 }
 assert set(IMPLEMENTACIONES) == {d['function']['name'] for d in DEFINICIONES}

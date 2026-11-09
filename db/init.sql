@@ -167,3 +167,18 @@ CREATE TABLE IF NOT EXISTS bot_trazas (
     calificacion    SMALLINT
 );
 CREATE INDEX IF NOT EXISTS idx_bot_trazas_fecha ON bot_trazas (fecha DESC);
+
+CREATE TABLE IF NOT EXISTS bot_tareas (
+    id            SERIAL PRIMARY KEY,
+    usuario_id    INTEGER NOT NULL REFERENCES usuarios_acceso(id) ON DELETE CASCADE,
+    instruccion   VARCHAR(300) NOT NULL,
+    frecuencia    VARCHAR(10) NOT NULL CHECK (frecuencia IN ('diaria', 'semanal', 'mensual')),
+    dias_semana   VARCHAR(20) NOT NULL DEFAULT '',
+    dia_mes       SMALLINT CHECK (dia_mes BETWEEN 1 AND 28),
+    hora          SMALLINT NOT NULL CHECK (hora BETWEEN 0 AND 23),
+    minuto        SMALLINT NOT NULL DEFAULT 0 CHECK (minuto BETWEEN 0 AND 59),
+    proxima       TIMESTAMPTZ NOT NULL,
+    ultima        TIMESTAMPTZ,
+    creada_en     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_bot_tareas_proxima ON bot_tareas (proxima);

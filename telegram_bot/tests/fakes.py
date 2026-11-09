@@ -64,10 +64,12 @@ class FakeLLM:
         self.guion = list(guion)
         self.modelo = modelo
         self.recibidos = []
+        self.herramientas_recibidas = []
 
     async def completar(self, mensajes, *, herramientas=None, max_tokens=1200, clave_cache=None):
         from bot.llm import LlamadaHerramienta, RespuestaLLM
         self.recibidos.append([dict(m) for m in mensajes])
+        self.herramientas_recibidas.append(herramientas or [])
         paso = self.guion.pop(0)
         if isinstance(paso, Exception):
             raise paso

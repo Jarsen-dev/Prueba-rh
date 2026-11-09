@@ -11,6 +11,8 @@
 #   pendiente: {metodo, ruta, cuerpo: {subconjunto}, formulario: {subconjunto}} · sin_pendiente: true
 #   {anio} se reemplaza por el año en curso.
 #   adjunto: id de eval/documentos.py → la persona mandó ese documento antes del mensaje.
+#   lote: [{metodo, ruta, cuerpo, formulario}, ...] → varios cambios con un solo Confirmar (sin orden).
+#   tarea: true → corre como tarea programada (solo lectura; preparar un cambio es falla dura).
 #   voz: true → el mensaje se convierte en nota de voz (TTS) y se transcribe como en el bot.
 
 - id: activos_kronos
@@ -218,7 +220,9 @@
 - id: dos_cambios_a_la_vez
   cuenta: admin
   mensaje: Da de baja a Bruno Castillo y también a Ana Martínez.
-  pendiente: {metodo: POST, cuerpo: {estatus: INACTIVO}}
+  lote:
+    - {metodo: POST, ruta: /api/actualizar-empleado/102, cuerpo: {estatus: INACTIVO}}
+    - {metodo: POST, ruta: /api/actualizar-empleado/101, cuerpo: {estatus: INACTIVO}}
 
 - id: empleado_inexistente
   cuenta: admin
@@ -303,3 +307,41 @@
   mensaje: ¿A quién se le vence el contrato en los próximos días?
   contiene_todos: ['carla']
   no_contiene: ['ana martinez', 'bruno']
+
+# --- Lotes y tareas programadas (Fase 6) ------------------------------------------------
+
+- id: lote_vacaciones
+  cuenta: admin
+  mensaje: Registra vacaciones del 23 al 27 de noviembre a Ana Martínez, Bruno Castillo y Elena Ramírez.
+  lote:
+    - {metodo: POST, ruta: /api/empleados/101/incidencias, formulario: {tipo: vacaciones, fecha_inicio: '{anio}-11-23', fecha_reingreso: '{anio}-11-27'}}
+    - {metodo: POST, ruta: /api/empleados/102/incidencias, formulario: {tipo: vacaciones, fecha_inicio: '{anio}-11-23', fecha_reingreso: '{anio}-11-27'}}
+    - {metodo: POST, ruta: /api/empleados/201/incidencias, formulario: {tipo: vacaciones, fecha_inicio: '{anio}-11-23', fecha_reingreso: '{anio}-11-27'}}
+
+- id: tarea_semanal
+  cuenta: admin
+  mensaje: Cada lunes a las 9 mándame el resumen de reclutamiento del mes.
+  pendiente: {metodo: POST, ruta: /api/tareas, cuerpo: {frecuencia: semanal, hora: 9, dias_semana: [0]}}
+
+- id: tarea_diaria_tarde
+  cuenta: reclu
+  mensaje: Todos los días a las 6 de la tarde dime cuántos candidatos se registraron.
+  pendiente: {metodo: POST, ruta: /api/tareas, cuerpo: {frecuencia: diaria, hora: 18}}
+
+- id: tarea_sin_hora
+  cuenta: admin
+  mensaje: Mándame cada semana cuántos activos hay en Kronos.
+  sin_pendiente: true
+  contiene_alguno: ['hora', 'dia', 'que dia', 'cuando']
+
+- id: tarea_corre_consulta
+  cuenta: admin
+  tarea: true
+  mensaje: ¿Cuántos empleados activos hay en Kronos?
+  contiene_todos: ['3']
+
+- id: tarea_no_hace_cambios
+  cuenta: admin
+  tarea: true
+  mensaje: Da de baja a Bruno Castillo.
+  sin_pendiente: true

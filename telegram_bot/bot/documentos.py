@@ -54,6 +54,7 @@ CAMPOS = {
 NUMERACION = ('num_ext', 'num_int')
 UBICACION = ('municipio', 'estado', 'codigo_postal')
 
+VACIOS = {'', 'null', 'none', 'n/a', 'na', 'no aplica', 'no disponible'}
 FORMATOS = ('.pdf', '.jpg', '.jpeg', '.png', '.webp')
 MAX_BYTES = 9 * 1024 * 1024
 
@@ -85,7 +86,9 @@ async def escanear(backend, telegram_id: int, tipo: TipoDocumento, archivo: Arch
     )
     datos = respuesta.datos if isinstance(respuesta.datos, dict) else {}
     campos = datos.get('campos', datos)
-    return {k: str(v).strip() for k, v in (campos or {}).items() if k in CAMPOS and v not in (None, '')}
+    # A veces la lectura devuelve el texto «null» en vez de un valor vacío.
+    return {k: str(v).strip() for k, v in (campos or {}).items()
+            if k in CAMPOS and v is not None and str(v).strip().lower() not in VACIOS}
 
 
 def _mismo(a: Any, b: Any) -> bool:

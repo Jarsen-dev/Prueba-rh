@@ -51,6 +51,12 @@ GUIA = [
      'resumen': f'Todos los empleados de una empresa ({EMPRESA}) con número, área, puesto, turno, estatus y fechas. Puede ser largo: prefiere contar_empleados.'},
     {'metodo': 'GET', 'ruta': '/api/empleados/{registro_id}/incidencias',
      'resumen': 'Historial de incidencias de un empleado (vacaciones, incapacidad, suspensión, entrada-salida, indisciplina) con fechas y motivo.'},
+    {'metodo': 'GET', 'ruta': '/api/tareas',
+     'resumen': 'Tareas programadas de la persona (consultas que el asistente corre solo a una hora fija).'},
+    {'metodo': 'POST', 'ruta': '/api/tareas',
+     'resumen': 'Programar una tarea de consulta (instruccion, frecuencia diaria/semanal/mensual, hora, minuto, '
+                'dias_semana 0=lunes, dia_mes 1-28).'},
+    {'metodo': 'DELETE', 'ruta': '/api/tareas/{tarea_id}', 'resumen': 'Borrar una tarea programada propia.'},
     {'metodo': 'GET', 'ruta': '/api/avisos',
      'resumen': 'Avisos del día: contratos que vencen pronto (fin = ingreso + 67 días hábiles), quién regresa o '
                 'empieza una incidencia hoy o mañana, y candidatos sin asignar desde hace días. Cada sección '

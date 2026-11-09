@@ -54,8 +54,9 @@ def test_tipo_por_texto_y_formato():
 
 
 async def test_escanear_manda_el_formulario_del_panel():
-    backend = FakeBackend(rutas={('POST', '/api/escanear-documento'): {'campos': {'rfc': ' X1 ', 'curp': None, 'otro': 'y'}}})
-    assert await documentos.escanear(backend, 7, CSF, FOTO) == {'rfc': 'X1'}
+    backend = FakeBackend(rutas={('POST', '/api/escanear-documento'): {'campos': {'rfc': ' X1 ', 'curp': None, 'otro': 'y',
+                                                                                   'num_int': 'null', 'num_ext': 'S/N'}}})
+    assert await documentos.escanear(backend, 7, CSF, FOTO) == {'rfc': 'X1', 'num_ext': 'S/N'}
     _m, _r, kw = backend.llamadas[0]
     assert kw['data'] == {'tipo_documento': 'Constancia de Situación Fiscal'}
     assert kw['files'] == [('archivo', ('constancia.jpg', FOTO.contenido, 'image/jpeg'))]

@@ -54,6 +54,45 @@
   },
   {
    "metodo": "GET",
+   "ruta": "/api/tareas",
+   "resumen": "Tareas programadas de la persona (consultas que el asistente corre solo a una hora fija).",
+   "parametros": {},
+   "archivo": false,
+   "escritura": false,
+   "permisos": [
+    "admin",
+    "reclutamiento",
+    "notificaciones"
+   ]
+  },
+  {
+   "metodo": "POST",
+   "ruta": "/api/tareas",
+   "resumen": "Programar una tarea de consulta (instruccion, frecuencia diaria/semanal/mensual, hora, minuto, dias_semana 0=lunes, dia_mes 1-28).",
+   "parametros": {},
+   "archivo": false,
+   "escritura": true,
+   "permisos": [
+    "admin",
+    "reclutamiento",
+    "notificaciones"
+   ]
+  },
+  {
+   "metodo": "DELETE",
+   "ruta": "/api/tareas/{tarea_id}",
+   "resumen": "Borrar una tarea programada propia.",
+   "parametros": {},
+   "archivo": false,
+   "escritura": true,
+   "permisos": [
+    "admin",
+    "reclutamiento",
+    "notificaciones"
+   ]
+  },
+  {
+   "metodo": "GET",
    "ruta": "/api/avisos",
    "resumen": "Avisos del día: contratos que vencen pronto (fin = ingreso + 67 días hábiles), quién regresa o empieza una incidencia hoy o mañana, y candidatos sin asignar desde hace días. Cada sección depende de los permisos.",
    "parametros": {

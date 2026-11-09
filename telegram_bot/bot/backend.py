@@ -187,6 +187,11 @@ class ClienteBackend:
         cuerpo = await self._interno('/avisos/turno')
         return [int(t) for t in cuerpo.get('telegram_ids') or []]
 
+    async def tareas_turno(self) -> list[dict[str, Any]]:
+        """Tareas programadas que ya tocan (el backend ya calculó su siguiente ejecución)."""
+        cuerpo = await self._interno('/tareas/turno')
+        return list(cuerpo.get('tareas') or [])
+
     async def avisos_preferencias(self, telegram_id: int, **cambios: Any) -> dict[str, Any]:
         """Sin cambios, solo consulta. Cambios posibles: activos (bool), hora (6 a 20)."""
         if cambios:

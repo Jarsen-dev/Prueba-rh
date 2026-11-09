@@ -65,11 +65,61 @@ async def test_id_inventado():
     assert c.pendiente is None
 
 
-async def test_un_cambio_por_turno():
+async def test_varios_cambios_forman_un_lote():
+    from bot.borrador import Lote
     c = ctx(['baja a bruno y bórralo'])
     await correr(c, 'preparar_estatus', registro_id=102, accion='baja')
-    assert 'solo va uno por mensaje' in await correr(c, 'preparar_eliminacion', que='empleado', id=102)
-    assert c.pendiente.metodo == 'POST'
+    salida = await correr(c, 'preparar_eliminacion', que='empleado', id=102)
+    assert 'ya son 2 cambios' in salida and isinstance(c.pendiente, Lote)
+    lote = c.pendiente
+    assert [x.metodo for x in lote.cambios] == ['POST', 'DELETE'] and lote.confirmaciones_faltantes == 2
+    assert all(x.origen == f'trabajo:{lote.trabajo}' for x in lote.cambios)
+    assert 'Ese cambio ya está' in await correr(c, 'preparar_estatus', registro_id=102, accion='baja')
+    assert '1. ⏸ Dar de baja' in lote.resumen() and '2. 🗑 Eliminar' in lote.resumen()
+
+
+async def test_el_lote_tiene_tope():
+    from bot.borrador import MAX_LOTE
+    c = ctx([f'bórralo {n}' for n in range(20)])
+    for n in range(MAX_LOTE + 1):
+        c.vistos.candidatos[400 + n] = {'id': 400 + n, 'nombre_completo': f'C{n}', 'numero_temporal': str(n)}
+    salidas = [await correr(c, 'preparar_eliminacion', que='candidato', id=400 + n) for n in range(MAX_LOTE + 1)]
+    assert 'como máximo' in salidas[-1] and len(c.pendiente.cambios) == MAX_LOTE
+
+
+async def test_tarea_programada():
+    c = ctx(['cada lunes y viernes a las 9 mándame el resumen de reclutamiento'])
+    await correr(c, 'preparar_tarea', instruccion='Dame el resumen de reclutamiento del mes', frecuencia='semanal',
+                 hora=9, dias_semana=['lunes', 'viernes'])
+    p = c.pendiente
+    assert (p.metodo, p.ruta) == ('POST', '/api/tareas')
+    assert p.cuerpo == {'instruccion': 'Dame el resumen de reclutamiento del mes', 'frecuencia': 'semanal',
+                        'hora': 9, 'minuto': 0, 'dias_semana': [0, 4]}
+    assert 'cada lunes y viernes a las 09:00' in p.resumen()
+
+
+@pytest.mark.parametrize('texto,argumentos,error', [
+    ('cada lunes mándame el resumen', {'hora': 9, 'dias_semana': ['lunes']}, 'hora'),
+    ('cada lunes a las 3 mándame el resumen', {'hora': 9, 'dias_semana': ['lunes']}, 'hora'),
+    ('cada semana a las 9 mándame el resumen', {'hora': 9, 'dias_semana': ['lunes']}, 'lunes'),
+])
+async def test_tarea_sin_datos_dichos(texto, argumentos, error):
+    c = ctx([texto])
+    salida = await correr(c, 'preparar_tarea', instruccion='Resumen', frecuencia='semanal', **argumentos)
+    assert error in salida and c.pendiente is None
+
+
+async def test_tarea_a_las_6_de_la_tarde():
+    c = ctx(['todos los días a las 6 de la tarde dime cuántos activos hay'])
+    await correr(c, 'preparar_tarea', instruccion='¿Cuántos activos hay?', frecuencia='diaria', hora=18)
+    assert c.pendiente.cuerpo['hora'] == 18
+
+
+async def test_tarea_en_solo_lectura_no_prepara_nada():
+    c = ctx(['da de baja a bruno'])
+    c.solo_lectura = True
+    assert 'no existe' in await herramientas.ejecutar(c, 'preparar_estatus', {'registro_id': 102, 'accion': 'baja'})
+    assert c.pendiente is None
 
 
 async def test_sin_permiso_no_prepara():
