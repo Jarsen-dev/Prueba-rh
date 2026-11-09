@@ -60,6 +60,18 @@ PERMISOS_POR_ENDPOINT = {
     'eliminar_archivo_empleado': ADMIN_O_RECLUTAMIENTO,
     'servir_documento_desde_db': ADMIN_O_RECLUTAMIENTO,
     'servir_documento_empleado': ADMIN_O_RECLUTAMIENTO,
+    'buscar_empleados': ADMIN_O_RECLUTAMIENTO,
+
+    # Telegram: el panel genera códigos y ve su vínculo; las internas las
+    # protege el secreto del bot (telegram_api.exigir_bot), no la sesión.
+    'telegram.crear_codigo': SESION,
+    'telegram.ver_vinculo': SESION,
+    'telegram.borrar_vinculo_propio': SESION,
+    'telegram.listar_vinculos': ADMIN,
+    'telegram.revocar_vinculo': ADMIN,
+    'telegram.interno_vincular': PUBLICO,
+    'telegram.interno_sesion': PUBLICO,
+    'telegram.interno_desvincular': PUBLICO,
 
     # Solo admin.
     'actualizar_empleado': ADMIN,

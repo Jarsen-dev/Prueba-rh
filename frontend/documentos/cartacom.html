@@ -160,7 +160,7 @@
         const currentHost = window.location.hostname;
         const PORT = '8001';
         const API_URL = `http://${currentHost}:${PORT}`;
-        const API_BASES = [API_URL, `http://localhost:${PORT}`];
+        const API_BASES = ['', API_URL, `http://localhost:${PORT}`];
 
         const urlParams = new URLSearchParams(window.location.search);
         const idEmpleado = urlParams.get('id') || urlParams.get('registro_id') || localStorage.getItem('ultimoRegistroId') || '';

@@ -18,6 +18,7 @@ from werkzeug.utils import secure_filename
 
 import auth
 import bitacora
+import telegram_api
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
@@ -2199,6 +2200,63 @@ def obtener_empleado_por_id(id_empleado):
         return (f"ERROR: {str(e)}", 500)
 
 
+@app.route('/api/empleados/buscar', methods=['GET'])
+def buscar_empleados():
+    """Búsqueda corta por número de empleado exacto o por parte del nombre."""
+    no_empleado = str(request.args.get('no_empleado', '')).strip()
+    texto = str(request.args.get('q', '')).strip()
+    if not no_empleado and len(texto) < 3:
+        return jsonify({'error': 'Indica no_empleado o al menos 3 letras del nombre (q).'}), 400
+    try:
+        limite = min(max(int(request.args.get('limite', 10)), 1), 25)
+    except ValueError:
+        limite = 10
+
+    if no_empleado:
+        filtro, parametro = 'BTRIM(ip.no_empleado::text) = %s', no_empleado
+    else:
+        filtro, parametro = 'r.nombre_completo ILIKE %s', f"%{texto.replace('%', '').replace('_', '')}%"
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("ALTER TABLE registro ADD COLUMN IF NOT EXISTS estatus VARCHAR(20) DEFAULT 'ACTIVO'")
+                asegurar_columna_nombre_completo(cur)
+                cur.execute(
+                    f"""
+                    SELECT r.id, r.nombre_completo, ip.no_empleado, ip.empresa, ip.puesto,
+                           ip.area, ip.turno,
+                           COALESCE(NULLIF(UPPER(TRIM(r.estatus)), ''), 'ACTIVO') AS estatus
+                    FROM registro r
+                    JOIN LATERAL (
+                        SELECT * FROM ingresos_puesto WHERE registro_id = r.id ORDER BY id DESC LIMIT 1
+                    ) ip ON TRUE
+                    WHERE {filtro}
+                    ORDER BY r.nombre_completo
+                    LIMIT %s
+                    """,
+                    (parametro, limite),
+                )
+                filas = cur.fetchall()
+            conn.commit()
+    except Exception as error:
+        return jsonify({'error': str(error)}), 500
+
+    return jsonify({'empleados': [
+        {
+            'registro_id': f[0],
+            'nombre_completo': f[1],
+            'no_empleado': f[2],
+            'empresa': f[3],
+            'puesto': f[4],
+            'area': f[5],
+            'turno': f[6],
+            'estatus': f[7],
+        }
+        for f in filas
+    ]})
+
+
 @app.route('/api/employee-files', methods=['GET'])
 def listar_archivos_empleado():
     curp = request.args.get('curp', '').strip()
@@ -3088,6 +3146,9 @@ def exportar_excel():
 # Sesión y bitácora (se registran al final para cubrir todas las rutas).
 auth.init_auth(app, lambda: get_db_connection(), normalizar_permisos, asegurar_esquema_sesion)
 bitacora.init_bitacora(app, lambda: get_db_connection(), asegurar_esquema_sesion)
+app.register_blueprint(telegram_api.crear_blueprint(
+    lambda: get_db_connection(), normalizar_permisos, asegurar_esquema_sesion
+))
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))

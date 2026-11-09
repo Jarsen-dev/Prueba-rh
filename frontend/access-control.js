@@ -157,6 +157,10 @@
             goToLogin();
             return;
         }
+        // Botón «Telegram» de la cabecera (vincular la cuenta con el bot).
+        const telegramScript = document.createElement('script');
+        telegramScript.src = 'telegram-vinculo.js';
+        document.head.append(telegramScript);
         // …y confirmación con el servidor (sesión vigente y permisos actuales).
         api('GET', '/api/auth/me').then((me) => {
             const permissions = normalizePermissions(me.permisos);

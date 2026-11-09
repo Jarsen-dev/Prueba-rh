@@ -103,11 +103,11 @@ Puertos publicados en el host:
 | Servicio  | Puerto host | Notas |
 |-----------|-------------|-------|
 | frontend  | 3001        | nginx sirve las páginas estáticas y reenvía `/api/` al backend |
-| backend   | 8001        | API Flask (gunicorn) |
+| backend   | 127.0.0.1:8001 | API Flask (gunicorn); solo en el propio servidor, desde fuera se usa nginx |
 | chatbot   | 5002        | Webhook de WhatsApp, respuestas automáticas y contactos de Reclutamiento |
-| postgres  | 127.0.0.1:5434 | PostgreSQL para el bot local; el backend usa la red interna de Docker |
+| postgres  | 127.0.0.1:5434 | PostgreSQL para herramientas locales; el backend usa la red interna de Docker |
 
-Estos puertos se eligieron para no chocar con el otro proyecto que ya corre en el mismo servidor (`produccion_frontend` en 3000, `produccion_backend` en 8000, `produccion_pgadmin` en 5050 y su Postgres publicado en el host 5433). PostgreSQL de este proyecto escucha en el puerto `5434` del loopback (`127.0.0.1`) para que el bot local pueda conectarse; no queda publicado en interfaces externas. Si el puerto 5434 ya está ocupado, define `TELEGRAM_POSTGRES_PORT` en `.env` con otro puerto local disponible y recrea el servicio de PostgreSQL.
+Estos puertos se eligieron para no chocar con el otro proyecto que ya corre en el mismo servidor (`produccion_frontend` en 3000, `produccion_backend` en 8000, `produccion_pgadmin` en 5050 y su Postgres publicado en el host 5433). PostgreSQL de este proyecto escucha en el puerto `5434` del loopback (`127.0.0.1`) para herramientas locales (pgAdmin, psql); no queda publicado en interfaces externas. Si el puerto 5434 ya está ocupado, define `TELEGRAM_POSTGRES_PORT` en `.env` con otro puerto local disponible y recrea el servicio de PostgreSQL.
 
 El esquema de las tablas (`registro`, `encuesta_reclutamiento`, `ingresos_puesto`, `incidencias_empleado`) se crea automáticamente la primera vez que el volumen de Postgres está vacío, vía `db/init.sql`. La tabla `registro` guarda el nombre de cada persona en un único campo `nombre_completo`. En bases existentes que tengan los campos separados de una versión anterior, la API vuelve a agregar `nombre_completo` y combina los valores para conservarlos; las columnas anteriores se dejan intactas para no borrar datos. Otros cambios de esquema posteriores requieren un `ALTER TABLE` manual — no hay herramienta de migraciones.
 
@@ -115,17 +115,56 @@ El esquema de las tablas (`registro`, `encuesta_reclutamiento`, `ingresos_puesto
 
 El chatbot conserva sus respuestas automáticas para personal activo y su conexión con los teléfonos registrados en Reclutamiento. Configura `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN` y `WHATSAPP_VERIFY_TOKEN` con los datos de Meta WhatsApp Cloud API. Los avisos de incidencias por WhatsApp y la notificación diferida a contactos de emergencia ya no forman parte del sistema.
 
-### Bot independiente de Telegram
+### Bot de Telegram
 
-El bot de Telegram está separado del chatbot de WhatsApp: sus archivos están en `telegram/`, sin modificar `Chatbot_Wpp/bot.py` ni las dependencias de WhatsApp. Usa `python-telegram-bot` con handlers asíncronos. Configura `TELEGRAM_BOT_TOKEN` y `TELEGRAM_ADMIN_IDS` en `.env`; este último debe ser una lista separada por comas de IDs numéricos de Telegram autorizados. Si la lista está vacía, los comandos administrativos quedan bloqueados. El bot consulta la misma base PostgreSQL usando las variables `POSTGRES_*` y requiere `psycopg2-binary`. Desde el equipo host se conecta a `127.0.0.1:5434`; `TELEGRAM_POSTGRES_PORT` permite cambiar el puerto local publicado. Ejecútalo en un entorno Python independiente:
+El bot (`telegram_bot/`) es un contenedor aparte, con un solo proceso y long polling: no publica puertos ni necesita webhook. **No tiene credenciales de la base de datos ni permisos propios.** Cada persona vincula su Telegram con su cuenta del panel, y el bot pide al backend una sesión de 15 minutos de esa cuenta. Con ella llama a la misma API que el panel, así que se aplican los mismos permisos y la bitácora registra a la persona con canal `telegram`.
+
+**Configurar:**
+
+1. Crea el bot con @BotFather y copia su token.
+2. En `.env` define:
+   - `TELEGRAM_BOT_TOKEN`: el token del bot.
+   - `TELEGRAM_BOT_USERNAME`: el usuario del bot, sin `@`; se usa para armar el enlace.
+   - `TELEGRAM_BOT_SECRETO_INTERNO`: una cadena larga y aleatoria, por ejemplo `openssl rand -hex 32`. El backend y el bot usan la misma.
+3. Levántalo con `docker compose --profile telegram up -d --build` (o pon `COMPOSE_PROFILES=telegram` en `.env`). Sin el perfil, el bot no arranca.
+
+**Vincular una cuenta:**
+
+1. En el panel, el botón «Telegram» de la barra genera un código de un solo uso, válido 10 minutos (`TELEGRAM_MINUTOS_CODIGO`), y un enlace `t.me/<bot>?start=CÓDIGO`.
+2. Abre el enlace en el teléfono o manda `/vincular CÓDIGO` al bot.
+3. Cada cuenta tiene a lo más un Telegram.
+
+Para quitar el vínculo:
+- la persona puede usar `/desvincular` en el bot o el mismo botón del panel;
+- un admin puede revocar cualquier vínculo desde «Usuarios con acceso».
+
+Revocar corta el acceso en la siguiente petición, y cambiar la contraseña de la cuenta también.
+
+**Comandos:**
+
+| Comando | Qué hace |
+|---|---|
+| `/consultar <número o nombre>` | Datos básicos de un empleado |
+| `/eliminar <número>` | Pide dos confirmaciones con botón antes de eliminar; solo `admin` |
+| `/cancelar` | Descarta el cambio pendiente |
+| `/yo` | Muestra tu cuenta y tus permisos |
+| `/desvincular` | Desconecta este Telegram de tu cuenta |
+| `/ayuda` | Lista de comandos |
+
+El bot solo atiende chats privados. Nada se escribe sin pulsar el botón Confirmar.
+
+**Seguridad de las rutas internas:**
+- Las rutas `/api/telegram/interno/*` solo aceptan el secreto compartido. Si el secreto está vacío, responden 503.
+- nginx les responde 404, así que únicamente se alcanzan por la red interna de Docker.
+- El backend publica el puerto 8001 solo en `127.0.0.1`; desde fuera se entra por nginx (3001).
+
+Pruebas del bot:
 
 ```bash
 python -m venv .venv-telegram
-.venv-telegram/bin/python -m pip install -r telegram/telegram_requirements.txt
-.venv-telegram/bin/python telegram/telegram_bot.py
+.venv-telegram/bin/pip install -r telegram_bot/requirements.txt
+cd telegram_bot && ../.venv-telegram/bin/python -m pytest
 ```
-
-En Windows, sustituye `.venv-telegram/bin/python` por `.venv-telegram\Scripts\python.exe`. El bot carga el `.env` de la raíz del proyecto y también acepta variables de entorno del proceso. Los administradores pueden usar `/consultar <no_empleado>` para consultar datos básicos de puesto y `/eliminar <no_empleado>` para solicitar un borrado definitivo; este último solo se ejecuta tras confirmar el botón en Telegram, y puede cancelarse con `/cancelar_eliminar`. Cada confirmación expira en cinco minutos. El borrado elimina en cascada los datos relacionados con el registro.
 
 ### Escaneo de documentos del registro
 
@@ -145,6 +184,5 @@ Las cuentas del panel viven en el servidor (tabla `usuarios_acceso`, contraseña
 
 ## Limitaciones conocidas
 
-- Varias páginas llaman primero a `http://<host>:8001` (el backend directo) antes que a nginx, así que el puerto 8001 sigue publicado.
 - `api/datos-grafica` responde 500 cuando la base no tiene datos (la función termina sin devolver respuesta).
 - No hay HTTPS ni dominio configurado — nginx sirve solo HTTP en el puerto 3001. Si el servidor ya tiene un reverse proxy compartido (nginx/Traefik) para el otro proyecto, este stack puede integrarse detrás de él apuntando ese proxy a `localhost:3001`.

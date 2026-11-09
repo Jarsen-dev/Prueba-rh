@@ -1,4 +1,5 @@
 let usuariosRegistrados = [];
+let vinculosTelegram = new Map();
 let usuarioEnEdicion = null;
 let datosFormularioAntesDeEditar = null;
 
@@ -39,7 +40,7 @@ function renderUsuariosRegistrados() {
     if (!usuariosRegistrados.length) {
         const row = document.createElement('tr');
         const emptyCell = crearCelda('Aún no hay usuarios registrados.');
-        emptyCell.colSpan = 3;
+        emptyCell.colSpan = 4;
         row.appendChild(emptyCell);
         tbody.appendChild(row);
         return;
@@ -50,7 +51,8 @@ function renderUsuariosRegistrados() {
         row.dataset.usuarioId = usuario.id;
         row.append(
             crearCelda(usuario.usuario),
-            crearCelda(obtenerNombreAsignacion(usuario.permisos))
+            crearCelda(obtenerNombreAsignacion(usuario.permisos)),
+            crearCeldaTelegram(usuario)
         );
 
         const actionCell = document.createElement('td');
@@ -67,9 +69,50 @@ function renderUsuariosRegistrados() {
     });
 }
 
+function crearCeldaTelegram(usuario) {
+    const vinculo = vinculosTelegram.get(String(usuario.id));
+    const cell = crearCelda(vinculo ? (vinculo.telegram_username ? `@${vinculo.telegram_username}` : 'Vinculado') : '—');
+    if (vinculo) {
+        cell.append(' ');
+        cell.appendChild(crearBotonAcceso('Revocar', 'revoke-telegram', 'delete-access-button'));
+    }
+    return cell;
+}
+
+async function cargarVinculosTelegram() {
+    try {
+        const respuesta = await fetch('/api/telegram/vinculos', { credentials: 'same-origin' });
+        const datos = respuesta.ok ? await respuesta.json() : { vinculos: [] };
+        vinculosTelegram = new Map((datos.vinculos || []).map((v) => [String(v.usuario_id), v]));
+    } catch (_) {
+        vinculosTelegram = new Map();
+    }
+}
+
+async function revocarTelegram(usuarioId) {
+    const usuario = usuariosRegistrados.find((item) => String(item.id) === String(usuarioId));
+    if (!usuario || !window.confirm(`¿Revocar el acceso por Telegram de ${usuario.usuario}?`)) return;
+    try {
+        const respuesta = await fetch(`/api/telegram/vinculos/${encodeURIComponent(usuarioId)}`, {
+            method: 'DELETE', credentials: 'same-origin',
+        });
+        if (!respuesta.ok) {
+            const datos = await respuesta.json().catch(() => ({}));
+            throw new Error(datos.error || `Error ${respuesta.status}`);
+        }
+        await cargarUsuariosRegistrados();
+        mostrarMensajeAcceso('access-users-feedback', 'Se revocó el acceso por Telegram.', 'success');
+    } catch (error) {
+        mostrarMensajeAcceso('access-users-feedback', error.message, 'error');
+    }
+}
+
 async function cargarUsuariosRegistrados() {
     try {
-        usuariosRegistrados = await window.AccessControlUsers.list();
+        [usuariosRegistrados] = await Promise.all([
+            window.AccessControlUsers.list(),
+            cargarVinculosTelegram(),
+        ]);
     } catch (error) {
         usuariosRegistrados = [];
         mostrarMensajeAcceso('access-users-feedback', `No se pudo cargar la lista: ${error.message}`, 'error');
@@ -260,6 +303,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
             case 'cancel-edit':
                 cancelarEdicionUsuario();
+                break;
+            case 'revoke-telegram':
+                revocarTelegram(row.dataset.usuarioId);
                 break;
             default:
                 break;

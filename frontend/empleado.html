@@ -1678,7 +1678,7 @@
         const currentHost = window.location.hostname;
         const PORT = '8001';
         const API_URL = `http://${currentHost}:${PORT}`;
-        const API_BASES = [API_URL, `http://localhost:${PORT}`];
+        const API_BASES = ['', API_URL, `http://localhost:${PORT}`];
         const DOC_KEYS = ['ine', 'comprobante_domicilio', 'acta_nacimiento', 'curp_doc', 'rfc_doc', 'nss_doc', 'comprobante_estudios', 'infonavit_doc', 'carta_autorizacion', 'contrato_firmado'];
         const isRecruitmentLimited = document.documentElement.classList.contains('recruitment-limited');
 
@@ -2775,7 +2775,7 @@ h1{text-align:center;margin-bottom:32px;}.block{margin-bottom:16px;}.sign{margin
                     const attachment = document.createElement('a');
                     attachment.className = 'notification-detail';
                     attachment.textContent = `Archivo: ${incident.attachmentName}`;
-                    attachment.href = `${API_URL}/api/empleados/${encodeURIComponent(registroId)}/incidencias/${encodeURIComponent(incident.id)}/archivo`;
+                    attachment.href = `/api/empleados/${encodeURIComponent(registroId)}/incidencias/${encodeURIComponent(incident.id)}/archivo`;
                     attachment.download = incident.attachmentName;
                     item.appendChild(attachment);
                 }

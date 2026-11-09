@@ -13,7 +13,7 @@ Sistema de RH de Cheong Woon México (empresas: **Cheong Woon** y **Kronos**): r
 - **Backend** (`backend/utily.py`): una sola app Flask (~3000 líneas, ~49 rutas) servida con gunicorn (`utily:app`). Usa psycopg2 directo (sin ORM), pandas/openpyxl para exportar Excel y OpenAI para escanear documentos. Los módulos nuevos van aparte y se registran al final de `utily.py`: `auth.py` (sesión y permisos por ruta) y `bitacora.py`.
 - **BD**: PostgreSQL 16. Esquema en `db/init.sql`, que **solo se aplica cuando el volumen está vacío**. No hay migraciones: los cambios de esquema van como `ALTER TABLE` manual o con `CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` defensivos dentro de `utily.py` (p. ej. `asegurar_tabla_incidencias`).
 - **Chatbot WhatsApp** (`Chatbot_Wpp/bot.py`): Flask + Meta Cloud API; corre con la imagen del backend (servicio `chatbot`). `whatsapp-puente.js` es un puente alternativo con wppconnect/Puppeteer.
-- **Bot de Telegram** (`telegram/`): independiente, con su propio venv (`.venv-telegram`) y requirements; corre fuera de Docker contra Postgres en `127.0.0.1:5434`.
+- **Bot de Telegram** (`telegram_bot/`): contenedor propio (perfil compose `telegram`), un solo proceso con long polling. No tiene credenciales de BD: pide al backend una sesión de 15 min de la cuenta vinculada (`/api/telegram/interno/*`, secreto `X-Bot-Secreto`, 404 en nginx) y llama a la API con `Authorization: Bearer`. Vinculación y rutas en `backend/telegram_api.py`. Nada se escribe sin botón Confirmar (`bot/borrador.py`).
 
 ### Páginas principales del frontend
 
@@ -45,7 +45,7 @@ docker compose logs -f backend
 
 Nunca usar `docker compose down -v` (borra la BD). El frontend se monta como volumen, así que los cambios de HTML/JS se ven sin reconstruir; el backend **sí** requiere `--build` (el Dockerfile copia solo `utily.py`).
 
-Variables en `.env` (no versionado; plantilla en `.env.example`): `AUTH_SECRET_KEY`, `AUTH_ESTRICTO`, `AUTH_COOKIE_SECURE`, `ADMIN_INICIAL_USUARIO/PASSWORD`, `POSTGRES_DB/USER/PASSWORD/HOST/PORT`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `WHATSAPP_*`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_IDS`, `TELEGRAM_POSTGRES_PORT`, `DB_WRITE_LOCK`, `EMPLOYEE_DOCS_ROOT`.
+Variables en `.env` (no versionado; plantilla en `.env.example`): `AUTH_SECRET_KEY`, `AUTH_ESTRICTO`, `AUTH_COOKIE_SECURE`, `ADMIN_INICIAL_USUARIO/PASSWORD`, `POSTGRES_DB/USER/PASSWORD/HOST/PORT`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `WHATSAPP_*`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_BOT_SECRETO_INTERNO`, `TELEGRAM_MINUTOS_CODIGO`, `DB_WRITE_LOCK`, `EMPLOYEE_DOCS_ROOT`.
 
 ## Tests
 
@@ -54,7 +54,7 @@ Variables en `.env` (no versionado; plantilla en `.env.example`): `AUTH_SECRET_K
 ```bash
 cd backend && python -m unittest discover -p 'test_*.py'
 python -m unittest Chatbot_Wpp/test_bot.py
-.venv-telegram/bin/python -m unittest telegram/test_telegram_bot.py
+cd telegram_bot && ../.venv-telegram/bin/python -m pytest   # pytest + pytest-asyncio
 ```
 
 ## Notas y deuda conocida
