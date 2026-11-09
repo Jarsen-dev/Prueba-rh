@@ -145,6 +145,7 @@
                 <summary>Formatos del día</summary>
                 <div class="acciones-dropdown">
                     <button id="btn-evaluacion-del-dia" type="button">Evaluación de Inducción</button>
+                    <button id="btn-registro-induccion-del-dia" type="button">Registro de Inducción</button>
                 </div>
             </details>
             <button id="btn-descargar-excel" type="button" class="accion-principal admin-only">Listado General</button>
@@ -266,24 +267,33 @@
             return '';
         }
 
-        function generarEvaluacionesDelDia() {
+        function obtenerEmpleadosQueIngresaronHoy() {
             const ahora = new Date();
             const fechaHoy = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
-            const ingresosDeHoy = empleadosCache
+            return empleadosCache
                 .map(getEmpleadoConLocal)
                 .filter((emp) => obtenerClaveFecha(emp.fecha_ingreso || emp.fecha_registro) === fechaHoy);
-            const empleadosConId = ingresosDeHoy.filter((emp) => /^\d+$/.test(String(emp.registro_id || '')));
+        }
 
+        function obtenerIdsEmpleadosQueIngresaronHoy() {
+            const ingresosDeHoy = obtenerEmpleadosQueIngresaronHoy();
+            const empleadosConId = ingresosDeHoy.filter((emp) => /^\d+$/.test(String(emp.registro_id || '')));
             if (!empleadosConId.length) {
                 alert(ingresosDeHoy.length
-                    ? 'Los empleados que ingresaron hoy no tienen un número de registro válido para generar la evaluación.'
+                    ? 'Los empleados que ingresaron hoy no tienen un número de registro válido para generar el formato.'
                     : 'No hay empleados con fecha de ingreso de hoy.');
-                return;
+                return null;
             }
             if (empleadosConId.length !== ingresosDeHoy.length) {
-                alert('No se generará la evaluación porque uno o más empleados que ingresaron hoy no tienen un número de registro válido.');
-                return;
+                alert('No se generará el formato porque uno o más empleados que ingresaron hoy no tienen un número de registro válido.');
+                return null;
             }
+            return empleadosConId;
+        }
+
+        function generarEvaluacionesDelDia() {
+            const empleadosConId = obtenerIdsEmpleadosQueIngresaronHoy();
+            if (!empleadosConId) return;
 
             const params = new URLSearchParams({
                 tipo: 'evaluacion',
@@ -291,6 +301,17 @@
                 return_url: 'Kronos.html',
             });
             window.location.href = `formatos-lote.html?${params.toString()}`;
+        }
+
+        function generarRegistroInduccionDelDia() {
+            const empleadosConId = obtenerIdsEmpleadosQueIngresaronHoy();
+            if (!empleadosConId) return;
+
+            const params = new URLSearchParams({
+                ids: empleadosConId.map((emp) => emp.registro_id).join(','),
+                return_url: 'Kronos.html',
+            });
+            window.location.href = `documentos/checklist.html?${params.toString()}`;
         }
 
         function matchesSearch(emp) {
@@ -579,6 +600,7 @@
         }
 
         document.getElementById('btn-evaluacion-del-dia').addEventListener('click', generarEvaluacionesDelDia);
+        document.getElementById('btn-registro-induccion-del-dia').addEventListener('click', generarRegistroInduccionDelDia);
 
         document.querySelectorAll('[data-formato]').forEach((button) => {
             button.addEventListener('click', () => iniciarSeleccionFormato(button.dataset.formato));
