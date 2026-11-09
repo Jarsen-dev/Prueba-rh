@@ -13,7 +13,7 @@ from bot.agente import Agente, Resultado
 from bot.backend import ErrorBackend
 from bot.config import Settings
 from bot.estado import Estados, EstadoUsuario
-from bot.interfaz import boton, responder, texto_error
+from bot.interfaz import boton, responder, teclado_confirmar, texto_error
 from bot.llm import ErrorLLM
 
 logger = logging.getLogger(__name__)
@@ -98,7 +98,8 @@ async def _turno(update, context, settings: Settings, agente: Agente, estado: Es
 
     ahora = datetime.now(ZoneInfo(settings.ZONA_HORARIA))
     try:
-        resultado = await agente.responder(telegram_id, texto, list(estado.historial), ahora)
+        resultado = await agente.responder(telegram_id, texto, list(estado.historial), ahora,
+                                           vistos=estado.vistos, adjunto=estado.adjunto)
     except ErrorBackend as error:
         await responder(update, texto_error(error))
         return
@@ -121,6 +122,14 @@ async def _turno(update, context, settings: Settings, agente: Agente, estado: Es
         update, f'{resultado.texto}\n\n{pie(resultado)}',
         teclado_calificar(traza_id) if traza_id else None,
     )
+    pendiente = resultado.pendiente
+    if pendiente is not None:
+        # El mismo pendiente y el mismo botón que el menú: solo al_boton escribe.
+        async with estado.candado:
+            estado.pendiente = pendiente
+        if pendiente.archivo is not None and pendiente.archivo is estado.adjunto:
+            estado.adjunto = None
+        await responder(update, pendiente.resumen(), teclado_confirmar(pendiente))
 
 
 async def al_calificar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -141,4 +150,32 @@ async def al_calificar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 def olvidar_conversacion(estados: Estados, telegram_id: int) -> None:
-    estados.de(telegram_id).historial.clear()
+    estados.de(telegram_id).olvidar_conversacion()
+
+
+async def guardar_adjunto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Un archivo fuera de un formulario: se guarda para que el agente lo adjunte si se lo piden."""
+    from bot.menu import formularios
+
+    if context.application.bot_data.get('agente') is None:
+        return False
+    mensaje = update.effective_message
+    if mensaje.photo:
+        foto = mensaje.photo[-1]
+        nombre, tamano, file_id = 'foto.jpg', foto.file_size or 0, foto.file_id
+    else:
+        documento = mensaje.document
+        nombre, tamano, file_id = documento.file_name or 'documento', documento.file_size or 0, documento.file_id
+    try:
+        if tamano > formularios.MAX_ARCHIVO:
+            raise ValueError('El archivo no puede pasar de 10 MB.')
+        formularios.validar_archivo(nombre, b'')
+        descarga = await context.bot.get_file(file_id)
+        archivo = formularios.validar_archivo(nombre, bytes(await descarga.download_as_bytearray()))
+    except ValueError as error:
+        await responder(update, f'⚠️ {error}')
+        return True
+    context.application.bot_data['estados'].de(update.effective_user.id).adjunto = archivo
+    await responder(update, f'📎 Recibí «{nombre}». Dime a qué incidencia lo adjunto (por ejemplo: «es el acta de '
+                            'la suspensión de Bruno del 12 al 13 de noviembre por faltas»).')
+    return True

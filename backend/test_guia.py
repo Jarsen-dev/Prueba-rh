@@ -103,5 +103,16 @@ class RutasAgenteTests(unittest.TestCase):
         self.assertEqual(respuesta.get_json(), {'tokens_hoy': 1200, 'tokens_hoy_persona': 300})
 
 
+class CopiaDelBotTests(unittest.TestCase):
+    def test_la_copia_de_las_pruebas_del_bot_esta_al_dia(self):
+        import json
+        from pathlib import Path
+        copia = Path(__file__).resolve().parents[1] / 'telegram_bot' / 'tests' / 'guia.json'
+        self.assertEqual(
+            json.loads(copia.read_text(encoding='utf-8')), guia_api.construir_guia(utily.app),
+            'Regenera telegram_bot/tests/guia.json (ver README, «Pruebas del bot»).',
+        )
+
+
 if __name__ == '__main__':
     unittest.main()

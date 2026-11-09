@@ -13,7 +13,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from bot.borrador import CambioPendiente
+from bot.borrador import Archivo, CambioPendiente
+from bot.guardas import Vistos
 
 #: Minutos sin actividad tras los que se descarta el estado del menú.
 CADUCIDAD_MENU = 30
@@ -35,6 +36,10 @@ class EstadoUsuario:
     historial: list[dict[str, str]] = field(default_factory=list)
     #: El agente está contestando un mensaje de esta persona.
     ocupado: bool = False
+    #: Registros que la API le devolvió a esta persona (los cambios del agente solo apuntan a estos).
+    vistos: Vistos = field(default_factory=Vistos)
+    #: Último archivo que mandó fuera de un formulario, para que el agente lo adjunte.
+    adjunto: Archivo | None = None
     ultimo_uso: float = field(default_factory=time.monotonic)
     candado: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -48,8 +53,13 @@ class EstadoUsuario:
         ahora = ahora or time.monotonic()
         if ahora - self.ultimo_uso > CADUCIDAD_MENU * 60:
             self.limpiar_menu()
-            self.historial.clear()
+            self.olvidar_conversacion()
         self.ultimo_uso = ahora
+
+    def olvidar_conversacion(self) -> None:
+        self.historial.clear()
+        self.vistos = Vistos()
+        self.adjunto = None
 
     def limpiar_menu(self) -> None:
         self.asistente = None
@@ -75,4 +85,4 @@ class Estados:
         if estado is not None:
             estado.pendiente = None
             estado.limpiar_menu()
-            estado.historial.clear()
+            estado.olvidar_conversacion()

@@ -3,18 +3,10 @@ from datetime import date, datetime
 from bot import herramientas
 from bot.agente import CIERRE_RONDAS, MAX_RONDAS, Agente
 from bot.backend import ErrorBackend, RespuestaBackend
-from tests.fakes import FakeBackend, FakeLLM
+from tests.fakes import GUIA_REAL, FakeBackend, FakeLLM
 
 AHORA = datetime(2026, 11, 9, 10, 30)
-GUIA = {'endpoints': [
-    {'metodo': 'GET', 'ruta': '/api/empleados/{registro_id}/incidencias', 'resumen': 'Incidencias de un empleado',
-     'permisos': ['admin'], 'escritura': False, 'archivo': False},
-    {'metodo': 'GET', 'ruta': '/api/exportar-reclutamiento', 'resumen': 'Excel de reclutamiento',
-     'permisos': ['admin', 'reclutamiento'], 'escritura': False, 'archivo': True},
-    {'metodo': 'GET', 'ruta': '/api/shared-events', 'resumen': 'Calendario', 'permisos': ['admin'], 'escritura': False},
-    {'metodo': 'DELETE', 'ruta': '/api/eliminar-empleado/{registro_id}', 'resumen': 'Eliminar',
-     'permisos': ['admin'], 'escritura': True},
-]}
+GUIA = GUIA_REAL
 ANA = {'registro_id': 7, 'nombre_completo': 'Ana Prueba', 'no_empleado': '5001', 'empresa': 'KRONOS',
        'area': 'EPS', 'puesto': 'MOLDERO', 'turno': 'NOCHE', 'estatus': 'ACTIVO'}
 
@@ -123,6 +115,13 @@ async def test_errores_vuelven_como_texto():
     assert 'Argumentos' in await herramientas.ejecutar(ctx(backend), 'buscar_empleado', {'zzz': 1})
 
 
-def test_ninguna_herramienta_escribe():
-    assert herramientas.NOMBRES == {'buscar_empleado', 'ver_empleado', 'contar_empleados', 'resumen_reclutamiento',
-                                    'buscar_endpoints', 'consultar_api'}
+def test_herramientas_de_lectura_y_de_preparar():
+    assert herramientas.LECTURA == {'buscar_empleado', 'ver_empleado', 'contar_empleados', 'resumen_reclutamiento',
+                                    'buscar_endpoints', 'consultar_api', 'ver_pendientes', 'ver_incidencias'}
+    assert all(n.startswith('preparar_') for n in herramientas.NOMBRES - herramientas.LECTURA)
+
+
+async def test_consultas_curadas_tambien_respetan_permisos():
+    backend = FakeBackend(guia=GUIA)
+    salida = await herramientas.ejecutar(ctx(backend, ['reclutamiento']), 'ver_incidencias', {'registro_id': 7})
+    assert 'permiso' in salida and backend.llamadas == []

@@ -81,3 +81,41 @@ def test_traza_filtra_nombres_raros():
 def test_config_tope_cero_no_arranca():
     assert any('BOT_TOKENS' in p for p in Settings(TELEGRAM_BOT_TOKEN='t', TELEGRAM_BOT_SECRETO_INTERNO='s',
                                                      OPENAI_API_KEY='sk', BOT_TOKENS_DIA=0).problemas())
+
+
+async def test_pendiente_del_agente_se_confirma_con_el_mismo_boton():
+    from bot import principal
+    from bot.backend import RespuestaBackend
+    from bot.guardas import Vistos
+    from tests.test_escrituras import BRUNO, GUIA
+
+    backend = FakeBackend(guia=GUIA, rutas={('GET', '/api/empleados/buscar'): {'empleados': [BRUNO]},
+                                            ('POST', '/api/actualizar-empleado/102'): RespuestaBackend(200, 'application/json', datos={})})
+    llm = FakeLLM([[('buscar_empleado', {'texto': 'bruno'})],
+                   [('preparar_estatus', {'registro_id': 102, 'accion': 'baja'})], 'Listo, confírmalo.'])
+    ctx = contexto(backend, Estados(), Settings(OPENAI_API_KEY='sk'))
+    ctx.application.bot_data['agente'] = Agente(llm=llm, backend=backend)
+    chat = Chat()
+    await conversacion.atender(texto(chat, 'da de baja a bruno'), ctx, 'da de baja a bruno')
+    assert not [l for l in backend.llamadas if l[0] != 'GET']
+    resumen, teclado = chat.ultimo()
+    assert 'Dar de baja' in resumen
+    ok = teclado.inline_keyboard[0][0].callback_data
+    await principal.al_boton(pulsar(chat, ok), ctx)
+    escrituras = [l for l in backend.llamadas if l[0] != 'GET']
+    assert escrituras == [('POST', '/api/actualizar-empleado/102',
+                           {'headers': {'X-Origen-Telegram': 'agente'}, 'json': {'estatus': 'INACTIVO'}})]
+    assert isinstance(ctx.application.bot_data['estados'].de(7).vistos, Vistos)
+
+
+async def test_archivo_fuera_de_formulario_queda_como_adjunto():
+    from bot import principal
+    from tests.fakes import archivo
+
+    backend = FakeBackend()
+    ctx = contexto(backend, Estados(), Settings(OPENAI_API_KEY='sk'), archivos={'f1': b'%PDF'})
+    ctx.application.bot_data['agente'] = object()
+    chat = Chat()
+    await principal.al_archivo(archivo(chat, 'acta.pdf'), ctx)
+    assert 'Recibí' in chat.ultimo()[0]
+    assert ctx.application.bot_data['estados'].de(7).adjunto.nombre == 'acta.pdf'

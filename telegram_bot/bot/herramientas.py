@@ -1,4 +1,4 @@
-"""Herramientas del agente (Fase 2: solo lectura).
+"""Herramientas de lectura del agente (las de escritura están en ``escrituras.py``).
 
 Cada herramienta llama a la API con la sesión de la persona: el backend aplica
 sus permisos. Lo que vuelve al modelo pasa por ``seguridad.para_modelo``
@@ -9,6 +9,7 @@ Las curadas (contar_empleados, resumen_reclutamiento…) hacen las cuentas en
 código: un modelo chico cuenta mal una lista de 300 empleados.
 """
 
+import re
 from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -16,7 +17,9 @@ from datetime import date
 from typing import Any
 from urllib.parse import quote
 
+from bot import borrador
 from bot.backend import ClienteBackend, ErrorBackend
+from bot.guardas import GuardaFallo, Vistos
 from bot.seguridad import (
     RutaNoPermitida,
     buscar_en_guia,
@@ -31,6 +34,10 @@ FUENTES = ['FACEBOOK', 'POSTEO', 'VOLANTE', 'RECOMENDACION', 'RECLU CW', 'RECLU 
 MAX_PARAMETROS = 8
 MAX_VALOR_PARAMETRO = 100
 MUESTRA = 15
+
+
+class SinPermiso(Exception):
+    """La consulta no está en la guía o la cuenta no tiene permiso; no se manda."""
 
 
 @dataclass
@@ -51,10 +58,58 @@ class Contexto:
     archivos: list[Archivo] = field(default_factory=list)
     #: Cada petición a la API que hizo el agente: (método, ruta, params). Para trazas y el banco de evaluación.
     peticiones: list[tuple[str, str, dict[str, Any]]] = field(default_factory=list)
+    #: Lo que escribió la persona (este mensaje y los anteriores): las guardas buscan ahí los datos.
+    textos: list[str] = field(default_factory=list)
+    #: Registros que salieron de la API; los cambios solo pueden apuntar a estos.
+    vistos: Vistos = field(default_factory=Vistos)
+    #: Archivo que mandó la persona por Telegram (el modelo solo sabe su nombre).
+    adjunto: borrador.Archivo | None = None
+    #: El cambio que preparó el agente en este turno (uno como máximo).
+    pendiente: borrador.CambioPendiente | None = None
 
     async def get(self, ruta: str, params: dict[str, Any] | None = None):
+        # Toda consulta del agente (curada o no) pasa por la guía y los permisos
+        # antes de salir: lo que la cuenta no puede ver ni se pide.
+        try:
+            endpoint = buscar_endpoint(await self.backend.guia(), 'GET', ruta)
+        except RutaNoPermitida as error:
+            raise SinPermiso(str(error)) from error
+        if not puede_usar(endpoint, self.permisos):
+            raise SinPermiso('La cuenta de la persona no tiene permiso para esta consulta.')
         self.peticiones.append(('GET', ruta, dict(params or {})))
-        return await self.backend.peticion(self.telegram_id, 'GET', ruta, params=params, timeout=90)
+        respuesta = await self.backend.peticion(self.telegram_id, 'GET', ruta, params=params, timeout=90)
+        registrar_vistos(self.vistos, ruta, respuesta.datos)
+        return respuesta
+
+
+#: Solo esto de un empleado se guarda en memoria (nada de datos personales).
+CAMPOS_EMPLEADO = ('registro_id', 'nombre_completo', 'no_empleado', 'empresa', 'puesto', 'area', 'turno',
+                   'salario', 'pago', 'estatus')
+
+
+def registrar_vistos(vistos: Vistos, ruta: str, datos: Any) -> None:
+    """Anota los registros que devolvió la API, para que un cambio solo apunte a algo real."""
+    def empleado(e):
+        if isinstance(e, dict):
+            vistos.registrar_empleado({k: e.get(k) for k in CAMPOS_EMPLEADO})
+
+    if ruta == '/api/empleados/buscar' and isinstance(datos, dict):
+        for e in datos.get('empleados') or []:
+            empleado(e)
+    elif re.fullmatch(r'/api/obtener-empleado/\d+', ruta):
+        empleado(datos)
+    elif re.fullmatch(r'/api/obtener-empleados/[A-Z_]+|/api/obtener-ingresos', ruta) and isinstance(datos, list):
+        for e in datos:
+            empleado(e)
+    elif ruta == '/api/obtener-pendientes' and isinstance(datos, list):
+        for c in datos:
+            if isinstance(c, dict) and isinstance(c.get('id'), int):
+                vistos.candidatos[c['id']] = {k: c.get(k) for k in ('id', 'nombre_completo', 'numero_temporal')}
+    elif (m := re.fullmatch(r'/api/empleados/(\d+)/incidencias', ruta)) and isinstance(datos, dict):
+        for i in datos.get('incidencias') or []:
+            if isinstance(i, dict) and isinstance(i.get('id'), int):
+                vistos.incidencias[(int(m.group(1)), i['id'])] = {
+                    k: i.get(k) for k in ('id', 'type', 'fecha_inicio', 'fecha_reingreso', 'dias')}
 
 
 def _funcion(nombre: str, descripcion: str, propiedades: dict[str, Any], requeridos: list[str] | None = None):
@@ -67,8 +122,9 @@ def _funcion(nombre: str, descripcion: str, propiedades: dict[str, Any], requeri
 
 DEFINICIONES = [
     _funcion('buscar_empleado',
-             'Busca empleados por número de empleado exacto o por parte del nombre. Devuelve registro_id, '
-             'nombre, número, empresa, puesto, área, turno y estatus.',
+             'Busca empleados (personas que ya tienen puesto) por número de empleado exacto o por parte del nombre. '
+             'Devuelve registro_id, nombre, número, empresa, puesto, área, turno y estatus. Los candidatos que aún '
+             'no tienen puesto NO aparecen aquí: búscalos con ver_pendientes.',
              {'texto': {'type': 'string', 'description': 'Número de empleado o al menos 3 letras del nombre'}},
              ['texto']),
     _funcion('ver_empleado',
@@ -89,6 +145,11 @@ DEFINICIONES = [
              'por mes del año en curso.',
              {'mes': {'type': 'integer', 'minimum': 1, 'maximum': 12, 'description': 'Mes actual por omisión'},
               'anio': {'type': 'integer', 'description': 'Año actual por omisión'}}),
+    _funcion('ver_pendientes',
+             'Candidatos registrados que aún no tienen puesto asignado (id, nombre, número temporal).', {}),
+    _funcion('ver_incidencias',
+             'Historial de incidencias de un empleado por registro_id, con el id de cada incidencia.',
+             {'registro_id': {'type': 'integer'}}, ['registro_id']),
     _funcion('buscar_endpoints',
              'Busca en la guía de la API las consultas disponibles para tu cuenta (ruta, resumen y parámetros). '
              'Úsala antes de consultar_api cuando ninguna otra herramienta sirve.',
@@ -193,6 +254,21 @@ async def resumen_reclutamiento(ctx: Contexto, mes: Any = None, anio: Any = None
     return para_modelo(resultado, enmascarar=ctx.enmascarar)
 
 
+async def ver_pendientes(ctx: Contexto) -> str:
+    respuesta = await ctx.get('/api/obtener-pendientes')
+    candidatos = respuesta.datos if isinstance(respuesta.datos, list) else []
+    return para_modelo({'total': len(candidatos), 'candidatos': candidatos}, enmascarar=ctx.enmascarar)
+
+
+async def ver_incidencias(ctx: Contexto, registro_id: Any = None) -> str:
+    try:
+        registro_id = int(registro_id)
+    except (TypeError, ValueError):
+        return 'registro_id debe ser un número (búscalo con buscar_empleado).'
+    respuesta = await ctx.get(f'/api/empleados/{registro_id}/incidencias')
+    return para_modelo(respuesta.datos, enmascarar=ctx.enmascarar)
+
+
 async def buscar_endpoints(ctx: Contexto, consulta: str = '') -> str:
     guia = await ctx.backend.guia()
     encontrados = buscar_en_guia(guia, consulta, ctx.permisos, solo_lectura=True)
@@ -229,6 +305,8 @@ async def consultar_api(ctx: Contexto, ruta: str = '', parametros: dict[str, Any
 
 
 IMPLEMENTACIONES: dict[str, Callable[..., Awaitable[str]]] = {
+    'ver_pendientes': ver_pendientes,
+    'ver_incidencias': ver_incidencias,
     'buscar_empleado': buscar_empleado,
     'ver_empleado': ver_empleado,
     'contar_empleados': contar_empleados,
@@ -236,7 +314,15 @@ IMPLEMENTACIONES: dict[str, Callable[..., Awaitable[str]]] = {
     'buscar_endpoints': buscar_endpoints,
     'consultar_api': consultar_api,
 }
-assert set(IMPLEMENTACIONES) == NOMBRES
+LECTURA = frozenset(IMPLEMENTACIONES)
+assert LECTURA == NOMBRES
+
+# Las de escritura se agregan aquí para que el agente tenga una sola lista.
+from bot import escrituras  # noqa: E402
+
+DEFINICIONES = DEFINICIONES + escrituras.DEFINICIONES
+IMPLEMENTACIONES.update(escrituras.IMPLEMENTACIONES)
+NOMBRES = frozenset(IMPLEMENTACIONES)
 
 
 async def ejecutar(ctx: Contexto, nombre: str, argumentos: dict[str, Any]) -> str:
@@ -248,6 +334,10 @@ async def ejecutar(ctx: Contexto, nombre: str, argumentos: dict[str, Any]) -> st
         return await funcion(ctx, **{k: v for k, v in argumentos.items() if isinstance(k, str)})
     except TypeError:
         return f'Argumentos inválidos para {nombre}.'
+    except GuardaFallo as error:
+        return f'No preparé el cambio: {error}'
+    except SinPermiso as error:
+        return str(error)
     except ErrorBackend as error:
         if error.status == 403:
             return 'El sistema respondió 403: tu cuenta no tiene permiso para esto.'

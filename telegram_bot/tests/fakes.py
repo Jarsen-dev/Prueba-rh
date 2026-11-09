@@ -1,6 +1,8 @@
 """Dobles de Telegram y del backend para probar handlers sin red."""
 
+import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -11,6 +13,10 @@ from bot.config import Settings
 from bot.estado import Estados
 
 
+#: La guía real (la genera el backend; test_guia.py comprueba que esté al día).
+GUIA_REAL = json.loads((Path(__file__).parent / 'guia.json').read_text(encoding='utf-8'))
+
+
 class FakeBackend:
     """Responde según (método, ruta) y registra cada llamada."""
 
@@ -18,7 +24,7 @@ class FakeBackend:
         self.permisos = list(permisos)
         self.rutas = rutas or {}
         self.llamadas = []
-        self._guia = guia or {'endpoints': []}
+        self._guia = guia or GUIA_REAL
         self._presupuesto = presupuesto
         self.trazas = []
         self.calificaciones = []

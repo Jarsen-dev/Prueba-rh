@@ -52,8 +52,9 @@ TEXTO_AYUDA = (
     '/desvincular — desconecta este Telegram de tu cuenta\n'
     '/nuevo — empieza una conversación nueva con el asistente\n'
     '/ayuda — esta lista\n\n'
-    'También puedes escribirme preguntas, por ejemplo «¿cuántos activos hay en Kronos?» o '
-    '«ingresos de este mes por fuente». Por escrito solo consulto; para registrar o cambiar algo usa /sistema.\n\n'
+    'También puedes escribirme, por ejemplo «¿cuántos activos hay en Kronos?», «registra vacaciones a Ana del '
+    '16 al 20 de noviembre» o «da de baja a Bruno Castillo». Los cambios siempre te los muestro antes con un '
+    'botón Confirmar.\n\n'
     'Lo que puedes ver y hacer depende de los permisos de tu cuenta en el panel. '
     'Nada se guarda sin que pulses Confirmar.'
 )
@@ -272,6 +273,8 @@ async def al_texto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def al_archivo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await pantallas.atender_archivo(update, context):
+        return
+    if await conversacion.guardar_adjunto(update, context):
         return
     await responder(update, 'No esperaba un archivo. Para adjuntar un documento, ábrelo desde el formulario en /sistema.')
 
