@@ -141,6 +141,25 @@
         'empleado.html': ['admin', 'reclutamiento'],
     };
 
+    function cargarBotonTelegram() {
+        const montar = () => {
+            if (!document.querySelector('.header-right') || document.querySelector('script[data-telegram-vinculo]')) return;
+            const script = document.createElement('script');
+            script.src = 'telegram-vinculo.js?v=20261110-restore-button';
+            script.dataset.telegramVinculo = 'true';
+            script.addEventListener('error', () => {
+                console.error('No se pudo cargar el botón de vinculación de Telegram.');
+            }, { once: true });
+            document.head.append(script);
+        };
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', montar, { once: true });
+        } else {
+            montar();
+        }
+    }
+
     const pageName = decodeURIComponent(window.location.pathname.split('/').pop() || '');
     const allowedPermissions = pagePermissions[pageName];
 
@@ -161,6 +180,7 @@
                 return false;
             }
 
+            cargarBotonTelegram();
             document.documentElement.classList.toggle(
                 'recruitment-limited',
                 permissions.includes('reclutamiento') && !permissions.includes('admin')
