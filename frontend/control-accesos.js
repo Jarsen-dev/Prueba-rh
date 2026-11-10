@@ -67,9 +67,15 @@ function renderUsuariosRegistrados() {
     });
 }
 
-function cargarUsuariosRegistrados() {
-    usuariosRegistrados = window.AccessControlUsers.list();
-    renderUsuariosRegistrados();
+async function cargarUsuariosRegistrados() {
+    try {
+        usuariosRegistrados = await window.AccessControlUsers.list();
+        renderUsuariosRegistrados();
+    } catch (error) {
+        usuariosRegistrados = [];
+        renderUsuariosRegistrados();
+        mostrarMensajeAcceso('access-users-feedback', error.message, 'error');
+    }
 }
 
 function establecerModoEdicion(usuario) {
@@ -94,14 +100,14 @@ function establecerModoEdicion(usuario) {
     } else {
         userInput.value = datosFormularioAntesDeEditar?.usuario || '';
         permissionSelect.value = datosFormularioAntesDeEditar?.permiso || '';
-        passwordInput.value = datosFormularioAntesDeEditar?.password || '';
+        passwordInput.value = '';
         passwordInput.required = true;
         datosFormularioAntesDeEditar = null;
     }
 }
 
 function iniciarEdicionUsuario(usuarioId) {
-    const usuario = usuariosRegistrados.find((item) => item.id === usuarioId);
+    const usuario = usuariosRegistrados.find((item) => String(item.id) === String(usuarioId));
     if (!usuario) {
         mostrarMensajeAcceso('access-users-feedback', 'No se encontró el usuario seleccionado.', 'error');
         return;
@@ -110,7 +116,6 @@ function iniciarEdicionUsuario(usuarioId) {
     if (!usuarioEnEdicion) {
         datosFormularioAntesDeEditar = {
             usuario: document.getElementById('acceso-usuario').value,
-            password: document.getElementById('acceso-password').value,
             permiso: document.getElementById('acceso-asignacion').value,
         };
     }
@@ -131,19 +136,19 @@ function cancelarEdicionUsuario() {
     mostrarMensajeAcceso('access-create-feedback', '');
 }
 
-function guardarNuevoUsuario(event) {
+async function guardarNuevoUsuario(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const feedbackId = 'access-create-feedback';
-    const password = document.getElementById('acceso-password').value.trim();
+    const password = document.getElementById('acceso-password').value;
     const permission = document.getElementById('acceso-asignacion').value;
 
     try {
         if (usuarioEnEdicion) {
-            const usuario = usuariosRegistrados.find((item) => item.id === usuarioEnEdicion);
+            const usuario = usuariosRegistrados.find((item) => String(item.id) === String(usuarioEnEdicion));
             if (!usuario) throw new Error('No se encontró el usuario seleccionado.');
             if (!password) throw new Error('Escribe una nueva contraseña.');
-            window.AccessControlUsers.update(usuario.id, {
+            await window.AccessControlUsers.update(usuario.id, {
                 usuario: usuario.usuario,
                 password,
                 permisos: usuario.permisos,
@@ -154,19 +159,19 @@ function guardarNuevoUsuario(event) {
             datosFormularioAntesDeEditar = null;
             form.reset();
             establecerModoEdicion(null);
-            cargarUsuariosRegistrados();
+            await cargarUsuariosRegistrados();
             mostrarMensajeAcceso(feedbackId, 'La contraseña se actualizó correctamente.', 'success');
             mostrarMensajeAcceso('access-users-feedback', '');
             return;
         }
 
-        window.AccessControlUsers.create({
+        await window.AccessControlUsers.create({
             usuario: document.getElementById('acceso-usuario').value.trim(),
             password,
             permisos: [permission],
         });
         form.reset();
-        cargarUsuariosRegistrados();
+        await cargarUsuariosRegistrados();
         mostrarMensajeAcceso(feedbackId, 'El acceso se guardó correctamente.', 'success');
         mostrarMensajeAcceso('access-users-feedback', '');
     } catch (error) {
@@ -174,19 +179,19 @@ function guardarNuevoUsuario(event) {
     }
 }
 
-function eliminarUsuarioAcceso(usuarioId) {
-    const usuario = usuariosRegistrados.find((item) => item.id === usuarioId);
+async function eliminarUsuarioAcceso(usuarioId) {
+    const usuario = usuariosRegistrados.find((item) => String(item.id) === String(usuarioId));
     if (!usuario || !window.confirm(`¿Eliminar el acceso de ${usuario.usuario}?`)) return;
 
     try {
-        window.AccessControlUsers.remove(usuario.id);
-        if (usuarioEnEdicion === usuario.id) {
+        await window.AccessControlUsers.remove(usuario.id);
+        if (String(usuarioEnEdicion) === String(usuario.id)) {
             usuarioEnEdicion = null;
             datosFormularioAntesDeEditar = null;
             document.getElementById('form-nuevo-acceso').reset();
             establecerModoEdicion(null);
         }
-        cargarUsuariosRegistrados();
+        await cargarUsuariosRegistrados();
         mostrarMensajeAcceso('access-users-feedback', 'El acceso se eliminó correctamente.', 'success');
         mostrarMensajeAcceso('access-create-feedback', '');
     } catch (error) {
@@ -197,6 +202,7 @@ function eliminarUsuarioAcceso(usuarioId) {
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('form-nuevo-acceso');
     const tbody = document.getElementById('tabla-usuarios-registrados-body');
+    const migrateButton = document.getElementById('migrate-access-users-button');
 
     form.addEventListener('submit', guardarNuevoUsuario);
     tbody.addEventListener('click', (event) => {
@@ -220,6 +226,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
         }
     });
+
+    if (migrateButton) {
+        migrateButton.hidden = !window.AccessControlUsers.hasLegacyUsers();
+        migrateButton.addEventListener('click', async () => {
+            if (migrateButton.dataset.migrationComplete === 'true') {
+                if (!window.confirm('Las cuentas ya están guardadas en PostgreSQL. ¿Eliminar la copia antigua de este navegador?')) return;
+                window.AccessControlUsers.clearLegacyUsers();
+                migrateButton.hidden = true;
+                mostrarMensajeAcceso('access-users-feedback', 'Se eliminó la copia local antigua; las cuentas permanecen en PostgreSQL.', 'success');
+                return;
+            }
+
+            if (!window.confirm('Se migrarán las cuentas de este navegador a PostgreSQL y sus contraseñas quedarán guardadas como hashes. La copia local no se borrará hasta que confirmes después de verificar la migración. ¿Continuar?')) return;
+
+            migrateButton.disabled = true;
+            try {
+                const result = await window.AccessControlUsers.migrateLegacyUsers();
+                await cargarUsuariosRegistrados();
+                if (window.confirm(`Se migraron ${result.imported} cuentas a PostgreSQL. ¿Eliminar ahora la copia de contraseñas de este navegador?`)) {
+                    window.AccessControlUsers.clearLegacyUsers();
+                    migrateButton.hidden = true;
+                    mostrarMensajeAcceso('access-users-feedback', `Se migraron ${result.imported} cuentas y se eliminó la copia local.`, 'success');
+                } else {
+                    migrateButton.dataset.migrationComplete = 'true';
+                    migrateButton.textContent = 'Eliminar copia local de cuentas migradas';
+                    mostrarMensajeAcceso('access-users-feedback', `Se migraron ${result.imported} cuentas. La copia local sigue presente hasta que confirmes eliminarla.`, 'success');
+                }
+            } catch (error) {
+                mostrarMensajeAcceso('access-users-feedback', error.message, 'error');
+            } finally {
+                migrateButton.disabled = false;
+            }
+        });
+    }
 
     cargarUsuariosRegistrados();
     establecerModoEdicion(null);

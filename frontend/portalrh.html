@@ -172,29 +172,36 @@
         </div>
     </main>
 
-    <script src="access-control.js?v=recruitment-nav-order"></script>
+    <script src="access-control.js?v=postgres-access-auth"></script>
     <script>
         async function verificarAcceso() {
             const u = String(document.getElementById('user').value || '').trim();
-            const p = String(document.getElementById('pass').value || '').trim();
+            const p = String(document.getElementById('pass').value || '');
             const errorMsg = document.getElementById('mensajeError');
             const destinations = [
                 ['admin', 'iniciorh.html'],
                 ['reclutamiento', 'InicioReclu.html'],
             ];
 
-            const usuarioRegistrado = await window.AccessControlUsers.authenticate(u, p);
-            if (usuarioRegistrado) {
-                const permisos = Array.isArray(usuarioRegistrado.permisos) ? usuarioRegistrado.permisos : [];
-                const redirect = destinations.find(([permission]) => permisos.includes(permission));
-                if (!redirect) {
-                    errorMsg.textContent = 'El usuario no tiene acceso a una página asignada.';
-                    errorMsg.style.display = 'block';
+            try {
+                const usuarioRegistrado = await window.AccessControlUsers.authenticate(u, p);
+                if (usuarioRegistrado) {
+                    const permisos = Array.isArray(usuarioRegistrado.permisos) ? usuarioRegistrado.permisos : [];
+                    const redirect = destinations.find(([permission]) => permisos.includes(permission));
+                    if (!redirect) {
+                        await window.AccessControlUsers.logout();
+                        errorMsg.textContent = 'El usuario no tiene acceso a una página asignada.';
+                        errorMsg.style.display = 'block';
+                        return;
+                    }
+                    window.AccessControlUsers.saveSessionProfile(usuarioRegistrado);
+                    window.location.href = redirect[1];
                     return;
                 }
-                sessionStorage.setItem('accesoUsuario', JSON.stringify(usuarioRegistrado));
-                window.location.href = redirect[1];
-                return;
+                errorMsg.textContent = 'Usuario o contraseña incorrectos.';
+            } catch (error) {
+                console.error('No se pudo iniciar sesión:', error);
+                errorMsg.textContent = error.message || 'No se pudo conectar con el servidor de acceso.';
             }
 
             errorMsg.style.display = 'block';
@@ -204,7 +211,6 @@
         }
 
         (function configurarLogin() {
-            sessionStorage.removeItem('accesoUsuario');
             const form = document.getElementById('loginForm');
             if (form) {
                 form.addEventListener('submit', function(event) {

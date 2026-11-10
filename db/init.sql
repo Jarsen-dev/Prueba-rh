@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS chatbot_credenciales (
     updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS incidencias_empleado (
+CREATE TABLE IF NOT EXISTS incidencias_empleado ( 
     id                              BIGSERIAL PRIMARY KEY,
     registro_id                     INTEGER NOT NULL REFERENCES registro(id) ON DELETE CASCADE,
     no_empleado                     VARCHAR(50) NOT NULL,
@@ -108,6 +108,16 @@ CREATE TABLE IF NOT EXISTS usuarios_acceso (
     created_at              TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at              TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS sesiones_acceso (
+    token_hash              CHAR(64) PRIMARY KEY,
+    usuario_id              INTEGER NOT NULL REFERENCES usuarios_acceso(id) ON DELETE CASCADE,
+    expires_at              TIMESTAMPTZ NOT NULL,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_sesiones_acceso_expires_at
+    ON sesiones_acceso (expires_at);
 
 CREATE TABLE IF NOT EXISTS personal_reclutamiento (
     id              SERIAL PRIMARY KEY,

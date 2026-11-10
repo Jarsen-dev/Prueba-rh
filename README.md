@@ -111,6 +111,16 @@ Estos puertos se eligieron para no chocar con el otro proyecto que ya corre en e
 
 El esquema de las tablas (`registro`, `encuesta_reclutamiento`, `ingresos_puesto`, `incidencias_empleado`) se crea automáticamente la primera vez que el volumen de Postgres está vacío, vía `db/init.sql`. La tabla `registro` guarda el nombre de cada persona en un único campo `nombre_completo`. En bases existentes que tengan los campos separados de una versión anterior, la API vuelve a agregar `nombre_completo` y combina los valores para conservarlos; las columnas anteriores se dejan intactas para no borrar datos. Otros cambios de esquema posteriores requieren un `ALTER TABLE` manual — no hay herramienta de migraciones.
 
+### Usuarios y permisos de acceso
+
+Las cuentas de acceso y las sesiones se guardan en PostgreSQL. Las contraseñas se almacenan como hashes; la sesión usa una cookie `HttpOnly` y expira a las 12 horas. Las rutas de administración de cuentas requieren una sesión con permiso `Admin`; los permisos `Admin` y `Reclutamiento` determinan qué páginas del portal se muestran.
+
+Para crear el primer administrador, agrega `ACCESS_ADMIN_USERNAME` y `ACCESS_ADMIN_PASSWORD` al archivo `.env` que consume Docker Compose. La contraseña inicial debe tener al menos 12 caracteres. Reinicia el servicio backend después de configurar estas variables; solo se usan si todavía no existe ninguna cuenta. No compartas ni subas ese archivo.
+
+Si hay cuentas antiguas guardadas en el navegador, inicia sesión como administrador desde ese mismo navegador y usa **Migrar cuentas de este navegador a PostgreSQL** en “Usuarios con acceso”. La importación se hace en una sola operación y no borra la copia del navegador si falla o si hay nombres duplicados. Después de una importación correcta, el sistema solicita una confirmación aparte antes de borrar esa copia.
+
+El login remoto requiere HTTPS. La excepción de HTTP solo aplica al acceso local mediante `localhost` o `127.0.0.1`; el puerto 3001 publicado por defecto sirve HTTP, así que configura un reverse proxy con TLS antes de permitir inicios de sesión desde otros equipos. Este cambio protege las rutas de cuentas y sus páginas; no modifica la autorización de las demás APIs de datos del sistema.
+
 ### Chatbot de WhatsApp
 
 El chatbot conserva sus respuestas automáticas para personal activo y su conexión con los teléfonos registrados en Reclutamiento. Configura `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN` y `WHATSAPP_VERIFY_TOKEN` con los datos de Meta WhatsApp Cloud API. Los avisos de incidencias por WhatsApp y la notificación diferida a contactos de emergencia ya no forman parte del sistema.
@@ -135,6 +145,5 @@ El historial interno del expediente de empleado se guarda en la tabla `incidenci
 
 ## Limitaciones conocidas
 
-- El login de `portalrh.html` es una validación fija en el cliente (`admin` / `123`), sin backend ni sesión real — cualquiera puede saltarlo navegando directo a `iniciorh.html`. No se corrigió en esta reorganización; queda pendiente.
 - `cheong-woon.html` llama a `/api/baja-empleado`, endpoint que todavía no está implementado en el backend.
-- No hay HTTPS ni dominio configurado — nginx sirve solo HTTP en el puerto 3001. Si el servidor ya tiene un reverse proxy compartido (nginx/Traefik) para el otro proyecto, este stack puede integrarse detrás de él apuntando ese proxy a `localhost:3001`.
+- No hay HTTPS ni dominio configurado — nginx sirve solo HTTP en el puerto 3001. Para el acceso desde otros equipos, integra este stack detrás de un reverse proxy con TLS apuntando a `localhost:3001`.

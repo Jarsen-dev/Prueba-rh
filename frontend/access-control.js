@@ -1,25 +1,6 @@
 (function () {
-    const storageKey = 'cwAccessUsers';
-
-    function readUsers() {
-        try {
-            const users = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            return Array.isArray(users) ? users.map((user) => ({
-                id: user.id,
-                usuario: user.usuario,
-                password: user.password,
-                permisos: normalizePermissions(user.permisos),
-                nombre_notificacion: user.nombre_notificacion || '',
-                telefono_notificacion: user.telefono_notificacion || '',
-            })) : [];
-        } catch (_) {
-            return [];
-        }
-    }
-
-    function writeUsers(users) {
-        localStorage.setItem(storageKey, JSON.stringify(users));
-    }
+    const profileStorageKey = 'accesoUsuario';
+    const legacyUsersStorageKey = 'cwAccessUsers';
 
     function normalizePermissions(permissions) {
         const allowed = new Set(['admin', 'reclutamiento', 'notificaciones']);
@@ -31,65 +12,112 @@
             .filter((permission) => allowed.has(permission)))];
     }
 
-    function normalizeUser(data, existing = {}) {
-        const permissions = normalizePermissions(data.permisos);
-        return {
-            id: existing.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-            usuario: String(data.usuario || '').trim(),
-            password: String(data.password || '').trim(),
-            permisos: permissions,
-            nombre_notificacion: permissions.includes('notificaciones') ? String(data.nombre_notificacion || '').trim() : '',
-            telefono_notificacion: permissions.includes('notificaciones') ? String(data.telefono_notificacion || '').trim() : '',
-        };
+    function saveSessionProfile(user) {
+        if (!user) {
+            sessionStorage.removeItem(profileStorageKey);
+            return;
+        }
+
+        sessionStorage.setItem(profileStorageKey, JSON.stringify({
+            id: user.id,
+            usuario: user.usuario,
+            permisos: normalizePermissions(user.permisos),
+            nombre_notificacion: user.nombre_notificacion || '',
+            telefono_notificacion: user.telefono_notificacion || '',
+        }));
     }
 
-    function validateUser(user, users, userId = null) {
-        if (!user.usuario || !user.password || !user.permisos.length) {
-            throw new Error('Usuario, contraseña y al menos un permiso son obligatorios.');
+    async function requestJson(path, options = {}) {
+        const response = await fetch(`/api/${path}`, {
+            credentials: 'same-origin',
+            ...options,
+            headers: {
+                ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+                ...(options.headers || {}),
+            },
+        });
+        const payload = response.status === 204 ? {} : await response.json().catch(() => ({}));
+        if (!response.ok) {
+            const error = new Error(payload.error || `La solicitud falló (${response.status}).`);
+            error.status = response.status;
+            throw error;
         }
-        if (user.password.length < 6) {
-            throw new Error('La contraseña debe tener al menos 6 caracteres.');
-        }
-        if (users.some((item) => item.usuario.toLowerCase() === user.usuario.toLowerCase() && item.id !== userId)) {
-            throw new Error('Ese usuario ya está registrado.');
-        }
-        if (user.permisos.includes('notificaciones') && (!user.nombre_notificacion || !user.telefono_notificacion)) {
-            throw new Error('Nombre y teléfono son obligatorios para Notificaciones.');
-        }
+        return payload;
     }
 
     window.AccessControlUsers = {
-        list() {
-            return readUsers();
+        normalizePermissions,
+        saveSessionProfile,
+        async list() {
+            const result = await requestJson('access-users');
+            return Array.isArray(result.usuarios) ? result.usuarios : [];
         },
         create(data) {
-            const users = readUsers();
-            const user = normalizeUser(data);
-            validateUser(user, users);
-            users.push(user);
-            writeUsers(users);
-            return user;
+            return requestJson('access-users', {
+                method: 'POST',
+                body: JSON.stringify({ ...data, permisos: normalizePermissions(data.permisos) }),
+            });
         },
         update(userId, data) {
-            const users = readUsers();
-            const index = users.findIndex((user) => user.id === userId);
-            if (index < 0) throw new Error('Usuario no encontrado.');
-            const user = normalizeUser(data, users[index]);
-            validateUser(user, users, userId);
-            users[index] = user;
-            writeUsers(users);
-            return user;
+            return requestJson(`access-users/${encodeURIComponent(userId)}`, {
+                method: 'PUT',
+                body: JSON.stringify({ ...data, permisos: normalizePermissions(data.permisos) }),
+            });
         },
         remove(userId) {
-            const users = readUsers();
-            const filteredUsers = users.filter((user) => user.id !== userId);
-            if (filteredUsers.length === users.length) throw new Error('Usuario no encontrado.');
-            writeUsers(filteredUsers);
+            return requestJson(`access-users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
         },
-        authenticate(usuario, password) {
-            const usuarioSistema = String(usuario || '').trim();
-            const passwordSistema = String(password || '').trim();
-            return readUsers().find((user) => user.usuario === usuarioSistema && user.password === passwordSistema) || null;
+        hasLegacyUsers() {
+            return localStorage.getItem(legacyUsersStorageKey) !== null;
+        },
+        migrateLegacyUsers() {
+            let users;
+            try {
+                users = JSON.parse(localStorage.getItem(legacyUsersStorageKey) || '[]');
+            } catch (_) {
+                throw new Error('Las cuentas antiguas de este navegador no tienen un formato válido.');
+            }
+            if (!Array.isArray(users) || !users.length) {
+                throw new Error('No hay cuentas antiguas para migrar en este navegador.');
+            }
+            return requestJson('access-users/import', {
+                method: 'POST',
+                body: JSON.stringify({
+                    usuarios: users.map((user) => ({
+                        usuario: user.usuario,
+                        password: user.password,
+                        permisos: normalizePermissions(user.permisos),
+                        nombre_notificacion: user.nombre_notificacion || '',
+                        telefono_notificacion: user.telefono_notificacion || '',
+                    })),
+                }),
+            });
+        },
+        clearLegacyUsers() {
+            localStorage.removeItem(legacyUsersStorageKey);
+        },
+        async authenticate(usuario, password) {
+            try {
+                return await requestJson('auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ usuario, password }),
+                });
+            } catch (error) {
+                if (error.status === 401) return null;
+                throw error;
+            }
+        },
+        async getSession() {
+            try {
+                return await requestJson('auth/me');
+            } catch (error) {
+                if (error.status === 401) return null;
+                throw error;
+            }
+        },
+        async logout() {
+            await requestJson('auth/logout', { method: 'POST' });
+            saveSessionProfile(null);
         },
     };
 
@@ -104,34 +132,28 @@
 
     const pageName = decodeURIComponent(window.location.pathname.split('/').pop() || '');
     const allowedPermissions = pagePermissions[pageName];
-    if (!allowedPermissions) return;
 
-    try {
-        const accessUser = JSON.parse(sessionStorage.getItem('accesoUsuario') || '{}');
-        const currentUser = AccessControlUsers.list().find((user) => (
-            accessUser.id && user.id === accessUser.id
-        ) || (
-            accessUser.usuario
-            && user.usuario.toLowerCase() === String(accessUser.usuario).trim().toLowerCase()
-        ));
-        if (!currentUser) {
-            window.location.replace('portalrh.html');
-            return;
-        }
+    if (allowedPermissions) {
+        document.documentElement.style.visibility = 'hidden';
+        window.AccessControlReady = window.AccessControlUsers.getSession().then((user) => {
+            if (!user) {
+                saveSessionProfile(null);
+                window.location.replace('portalrh.html');
+                return false;
+            }
 
-        sessionStorage.setItem('accesoUsuario', JSON.stringify(currentUser));
-        const permissions = normalizePermissions(currentUser.permisos);
-        document.documentElement.classList.toggle(
-            'recruitment-limited',
-            permissions.includes('reclutamiento') && !permissions.includes('admin')
-        );
-        const hasPermission = permissions.some((permission) => allowedPermissions.includes(permission));
-        if (!hasPermission) {
-            window.location.replace('portalrh.html');
-            return;
-        }
+            saveSessionProfile(user);
+            const permissions = normalizePermissions(user.permisos);
+            const hasPermission = permissions.some((permission) => allowedPermissions.includes(permission));
+            if (!hasPermission) {
+                window.location.replace('portalrh.html');
+                return false;
+            }
 
-        const filterNavigation = () => {
+            document.documentElement.classList.toggle(
+                'recruitment-limited',
+                permissions.includes('reclutamiento') && !permissions.includes('admin')
+            );
             document.querySelectorAll('.nav-links a[href]').forEach((link) => {
                 const target = new URL(link.href, window.location.href);
                 const targetPage = decodeURIComponent(target.pathname.split('/').pop() || '');
@@ -140,13 +162,29 @@
                     link.style.display = 'none';
                 }
             });
-        };
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', filterNavigation, { once: true });
-        } else {
-            filterNavigation();
-        }
-    } catch (_) {
-        window.location.replace('portalrh.html');
+            document.documentElement.style.visibility = '';
+            return true;
+        }).catch((error) => {
+            console.error('No se pudo validar la sesión de acceso:', error);
+            saveSessionProfile(null);
+            window.location.replace('portalrh.html');
+            return false;
+        });
     }
+
+    document.addEventListener('click', (event) => {
+        const targetElement = event.target instanceof Element ? event.target : null;
+        const link = targetElement?.closest('a[href]');
+        if (!link) return;
+        const target = new URL(link.href, window.location.href);
+        if (decodeURIComponent(target.pathname.split('/').pop() || '') !== 'portalrh.html') return;
+
+        event.preventDefault();
+        window.AccessControlUsers.logout()
+            .then(() => window.location.assign(target.href))
+            .catch((error) => {
+                console.error('No se pudo cerrar la sesión en el servidor:', error);
+                window.alert('No se pudo cerrar la sesión en el servidor. Intenta de nuevo.');
+            });
+    });
 })();
