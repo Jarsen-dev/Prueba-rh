@@ -1,0 +1,42 @@
+# Banco de evaluación del agente: BD desechable en memoria y backend real.
+# Uso: docker-compose -p rh_eval --env-file .env -f eval/docker-compose.eval.yml up -d --build
+# Nunca toca la base de datos de prueba-rh (otro proyecto, sin volúmenes).
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: rh_eval
+      POSTGRES_USER: rh_eval
+      POSTGRES_PASSWORD: rh_eval
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ../db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./semilla.sql:/docker-entrypoint-initdb.d/02-semilla.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rh_eval -d rh_eval"]
+      interval: 2s
+      retries: 30
+
+  backend:
+    build: ../backend
+    environment:
+      POSTGRES_DB: rh_eval
+      POSTGRES_USER: rh_eval
+      POSTGRES_PASSWORD: rh_eval
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      AUTH_ESTRICTO: "1"
+      AUTH_SECRET_KEY: solo-para-el-banco-de-evaluacion
+      TELEGRAM_BOT_SECRETO_INTERNO: secreto-del-banco
+      ADMIN_INICIAL_USUARIO: admin_eval
+      ADMIN_INICIAL_PASSWORD: admin_eval_123
+      EMPLOYEE_DOCS_ROOT: /tmp/docs
+      # Solo para los casos de OCR (escanear-documento); levanta con --env-file .env.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+    ports:
+      - "127.0.0.1:58101:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy

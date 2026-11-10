@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <script src="../auth-fetch.js"></script>
     <meta charset="UTF-8">
     <title>Registro de Inducción</title>
     <link rel="icon" type="image/png" href="../favicon.png">
@@ -210,7 +211,7 @@
     <script>
         const PORT = '8001';
         const currentHost = window.location.hostname;
-        const API_BASES = [`http://${currentHost}:${PORT}`, `http://localhost:${PORT}`];
+        const API_BASES = ['', `http://${currentHost}:${PORT}`, `http://localhost:${PORT}`];
         const parametros = new URLSearchParams(window.location.search);
         const ids = [...new Set((parametros.get('ids') || '').split(',').filter((id) => /^\d+$/.test(id) && Number(id) > 0))];
         const filasEmpleados = document.getElementById('empleados-registro');

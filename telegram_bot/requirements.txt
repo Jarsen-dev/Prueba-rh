@@ -1,0 +1,11 @@
+# Long polling, botones en línea y httpx (que el bot reutiliza para el backend).
+python-telegram-bot==22.8
+
+# Configuración tipada desde el entorno.
+pydantic==2.10.4
+pydantic-settings==2.7.0
+
+# Pruebas
+pytest==8.3.4
+pytest-asyncio==0.25.0
+tzdata==2025.2

@@ -1,5 +1,6 @@
 (function () {
     const profileStorageKey = 'accesoUsuario';
+    const tokenStorageKey = 'rhToken';
     const legacyUsersStorageKey = 'cwAccessUsers';
 
     function normalizePermissions(permissions) {
@@ -43,6 +44,11 @@
             throw error;
         }
         return payload;
+    }
+
+    function setToken(token) {
+        if (token) localStorage.setItem(tokenStorageKey, token);
+        else localStorage.removeItem(tokenStorageKey);
     }
 
     window.AccessControlUsers = {
@@ -98,10 +104,14 @@
         },
         async authenticate(usuario, password) {
             try {
-                return await requestJson('auth/login', {
+                const user = await requestJson('auth/login', {
                     method: 'POST',
                     body: JSON.stringify({ usuario, password }),
                 });
+                setToken(user.token);
+                delete user.token;
+                saveSessionProfile(user);
+                return user;
             } catch (error) {
                 if (error.status === 401) return null;
                 throw error;
@@ -116,8 +126,9 @@
             }
         },
         async logout() {
-            await requestJson('auth/logout', { method: 'POST' });
+            setToken(null);
             saveSessionProfile(null);
+            await requestJson('auth/logout', { method: 'POST' });
         },
     };
 
