@@ -56,25 +56,27 @@ class AccessUserPermissionsTests(unittest.TestCase):
 
     def test_account_routes_require_authenticated_admin(self):
         client = utily.app.test_client()
-        requests = [
-            client.get('/api/access-users'),
-            client.post('/api/access-users', json={}),
-            client.post('/api/access-users/import', json={'usuarios': []}),
-            client.put('/api/access-users/1', json={}),
-            client.delete('/api/access-users/1'),
-        ]
+        with patch.dict('os.environ', {'AUTH_ESTRICTO': '1'}):
+            requests = [
+                client.get('/api/access-users'),
+                client.post('/api/access-users', json={}),
+                client.post('/api/access-users/import', json={'usuarios': []}),
+                client.put('/api/access-users/1', json={}),
+                client.delete('/api/access-users/1'),
+            ]
 
         self.assertEqual([response.status_code for response in requests], [401] * 5)
 
-    @patch('utily.obtener_usuario_sesion_actual', return_value={
-        'id': 8,
-        'usuario': 'reclutador',
-        'permisos': ['reclutamiento'],
-    })
-    def test_account_routes_reject_non_admin_users(self, _session):
-        response = utily.app.test_client().get('/api/access-users')
+    def test_account_routes_reject_non_admin_users(self):
+        with utily.app.test_request_context('/api/access-users'):
+            utily.g.usuario = {
+                'id': 8,
+                'usuario': 'reclutador',
+                'permisos': ['reclutamiento'],
+            }
+            response, status = utily.listar_usuarios_acceso()
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(status, 403)
         self.assertIn('administrador', response.get_json()['error'])
 
     def test_session_endpoint_requires_authentication(self):
