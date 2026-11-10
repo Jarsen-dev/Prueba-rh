@@ -129,8 +129,8 @@ class AuthTests(unittest.TestCase):
         os.environ['AUTH_ESTRICTO'] = '1'
         self.assertEqual(self.client.get('/api/access-users').status_code, 401)
 
-    def test_modo_gradual_sin_sesion_deja_pasar(self):
-        self.assertNotEqual(self.client.get('/api/access-users').status_code, 401)
+    def test_administracion_de_accesos_requiere_sesion_en_modo_gradual(self):
+        self.assertEqual(self.client.get('/api/access-users').status_code, 401)
 
     def test_rutas_publicas_no_piden_sesion_en_modo_estricto(self):
         os.environ['AUTH_ESTRICTO'] = '1'

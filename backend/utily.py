@@ -5,6 +5,8 @@ import base64
 import tempfile
 import traceback
 import mimetypes
+from functools import wraps
+from urllib.parse import urlsplit
 import requests
 from copy import copy
 from datetime import datetime
@@ -26,13 +28,13 @@ import memoria
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
-
-
 @app.after_request
 def agregar_headers_cors(response):
     response.headers.add("Access-Control-Allow-Origin", "*")
     response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
     response.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+    if request.path.startswith('/api/auth/') or request.path.startswith('/api/access-users'):
+        response.headers['Cache-Control'] = 'no-store'
     return response
 
 
@@ -964,8 +966,6 @@ def asegurar_tabla_usuarios_acceso(cur):
         )
         """
     )
-
-
 def normalizar_permisos(permisos):
     permitidos = {'admin', 'reclutamiento', 'notificaciones'}
     if not isinstance(permisos, list):
@@ -988,7 +988,56 @@ def usuario_acceso_dict(row):
     }
 
 
+def origen_es_mismo_host():
+    origen = request.headers.get('Origin')
+    if not origen:
+        return True
+
+    try:
+        url_origen = urlsplit(origen)
+        url_solicitud = urlsplit(f'//{request.host}')
+        return bool(
+            url_origen.hostname
+            and url_solicitud.hostname
+            and url_origen.hostname.casefold() == url_solicitud.hostname.casefold()
+            and url_origen.port == url_solicitud.port
+            and url_origen.scheme in {'http', 'https'}
+        )
+    except ValueError:
+        return False
+
+
+def solicitud_acceso_es_segura():
+    origen = request.headers.get('Origin', '')
+    esquema = urlsplit(origen).scheme if origen else request.scheme
+    host = urlsplit(f'//{request.host}').hostname
+    if esquema == 'https' or request.is_secure:
+        return True
+    return host in {'localhost', '127.0.0.1', '::1'}
+
+
+def admin_acceso_requerido(funcion):
+    @wraps(funcion)
+    def wrapper(*args, **kwargs):
+        usuario = getattr(g, 'usuario', None)
+        if not usuario:
+            return jsonify({'error': 'Se requiere iniciar sesión.'}), 401
+        if 'admin' not in usuario['permisos']:
+            return jsonify({'error': 'Se requiere permiso de administrador.'}), 403
+        if request.method in {'POST', 'PUT', 'PATCH', 'DELETE'} and not origen_es_mismo_host():
+            return jsonify({'error': 'Origen no permitido.'}), 403
+        g.usuario_acceso = usuario
+        return funcion(*args, **kwargs)
+
+    return wrapper
+
+
+def contrasena_valida(password):
+    return isinstance(password, str) and 6 <= len(password) <= 256
+
+
 @app.route('/api/access-users', methods=['GET'])
+@admin_acceso_requerido
 def listar_usuarios_acceso():
     try:
         with get_db_connection() as conn:
@@ -996,7 +1045,7 @@ def listar_usuarios_acceso():
                 asegurar_tabla_usuarios_acceso(cur)
                 cur.execute(
                     """
-                    SELECT id, usuario, password_hash, permisos,
+                    SELECT id, usuario, NULL, permisos,
                            nombre_notificacion, telefono_notificacion
                     FROM usuarios_acceso
                     ORDER BY usuario
@@ -1006,17 +1055,19 @@ def listar_usuarios_acceso():
             conn.commit()
         return jsonify({'usuarios': usuarios})
     except Exception as error:
-        return jsonify({'error': str(error)}), 500
+        app.logger.exception('No se pudieron consultar las cuentas de acceso.')
+        return jsonify({'error': 'No se pudieron consultar las cuentas de acceso.'}), 500
 
 
 @app.route('/api/access-users', methods=['POST'])
+@admin_acceso_requerido
 def crear_usuario_acceso():
     datos = request.get_json(silent=True) or {}
     usuario = str(datos.get('usuario', '')).strip()
-    password = str(datos.get('password', '')).strip()
+    password = datos.get('password', '')
     permisos = normalizar_permisos(datos.get('permisos'))
 
-    if not usuario or not password or not permisos:
+    if not usuario or len(usuario) > 100 or not contrasena_valida(password) or not permisos:
         return jsonify({'error': 'Usuario, contraseña y al menos un permiso son obligatorios.'}), 400
 
     nombre_notificacion = str(datos.get('nombre_notificacion', '')).strip() if 'notificaciones' in permisos else ''
@@ -1029,12 +1080,18 @@ def crear_usuario_acceso():
             with conn.cursor() as cur:
                 asegurar_tabla_usuarios_acceso(cur)
                 cur.execute(
+                    'SELECT 1 FROM usuarios_acceso WHERE LOWER(usuario) = LOWER(%s) LIMIT 1',
+                    (usuario,),
+                )
+                if cur.fetchone():
+                    return jsonify({'error': 'Ese usuario ya está registrado.'}), 409
+                cur.execute(
                     """
                     INSERT INTO usuarios_acceso (
                         usuario, password_hash, permisos,
                         nombre_notificacion, telefono_notificacion
                     ) VALUES (%s, %s, %s::jsonb, %s, %s)
-                    RETURNING id, usuario, password_hash, permisos,
+                    RETURNING id, usuario, NULL, permisos,
                               nombre_notificacion, telefono_notificacion
                     """,
                     (usuario, generate_password_hash(password), json.dumps(permisos),
@@ -1045,19 +1102,96 @@ def crear_usuario_acceso():
         return jsonify(creado), 201
     except psycopg2.IntegrityError:
         return jsonify({'error': 'Ese usuario ya está registrado.'}), 409
-    except Exception as error:
-        return jsonify({'error': str(error)}), 500
+    except Exception:
+        app.logger.exception('No se pudo crear la cuenta de acceso.')
+        return jsonify({'error': 'No se pudo crear la cuenta de acceso.'}), 500
+
+
+@app.route('/api/access-users/import', methods=['POST'])
+@admin_acceso_requerido
+def importar_usuarios_acceso():
+    datos = request.get_json(silent=True) or {}
+    usuarios = datos.get('usuarios')
+    if not isinstance(usuarios, list) or not usuarios or len(usuarios) > 100:
+        return jsonify({'error': 'Selecciona entre 1 y 100 cuentas para migrar.'}), 400
+
+    usuarios_normalizados = []
+    nombres_vistos = set()
+    for item in usuarios:
+        if not isinstance(item, dict):
+            return jsonify({'error': 'La lista contiene una cuenta no válida.'}), 400
+        usuario = str(item.get('usuario', '')).strip()
+        password = item.get('password', '')
+        permisos = normalizar_permisos(item.get('permisos'))
+        nombre_notificacion = str(item.get('nombre_notificacion', '')).strip() if 'notificaciones' in permisos else ''
+        telefono_notificacion = str(item.get('telefono_notificacion', '')).strip() if 'notificaciones' in permisos else ''
+
+        if not usuario or len(usuario) > 100 or not contrasena_valida(password) or not permisos:
+            return jsonify({'error': 'Una cuenta migrada no tiene usuario, contraseña o permisos válidos.'}), 400
+        nombre_normalizado = usuario.casefold()
+        if nombre_normalizado in nombres_vistos:
+            return jsonify({'error': f'La lista contiene el usuario duplicado {usuario}.'}), 400
+        nombres_vistos.add(nombre_normalizado)
+        if 'notificaciones' in permisos and (not nombre_notificacion or not telefono_notificacion):
+            return jsonify({'error': f'La cuenta {usuario} requiere nombre y teléfono de notificación.'}), 400
+        usuarios_normalizados.append((
+            usuario,
+            password,
+            json.dumps(permisos),
+            nombre_notificacion,
+            telefono_notificacion,
+        ))
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                asegurar_tabla_usuarios_acceso(cur)
+                nombres = [item[0] for item in usuarios_normalizados]
+                cur.execute(
+                    'SELECT usuario FROM usuarios_acceso WHERE LOWER(usuario) = ANY(%s)',
+                    ([nombre.casefold() for nombre in nombres],),
+                )
+                duplicados = [row[0] for row in cur.fetchall()]
+                if duplicados:
+                    return jsonify({
+                        'error': 'Ya existen cuentas con estos nombres; no se migró ninguna: '
+                                 + ', '.join(duplicados),
+                    }), 409
+                cur.executemany(
+                    """
+                    INSERT INTO usuarios_acceso (
+                        usuario, password_hash, permisos,
+                        nombre_notificacion, telefono_notificacion
+                    ) VALUES (%s, %s, %s::jsonb, %s, %s)
+                    """,
+                    [
+                        (usuario, generate_password_hash(password), permisos,
+                         nombre_notificacion, telefono_notificacion)
+                        for usuario, password, permisos, nombre_notificacion, telefono_notificacion
+                        in usuarios_normalizados
+                    ],
+                )
+            conn.commit()
+        return jsonify({'ok': True, 'imported': len(usuarios_normalizados)}), 201
+    except psycopg2.IntegrityError:
+        return jsonify({'error': 'No se migró ninguna cuenta porque hubo un usuario duplicado.'}), 409
+    except Exception:
+        app.logger.exception('No se pudieron migrar las cuentas del navegador.')
+        return jsonify({'error': 'No se pudieron migrar las cuentas del navegador.'}), 500
 
 
 @app.route('/api/access-users/<int:usuario_id>', methods=['PUT'])
+@admin_acceso_requerido
 def actualizar_usuario_acceso(usuario_id):
     datos = request.get_json(silent=True) or {}
     usuario = str(datos.get('usuario', '')).strip()
-    password = str(datos.get('password', '')).strip()
+    password = datos.get('password', '')
     permisos = normalizar_permisos(datos.get('permisos'))
 
-    if not usuario or not permisos:
+    if not usuario or len(usuario) > 100 or not permisos:
         return jsonify({'error': 'Usuario y al menos un permiso son obligatorios.'}), 400
+    if password and not contrasena_valida(password):
+        return jsonify({'error': 'La contraseña debe tener entre 6 y 256 caracteres.'}), 400
 
     nombre_notificacion = str(datos.get('nombre_notificacion', '')).strip() if 'notificaciones' in permisos else ''
     telefono_notificacion = str(datos.get('telefono_notificacion', '')).strip() if 'notificaciones' in permisos else ''
@@ -1068,6 +1202,42 @@ def actualizar_usuario_acceso(usuario_id):
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 asegurar_tabla_usuarios_acceso(cur)
+                cur.execute(
+                    'SELECT permisos FROM usuarios_acceso WHERE id = %s FOR UPDATE',
+                    (usuario_id,),
+                )
+                existente = cur.fetchone()
+                if not existente:
+                    return jsonify({'error': 'Usuario no encontrado.'}), 404
+
+                permisos_anteriores = normalizar_permisos(
+                    existente[0] if isinstance(existente[0], list) else json.loads(existente[0] or '[]')
+                )
+                if (
+                    usuario_id == g.usuario_acceso['id']
+                    and 'admin' in permisos_anteriores
+                    and 'admin' not in permisos
+                ):
+                    return jsonify({'error': 'No puedes quitarte tu propio acceso de administrador.'}), 400
+
+                if 'admin' in permisos_anteriores and 'admin' not in permisos:
+                    cur.execute(
+                        "SELECT COUNT(*) FROM usuarios_acceso WHERE permisos @> '[\"admin\"]'::jsonb"
+                    )
+                    if cur.fetchone()[0] <= 1:
+                        return jsonify({'error': 'No se puede quitar el último acceso de administrador.'}), 400
+
+                cur.execute(
+                        """
+                        SELECT 1 FROM usuarios_acceso
+                        WHERE LOWER(usuario) = LOWER(%s) AND id <> %s
+                        LIMIT 1
+                        """,
+                        (usuario, usuario_id),
+                )
+                if cur.fetchone():
+                        return jsonify({'error': 'Ese usuario ya está registrado.'}), 409
+
                 if password:
                     cur.execute(
                         """UPDATE usuarios_acceso
@@ -1075,7 +1245,7 @@ def actualizar_usuario_acceso(usuario_id):
                                nombre_notificacion = %s,
                                telefono_notificacion = %s, updated_at = CURRENT_TIMESTAMP
                            WHERE id = %s
-                           RETURNING id, usuario, password_hash, permisos,
+                           RETURNING id, usuario, NULL, permisos,
                                      nombre_notificacion, telefono_notificacion""",
                         (usuario, generate_password_hash(password), json.dumps(permisos),
                          nombre_notificacion, telefono_notificacion, usuario_id),
@@ -1087,7 +1257,7 @@ def actualizar_usuario_acceso(usuario_id):
                                nombre_notificacion = %s, telefono_notificacion = %s,
                                updated_at = CURRENT_TIMESTAMP
                            WHERE id = %s
-                          RETURNING id, usuario, password_hash, permisos,
+                          RETURNING id, usuario, NULL, permisos,
                                      nombre_notificacion, telefono_notificacion""",
                         (usuario, json.dumps(permisos), nombre_notificacion,
                          telefono_notificacion, usuario_id),
@@ -1099,31 +1269,56 @@ def actualizar_usuario_acceso(usuario_id):
         return jsonify(usuario_acceso_dict(actualizado))
     except psycopg2.IntegrityError:
         return jsonify({'error': 'Ese usuario ya está registrado.'}), 409
-    except Exception as error:
-        return jsonify({'error': str(error)}), 500
+    except Exception:
+        app.logger.exception('No se pudo actualizar la cuenta de acceso.')
+        return jsonify({'error': 'No se pudo actualizar la cuenta de acceso.'}), 500
 
 
 @app.route('/api/access-users/<int:usuario_id>', methods=['DELETE'])
+@admin_acceso_requerido
 def eliminar_usuario_acceso(usuario_id):
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 asegurar_tabla_usuarios_acceso(cur)
+                cur.execute(
+                    'SELECT permisos FROM usuarios_acceso WHERE id = %s FOR UPDATE',
+                    (usuario_id,),
+                )
+                existente = cur.fetchone()
+                if not existente:
+                    return jsonify({'error': 'Usuario no encontrado.'}), 404
+                permisos = normalizar_permisos(
+                    existente[0] if isinstance(existente[0], list) else json.loads(existente[0] or '[]')
+                )
+                if usuario_id == g.usuario_acceso['id']:
+                    return jsonify({'error': 'No puedes eliminar tu propio acceso.'}), 400
+                if 'admin' in permisos:
+                    cur.execute(
+                        "SELECT COUNT(*) FROM usuarios_acceso WHERE permisos @> '[\"admin\"]'::jsonb"
+                    )
+                    if cur.fetchone()[0] <= 1:
+                        return jsonify({'error': 'No se puede eliminar el último acceso de administrador.'}), 400
                 cur.execute('DELETE FROM usuarios_acceso WHERE id = %s', (usuario_id,))
                 eliminado = cur.rowcount
             conn.commit()
         if not eliminado:
             return jsonify({'error': 'Usuario no encontrado.'}), 404
         return jsonify({'ok': True})
-    except Exception as error:
-        return jsonify({'error': str(error)}), 500
+    except Exception:
+        app.logger.exception('No se pudo eliminar la cuenta de acceso.')
+        return jsonify({'error': 'No se pudo eliminar la cuenta de acceso.'}), 500
 
 
 @app.route('/api/auth/login', methods=['POST'])
 def iniciar_sesion_acceso():
+    if not origen_es_mismo_host():
+        return jsonify({'error': 'Origen no permitido.'}), 403
+    if not solicitud_acceso_es_segura():
+        return jsonify({'error': 'Inicia sesión mediante HTTPS para proteger tus credenciales.'}), 400
     datos = request.get_json(silent=True) or {}
     usuario = str(datos.get('usuario', '')).strip()
-    password = str(datos.get('password', '')).strip()
+    password = datos.get('password', '')
 
     if not usuario or not password:
         return jsonify({'error': 'Usuario y contraseña son obligatorios.'}), 400
@@ -1147,9 +1342,12 @@ def iniciar_sesion_acceso():
         cuerpo = usuario_acceso_dict(encontrado)
         cuerpo['token'] = token
         cuerpo['expira_en_minutos'] = auth.MINUTOS_POR_CANAL[auth.CANAL_WEB]
-        return auth.poner_cookie_sesion(jsonify(cuerpo), token)
+        response = auth.poner_cookie_sesion(jsonify(cuerpo), token)
+        response.headers['Cache-Control'] = 'no-store'
+        return response
     except Exception as error:
-        return jsonify({'error': str(error)}), 500
+        app.logger.exception('No se pudo iniciar sesión.')
+        return jsonify({'error': 'No se pudo iniciar sesión.'}), 500
 
 
 @app.route('/api/auth/logout', methods=['POST'])
@@ -1160,12 +1358,11 @@ def cerrar_sesion_acceso():
 @app.route('/api/auth/me', methods=['GET'])
 def sesion_actual():
     usuario = g.usuario
-    return jsonify({
-        'id': usuario['id'],
-        'usuario': usuario['usuario'],
-        'permisos': usuario['permisos'],
-        'canal': usuario['canal'],
-    })
+    if not usuario:
+        return jsonify({'error': 'Se requiere iniciar sesión.'}), 401
+    response = jsonify(usuario)
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 def asegurar_esquema_sesion(cur):
@@ -3163,7 +3360,7 @@ def exportar_excel():
         ws.append([1, "Ejemplo", "Cheong Woon"])
 
         # 2. Guardar en memoria
-        output = io.BytesIO()
+        output = BytesIO()
         wb.save(output)
         output.seek(0)
 

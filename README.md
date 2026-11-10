@@ -111,6 +111,16 @@ Estos puertos se eligieron para no chocar con el otro proyecto que ya corre en e
 
 El esquema de las tablas (`registro`, `encuesta_reclutamiento`, `ingresos_puesto`, `incidencias_empleado`) se crea automáticamente la primera vez que el volumen de Postgres está vacío, vía `db/init.sql`. La tabla `registro` guarda el nombre de cada persona en un único campo `nombre_completo`. En bases existentes que tengan los campos separados de una versión anterior, la API vuelve a agregar `nombre_completo` y combina los valores para conservarlos; las columnas anteriores se dejan intactas para no borrar datos. Otros cambios de esquema posteriores requieren un `ALTER TABLE` manual — no hay herramienta de migraciones.
 
+### Usuarios y permisos de acceso
+
+Las cuentas de acceso y las sesiones se guardan en PostgreSQL. Las contraseñas se almacenan como hashes; la sesión usa una cookie `HttpOnly` y expira a las 12 horas. Las rutas de administración de cuentas requieren una sesión con permiso `Admin`; los permisos `Admin` y `Reclutamiento` determinan qué páginas del portal se muestran.
+
+Para crear el primer administrador, agrega `ACCESS_ADMIN_USERNAME` y `ACCESS_ADMIN_PASSWORD` al archivo `.env` que consume Docker Compose. La contraseña inicial debe tener al menos 12 caracteres. Reinicia el servicio backend después de configurar estas variables; solo se usan si todavía no existe ninguna cuenta. No compartas ni subas ese archivo.
+
+Si hay cuentas antiguas guardadas en el navegador, inicia sesión como administrador desde ese mismo navegador y usa **Migrar cuentas de este navegador a PostgreSQL** en “Usuarios con acceso”. La importación se hace en una sola operación y no borra la copia del navegador si falla o si hay nombres duplicados. Después de una importación correcta, el sistema solicita una confirmación aparte antes de borrar esa copia.
+
+El login remoto requiere HTTPS. La excepción de HTTP solo aplica al acceso local mediante `localhost` o `127.0.0.1`; el puerto 3001 publicado por defecto sirve HTTP, así que configura un reverse proxy con TLS antes de permitir inicios de sesión desde otros equipos. Este cambio protege las rutas de cuentas y sus páginas; no modifica la autorización de las demás APIs de datos del sistema.
+
 ### Chatbot de WhatsApp
 
 El chatbot conserva sus respuestas automáticas para personal activo y su conexión con los teléfonos registrados en Reclutamiento. Configura `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN` y `WHATSAPP_VERIFY_TOKEN` con los datos de Meta WhatsApp Cloud API. Los avisos de incidencias por WhatsApp y la notificación diferida a contactos de emergencia ya no forman parte del sistema.
@@ -266,14 +276,15 @@ El historial interno del expediente de empleado se guarda en la tabla `incidenci
 Las cuentas del panel viven en el servidor (tabla `usuarios_acceso`, contraseñas con hash). `portalrh.html` inicia sesión con `/api/auth/login`, que devuelve una sesión firmada de 8 horas. La sesión viaja en una cookie `HttpOnly` y además como `Authorization: Bearer`, que añade `frontend/auth-fetch.js`. Cambiar la contraseña de una cuenta cierra sus sesiones abiertas.
 
 - **Primera cuenta:** define `ADMIN_INICIAL_USUARIO` y `ADMIN_INICIAL_PASSWORD` en `.env`. Se crea sola al primer intento de login si la tabla está vacía. Después cambia la contraseña desde el panel.
-- **Usuarios del sistema anterior:** antes las cuentas se guardaban en el navegador (localStorage). Al entrar a `iniciorh.html` como admin desde ese navegador aparece el botón «Importar al servidor», que las sube una sola vez y luego borra la copia local.
+- **Usuarios del sistema anterior:** antes las cuentas se guardaban en el navegador (localStorage). En `iniciorh.html`, el botón «Migrar cuentas de este navegador a PostgreSQL» las importa en una sola operación. Solo después de que la importación termina correctamente se ofrece borrar la copia local, con una confirmación aparte.
 - **Permisos:** cada ruta del backend tiene un permiso en `backend/auth.py` (`PERMISOS_POR_ENDPOINT`): público, `reclutamiento` o `admin`. Una ruta nueva sin clasificar exige `admin`, y `test_auth.py` falla hasta que se clasifique.
-- **Modo gradual:** con `AUTH_ESTRICTO=0` (por omisión) una petición sin sesión todavía pasa, y el backend registra un warning. Con `AUTH_ESTRICTO=1` responde 401. Actívalo cuando todos usen el nuevo login.
+- **Modo gradual:** con `AUTH_ESTRICTO=0` (por omisión) la mayoría de las peticiones del panel sin sesión todavía pasan, y el backend registra un warning. La administración de cuentas siempre requiere una sesión de administrador. Con `AUTH_ESTRICTO=1` las rutas protegidas responden 401 si no hay sesión.
 - **Bitácora:** las escrituras con sesión quedan en la tabla `bitacora` (usuario, canal, método, ruta y resultado; nunca el contenido).
 
 ## Limitaciones conocidas
 
-- `api/datos-grafica` responde 500 cuando la base no tiene datos (la función termina sin devolver respuesta).
-- `api/datos-grafica?periodo=mes` aplica `timezone('America/Mexico_City', fecha_registro)` a una columna `DATE`. La fecha se toma como medianoche UTC y queda en el día anterior, así que lo registrado el día 1 se cuenta en el mes anterior.
+- `cheong-woon.html` llama a `/api/baja-empleado`, endpoint que todavía no está implementado en el backend.
+- `api/datos-grafica` puede responder 500 cuando la base no tiene datos (la función termina sin devolver respuesta).
+- `api/datos-grafica?periodo=mes` aplica `timezone('America/Mexico_City', fecha_registro)` a una columna `DATE`. La fecha se toma como medianoche UTC y puede quedar en el día anterior, por lo que registros del día 1 se cuentan en el mes anterior.
 - `GET /api/reclutadores-nombres` es público (lo usa el formulario de registro) y devuelve el teléfono de cada reclutador.
-- No hay HTTPS ni dominio configurado — nginx sirve solo HTTP en el puerto 3001. Si el servidor ya tiene un reverse proxy compartido (nginx/Traefik) para el otro proyecto, este stack puede integrarse detrás de él apuntando ese proxy a `localhost:3001`.
+- No hay HTTPS ni dominio configurado — nginx sirve solo HTTP en el puerto 3001. Para el acceso desde otros equipos, integra este stack detrás de un reverse proxy con TLS apuntando a `localhost:3001`.

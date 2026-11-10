@@ -109,6 +109,7 @@ PERMISOS_POR_ENDPOINT = {
     'guardar_eventos_compartidos': ADMIN,
     'listar_usuarios_acceso': ADMIN,
     'crear_usuario_acceso': ADMIN,
+    'importar_usuarios_acceso': ADMIN,
     'actualizar_usuario_acceso': ADMIN,
     'eliminar_usuario_acceso': ADMIN,
     'admin_normalize_encuestas': ADMIN,

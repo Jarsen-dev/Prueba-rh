@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import utily
 
@@ -50,8 +51,65 @@ class AccessUserPermissionsTests(unittest.TestCase):
             },
         )
 
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('al menos un permiso', response.get_json()['error'])
+        self.assertEqual(response.status_code, 401)
+        self.assertIn('iniciar sesión', response.get_json()['error'])
+
+    def test_account_routes_require_authenticated_admin(self):
+        client = utily.app.test_client()
+        with patch.dict('os.environ', {'AUTH_ESTRICTO': '1'}):
+            requests = [
+                client.get('/api/access-users'),
+                client.post('/api/access-users', json={}),
+                client.post('/api/access-users/import', json={'usuarios': []}),
+                client.put('/api/access-users/1', json={}),
+                client.delete('/api/access-users/1'),
+            ]
+
+        self.assertEqual([response.status_code for response in requests], [401] * 5)
+
+    def test_account_routes_reject_non_admin_users(self):
+        with utily.app.test_request_context('/api/access-users'):
+            utily.g.usuario = {
+                'id': 8,
+                'usuario': 'reclutador',
+                'permisos': ['reclutamiento'],
+            }
+            response, status = utily.listar_usuarios_acceso()
+
+        self.assertEqual(status, 403)
+        self.assertIn('administrador', response.get_json()['error'])
+
+    def test_session_endpoint_requires_authentication(self):
+        response = utily.app.test_client().get('/api/auth/me')
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_cross_host_login_is_rejected(self):
+        response = utily.app.test_client().post(
+            '/api/auth/login',
+            json={'usuario': 'usuario', 'password': 'password'},
+            headers={'Origin': 'https://otro-sitio.example'},
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_cross_port_login_is_rejected(self):
+        response = utily.app.test_client().post(
+            '/api/auth/login',
+            base_url='http://localhost:8001',
+            json={'usuario': 'usuario', 'password': 'password'},
+            headers={'Origin': 'http://localhost:3001'},
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_same_host_and_port_origin_is_accepted(self):
+        with utily.app.test_request_context(
+            '/',
+            base_url='http://localhost:3001',
+            headers={'Origin': 'http://localhost:3001'},
+        ):
+            self.assertTrue(utily.origen_es_mismo_host())
 
 
 if __name__ == '__main__':

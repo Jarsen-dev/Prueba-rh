@@ -82,10 +82,12 @@ function crearCeldaTelegram(usuario) {
 async function cargarVinculosTelegram() {
     try {
         const respuesta = await fetch('/api/telegram/vinculos', { credentials: 'same-origin' });
-        const datos = respuesta.ok ? await respuesta.json() : { vinculos: [] };
+        if (!respuesta.ok) throw new Error(`No se pudieron cargar los vínculos (${respuesta.status}).`);
+        const datos = await respuesta.json();
         vinculosTelegram = new Map((datos.vinculos || []).map((v) => [String(v.usuario_id), v]));
-    } catch (_) {
+    } catch (error) {
         vinculosTelegram = new Map();
+        console.error('No se pudieron cargar los vínculos de Telegram:', error);
     }
 }
 
@@ -118,46 +120,6 @@ async function cargarUsuariosRegistrados() {
         mostrarMensajeAcceso('access-users-feedback', `No se pudo cargar la lista: ${error.message}`, 'error');
     }
     renderUsuariosRegistrados();
-    renderImportacionLegada();
-}
-
-function renderImportacionLegada() {
-    const contenedor = document.getElementById('access-legacy-import');
-    if (!contenedor) return;
-    const existentes = new Set(usuariosRegistrados.map((usuario) => usuario.usuario.toLowerCase()));
-    const pendientes = window.AccessControlUsers.legacyList()
-        .filter((usuario) => !existentes.has(String(usuario.usuario).trim().toLowerCase()));
-    contenedor.replaceChildren();
-    if (!pendientes.length) {
-        if (window.AccessControlUsers.legacyList().length) window.AccessControlUsers.clearLegacy();
-        contenedor.hidden = true;
-        return;
-    }
-    contenedor.hidden = false;
-    const texto = document.createElement('span');
-    texto.textContent = `Este navegador tiene ${pendientes.length} usuario(s) del sistema anterior que aún no están en el servidor. `;
-    const boton = crearBotonAcceso('Importar al servidor', 'import-legacy');
-    boton.addEventListener('click', () => importarUsuariosLegados(pendientes, boton));
-    contenedor.append(texto, boton);
-}
-
-async function importarUsuariosLegados(pendientes, boton) {
-    boton.disabled = true;
-    const errores = [];
-    for (const usuario of pendientes) {
-        try {
-            await window.AccessControlUsers.create(usuario);
-        } catch (error) {
-            if (error.status !== 409) errores.push(`${usuario.usuario}: ${error.message}`);
-        }
-    }
-    if (errores.length) {
-        mostrarMensajeAcceso('access-users-feedback', `No se importaron: ${errores.join('; ')}`, 'error');
-    } else {
-        window.AccessControlUsers.clearLegacy();
-        mostrarMensajeAcceso('access-users-feedback', 'Usuarios importados al servidor.', 'success');
-    }
-    await cargarUsuariosRegistrados();
 }
 
 function establecerModoEdicion(usuario) {
@@ -182,7 +144,7 @@ function establecerModoEdicion(usuario) {
     } else {
         userInput.value = datosFormularioAntesDeEditar?.usuario || '';
         permissionSelect.value = datosFormularioAntesDeEditar?.permiso || '';
-        passwordInput.value = datosFormularioAntesDeEditar?.password || '';
+        passwordInput.value = '';
         passwordInput.required = true;
         datosFormularioAntesDeEditar = null;
     }
@@ -198,7 +160,6 @@ function iniciarEdicionUsuario(usuarioId) {
     if (!usuarioEnEdicion) {
         datosFormularioAntesDeEditar = {
             usuario: document.getElementById('acceso-usuario').value,
-            password: document.getElementById('acceso-password').value,
             permiso: document.getElementById('acceso-asignacion').value,
         };
     }
@@ -223,7 +184,7 @@ async function guardarNuevoUsuario(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const feedbackId = 'access-create-feedback';
-    const password = document.getElementById('acceso-password').value.trim();
+    const password = document.getElementById('acceso-password').value;
     const permission = document.getElementById('acceso-asignacion').value;
 
     try {
@@ -285,6 +246,7 @@ async function eliminarUsuarioAcceso(usuarioId) {
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('form-nuevo-acceso');
     const tbody = document.getElementById('tabla-usuarios-registrados-body');
+    const migrateButton = document.getElementById('migrate-access-users-button');
 
     form.addEventListener('submit', guardarNuevoUsuario);
     tbody.addEventListener('click', (event) => {
@@ -311,6 +273,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
         }
     });
+
+    if (migrateButton) {
+        migrateButton.hidden = !window.AccessControlUsers.hasLegacyUsers();
+        migrateButton.addEventListener('click', async () => {
+            if (migrateButton.dataset.migrationComplete === 'true') {
+                if (!window.confirm('Las cuentas ya están guardadas en PostgreSQL. ¿Eliminar la copia antigua de este navegador?')) return;
+                window.AccessControlUsers.clearLegacyUsers();
+                migrateButton.hidden = true;
+                mostrarMensajeAcceso('access-users-feedback', 'Se eliminó la copia local antigua; las cuentas permanecen en PostgreSQL.', 'success');
+                return;
+            }
+
+            if (!window.confirm('Se migrarán las cuentas de este navegador a PostgreSQL y sus contraseñas quedarán guardadas como hashes. La copia local no se borrará hasta que confirmes después de verificar la migración. ¿Continuar?')) return;
+
+            migrateButton.disabled = true;
+            try {
+                const result = await window.AccessControlUsers.migrateLegacyUsers();
+                await cargarUsuariosRegistrados();
+                if (window.confirm(`Se migraron ${result.imported} cuentas a PostgreSQL. ¿Eliminar ahora la copia de contraseñas de este navegador?`)) {
+                    window.AccessControlUsers.clearLegacyUsers();
+                    migrateButton.hidden = true;
+                    mostrarMensajeAcceso('access-users-feedback', `Se migraron ${result.imported} cuentas y se eliminó la copia local.`, 'success');
+                } else {
+                    migrateButton.dataset.migrationComplete = 'true';
+                    migrateButton.textContent = 'Eliminar copia local de cuentas migradas';
+                    mostrarMensajeAcceso('access-users-feedback', `Se migraron ${result.imported} cuentas. La copia local sigue presente hasta que confirmes eliminarla.`, 'success');
+                }
+            } catch (error) {
+                mostrarMensajeAcceso('access-users-feedback', error.message, 'error');
+            } finally {
+                migrateButton.disabled = false;
+            }
+        });
+    }
 
     cargarUsuariosRegistrados();
     establecerModoEdicion(null);

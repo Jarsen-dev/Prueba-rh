@@ -1,9 +1,7 @@
 (function () {
-    // Las cuentas viven en el servidor (tabla usuarios_acceso). Lo único que
-    // queda en localStorage es la lista heredada, solo para importarla una vez.
-    const legacyStorageKey = 'cwAccessUsers';
-    const tokenKey = 'rhToken';
-    const userKey = 'accesoUsuario';
+    const profileStorageKey = 'accesoUsuario';
+    const tokenStorageKey = 'rhToken';
+    const legacyUsersStorageKey = 'cwAccessUsers';
 
     function normalizePermissions(permissions) {
         const allowed = new Set(['admin', 'reclutamiento', 'notificaciones']);
@@ -15,93 +13,122 @@
             .filter((permission) => allowed.has(permission)))];
     }
 
-    async function api(method, path, body) {
-        const options = { method, headers: {}, credentials: 'same-origin' };
-        if (body !== undefined) {
-            options.headers['Content-Type'] = 'application/json';
-            options.body = JSON.stringify(body);
+    function saveSessionProfile(user) {
+        if (!user) {
+            sessionStorage.removeItem(profileStorageKey);
+            return;
         }
-        const response = await fetch(path, options);
-        const text = await response.text();
-        let data = {};
-        try { data = text ? JSON.parse(text) : {}; } catch (_) { data = {}; }
+
+        sessionStorage.setItem(profileStorageKey, JSON.stringify({
+            id: user.id,
+            usuario: user.usuario,
+            permisos: normalizePermissions(user.permisos),
+            nombre_notificacion: user.nombre_notificacion || '',
+            telefono_notificacion: user.telefono_notificacion || '',
+        }));
+    }
+
+    async function requestJson(path, options = {}) {
+        const response = await fetch(`/api/${path}`, {
+            credentials: 'same-origin',
+            ...options,
+            headers: {
+                ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+                ...(options.headers || {}),
+            },
+        });
+        const payload = response.status === 204 ? {} : await response.json().catch(() => ({}));
         if (!response.ok) {
-            const error = new Error(data.error || `Error ${response.status}`);
+            const error = new Error(payload.error || `La solicitud falló (${response.status}).`);
             error.status = response.status;
             throw error;
         }
-        return data;
+        return payload;
     }
 
-    function readLegacyUsers() {
-        try {
-            const users = JSON.parse(localStorage.getItem(legacyStorageKey) || '[]');
-            return Array.isArray(users) ? users.filter((user) => user && user.usuario && user.password) : [];
-        } catch (_) {
-            return [];
-        }
-    }
-
-    function validateUser(user) {
-        if (!user.usuario || !user.password || !normalizePermissions(user.permisos).length) {
-            throw new Error('Usuario, contraseña y al menos un permiso son obligatorios.');
-        }
-        if (user.password.length < 6) {
-            throw new Error('La contraseña debe tener al menos 6 caracteres.');
-        }
-    }
-
-    function payload(data) {
-        const permisos = normalizePermissions(data.permisos);
-        return {
-            usuario: String(data.usuario || '').trim(),
-            password: String(data.password || '').trim(),
-            permisos,
-            nombre_notificacion: permisos.includes('notificaciones') ? String(data.nombre_notificacion || '').trim() : '',
-            telefono_notificacion: permisos.includes('notificaciones') ? String(data.telefono_notificacion || '').trim() : '',
-        };
+    function setToken(token) {
+        if (token) localStorage.setItem(tokenStorageKey, token);
+        else localStorage.removeItem(tokenStorageKey);
     }
 
     window.AccessControlUsers = {
+        normalizePermissions,
+        saveSessionProfile,
         async list() {
-            const data = await api('GET', '/api/access-users');
-            return Array.isArray(data.usuarios) ? data.usuarios : [];
+            const result = await requestJson('access-users');
+            return Array.isArray(result.usuarios) ? result.usuarios : [];
         },
-        async create(data) {
-            const user = payload(data);
-            validateUser(user);
-            return api('POST', '/api/access-users', user);
+        create(data) {
+            return requestJson('access-users', {
+                method: 'POST',
+                body: JSON.stringify({ ...data, permisos: normalizePermissions(data.permisos) }),
+            });
         },
-        async update(userId, data) {
-            const user = payload(data);
-            validateUser(user);
-            return api('PUT', `/api/access-users/${encodeURIComponent(userId)}`, user);
+        update(userId, data) {
+            return requestJson(`access-users/${encodeURIComponent(userId)}`, {
+                method: 'PUT',
+                body: JSON.stringify({ ...data, permisos: normalizePermissions(data.permisos) }),
+            });
         },
-        async remove(userId) {
-            return api('DELETE', `/api/access-users/${encodeURIComponent(userId)}`);
+        remove(userId) {
+            return requestJson(`access-users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+        },
+        hasLegacyUsers() {
+            return localStorage.getItem(legacyUsersStorageKey) !== null;
+        },
+        migrateLegacyUsers() {
+            let users;
+            try {
+                users = JSON.parse(localStorage.getItem(legacyUsersStorageKey) || '[]');
+            } catch (_) {
+                throw new Error('Las cuentas antiguas de este navegador no tienen un formato válido.');
+            }
+            if (!Array.isArray(users) || !users.length) {
+                throw new Error('No hay cuentas antiguas para migrar en este navegador.');
+            }
+            return requestJson('access-users/import', {
+                method: 'POST',
+                body: JSON.stringify({
+                    usuarios: users.map((user) => ({
+                        usuario: user.usuario,
+                        password: user.password,
+                        permisos: normalizePermissions(user.permisos),
+                        nombre_notificacion: user.nombre_notificacion || '',
+                        telefono_notificacion: user.telefono_notificacion || '',
+                    })),
+                }),
+            });
+        },
+        clearLegacyUsers() {
+            localStorage.removeItem(legacyUsersStorageKey);
         },
         async authenticate(usuario, password) {
             try {
-                const user = await api('POST', '/api/auth/login', {
-                    usuario: String(usuario || '').trim(),
-                    password: String(password || '').trim(),
+                const user = await requestJson('auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ usuario, password }),
                 });
-                try { localStorage.setItem(tokenKey, user.token || ''); } catch (_) {}
+                setToken(user.token);
                 delete user.token;
+                saveSessionProfile(user);
                 return user;
             } catch (error) {
                 if (error.status === 401) return null;
                 throw error;
             }
         },
-        async logout() {
-            try { localStorage.removeItem(tokenKey); } catch (_) {}
-            sessionStorage.removeItem(userKey);
-            try { await api('POST', '/api/auth/logout'); } catch (_) {}
+        async getSession() {
+            try {
+                return await requestJson('auth/me');
+            } catch (error) {
+                if (error.status === 401) return null;
+                throw error;
+            }
         },
-        legacyList: readLegacyUsers,
-        clearLegacy() {
-            try { localStorage.removeItem(legacyStorageKey); } catch (_) {}
+        async logout() {
+            setToken(null);
+            saveSessionProfile(null);
+            await requestJson('auth/logout', { method: 'POST' });
         },
     };
 
@@ -116,23 +143,28 @@
 
     const pageName = decodeURIComponent(window.location.pathname.split('/').pop() || '');
     const allowedPermissions = pagePermissions[pageName];
-    if (!allowedPermissions) return;
 
-    function goToLogin() {
-        sessionStorage.removeItem(userKey);
-        window.location.replace('portalrh.html');
-    }
+    if (allowedPermissions) {
+        document.documentElement.style.visibility = 'hidden';
+        window.AccessControlReady = window.AccessControlUsers.getSession().then((user) => {
+            if (!user) {
+                saveSessionProfile(null);
+                window.location.replace('portalrh.html');
+                return false;
+            }
 
-    function applyPermissions(permissions) {
-        document.documentElement.classList.toggle(
-            'recruitment-limited',
-            permissions.includes('reclutamiento') && !permissions.includes('admin')
-        );
-        if (!permissions.some((permission) => allowedPermissions.includes(permission))) {
-            goToLogin();
-            return false;
-        }
-        const filterNavigation = () => {
+            saveSessionProfile(user);
+            const permissions = normalizePermissions(user.permisos);
+            const hasPermission = permissions.some((permission) => allowedPermissions.includes(permission));
+            if (!hasPermission) {
+                window.location.replace('portalrh.html');
+                return false;
+            }
+
+            document.documentElement.classList.toggle(
+                'recruitment-limited',
+                permissions.includes('reclutamiento') && !permissions.includes('admin')
+            );
             document.querySelectorAll('.nav-links a[href]').forEach((link) => {
                 const target = new URL(link.href, window.location.href);
                 const targetPage = decodeURIComponent(target.pathname.split('/').pop() || '');
@@ -141,35 +173,29 @@
                     link.style.display = 'none';
                 }
             });
-        };
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', filterNavigation, { once: true });
-        } else {
-            filterNavigation();
-        }
-        return true;
+            document.documentElement.style.visibility = '';
+            return true;
+        }).catch((error) => {
+            console.error('No se pudo validar la sesión de acceso:', error);
+            saveSessionProfile(null);
+            window.location.replace('portalrh.html');
+            return false;
+        });
     }
 
-    try {
-        // Comprobación inmediata con lo guardado al iniciar sesión…
-        const accessUser = JSON.parse(sessionStorage.getItem(userKey) || '{}');
-        if (!accessUser.id || !applyPermissions(normalizePermissions(accessUser.permisos))) {
-            goToLogin();
-            return;
-        }
-        // Botón «Telegram» de la cabecera (vincular la cuenta con el bot).
-        const telegramScript = document.createElement('script');
-        telegramScript.src = 'telegram-vinculo.js';
-        document.head.append(telegramScript);
-        // …y confirmación con el servidor (sesión vigente y permisos actuales).
-        api('GET', '/api/auth/me').then((me) => {
-            const permissions = normalizePermissions(me.permisos);
-            sessionStorage.setItem(userKey, JSON.stringify({ ...accessUser, permisos: permissions }));
-            applyPermissions(permissions);
-        }).catch((error) => {
-            if (error.status === 401) goToLogin();
-        });
-    } catch (_) {
-        goToLogin();
-    }
+    document.addEventListener('click', (event) => {
+        const targetElement = event.target instanceof Element ? event.target : null;
+        const link = targetElement?.closest('a[href]');
+        if (!link) return;
+        const target = new URL(link.href, window.location.href);
+        if (decodeURIComponent(target.pathname.split('/').pop() || '') !== 'portalrh.html') return;
+
+        event.preventDefault();
+        window.AccessControlUsers.logout()
+            .then(() => window.location.assign(target.href))
+            .catch((error) => {
+                console.error('No se pudo cerrar la sesión en el servidor:', error);
+                window.alert('No se pudo cerrar la sesión en el servidor. Intenta de nuevo.');
+            });
+    });
 })();
