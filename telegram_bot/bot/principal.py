@@ -10,7 +10,7 @@ import time
 from typing import Any
 
 import httpx
-from telegram import BotCommand, Update
+from telegram import BotCommand, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.constants import ChatType
 from telegram.ext import (
     Application,
@@ -81,6 +81,25 @@ COMANDOS = [
 ]
 
 
+# Teclado fijo (debajo del chat) con los comandos rápidos. Cada etiqueta llama
+# al mismo handler que su comando; se manda al vincular, con /start y /ayuda.
+BOTONES_RAPIDOS = [
+    [('📋 Menú', 'sistema'), ('🔔 Avisos', 'avisos')],
+    [('🗓 Tareas', 'tareas'), ('🧠 Memoria', 'memoria')],
+    [('👤 Mi cuenta', 'yo'), ('🆕 Nueva conversación', 'nuevo')],
+    [('❌ Cancelar', 'cancelar'), ('❓ Ayuda', 'ayuda')],
+]
+
+
+def teclado_rapido() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [[KeyboardButton(etiqueta) for etiqueta, _ in fila] for fila in BOTONES_RAPIDOS],
+        resize_keyboard=True,
+        is_persistent=True,
+        input_field_placeholder='Escribe o elige una opción',
+    )
+
+
 # --- Ayudantes de contexto ---------------------------------------------------
 
 def _backend(context: ContextTypes.DEFAULT_TYPE) -> ClienteBackend:
@@ -106,7 +125,8 @@ async def _vincular(update: Update, context: ContextTypes.DEFAULT_TYPE, codigo: 
         return
     nombre = sesion.usuario.get('usuario', '')
     permisos = ', '.join(sesion.permisos) or 'ninguno'
-    await responder(update, f'✅ Listo, este Telegram quedó vinculado a la cuenta «{nombre}» (permisos: {permisos}).\n\n{TEXTO_AYUDA}')
+    await responder(update, f'✅ Listo, este Telegram quedó vinculado a la cuenta «{nombre}» (permisos: {permisos}).\n\n{TEXTO_AYUDA}',
+                    reply_markup=teclado_rapido())
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -118,7 +138,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except ErrorBackend as error:
         await responder(update, texto_error(error))
         return
-    await responder(update, f'Hola, {sesion.usuario.get("usuario", "")}.\n\n{TEXTO_AYUDA}')
+    await responder(update, f'Hola, {sesion.usuario.get("usuario", "")}.\n\n{TEXTO_AYUDA}', reply_markup=teclado_rapido())
 
 
 async def cmd_vincular(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -136,7 +156,8 @@ async def cmd_desvincular(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     except ErrorBackend as error:
         await responder(update, texto_error(error))
         return
-    await responder(update, '🔌 Este Telegram quedó desvinculado.' if desvinculado else 'Este Telegram no estaba vinculado.')
+    await responder(update, '🔌 Este Telegram quedó desvinculado.' if desvinculado else 'Este Telegram no estaba vinculado.',
+                    reply_markup=ReplyKeyboardRemove())
 
 
 async def cmd_yo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -149,7 +170,7 @@ async def cmd_yo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_ayuda(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
-    await responder(update, TEXTO_AYUDA)
+    await responder(update, TEXTO_AYUDA, reply_markup=teclado_rapido())
 
 
 # --- Consultas ---------------------------------------------------------------------
@@ -424,6 +445,13 @@ def construir(settings: Settings) -> Application:
     }
     for nombre, handler in comandos.items():
         app.add_handler(CommandHandler(nombre, handler, filters=PRIVADO))
+    # Antes del texto libre: si no, la etiqueta del botón le llegaría al agente.
+    por_etiqueta = {etiqueta: comandos[cmd] for fila in BOTONES_RAPIDOS for etiqueta, cmd in fila}
+
+    async def al_boton_rapido(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        await por_etiqueta[update.effective_message.text](update, context)
+
+    app.add_handler(MessageHandler(filters.Text(list(por_etiqueta)) & PRIVADO, al_boton_rapido))
     app.add_handler(CallbackQueryHandler(al_boton, pattern=r'^(ok|no):[0-9a-f]{8}$'))
     app.add_handler(CallbackQueryHandler(pantallas.al_boton_nodo, pattern=r'^m:[a-z_]{1,30}$'))
     app.add_handler(CallbackQueryHandler(pantallas.al_boton_empleado, pattern=r'^e:\d{1,3}$'))

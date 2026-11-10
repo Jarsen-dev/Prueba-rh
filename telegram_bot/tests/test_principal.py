@@ -157,3 +157,34 @@ def test_handlers_registrados_solo_en_privado():
     app = principal.construir(Settings(TELEGRAM_BOT_TOKEN='123:abc', TELEGRAM_BOT_SECRETO_INTERNO='s'))
     comandos = {c for h in app.handlers[0] if hasattr(h, 'commands') for c in h.commands}
     assert {'start', 'vincular', 'desvincular', 'consultar', 'eliminar', 'cancelar'} <= comandos
+
+
+def test_teclado_rapido_cada_boton_tiene_comando():
+    comandos = {c.command for c in principal.COMANDOS}
+    teclado = principal.teclado_rapido()
+    assert teclado.is_persistent and teclado.resize_keyboard
+    for fila in principal.BOTONES_RAPIDOS:
+        for etiqueta, cmd in fila:
+            assert cmd in comandos
+            assert not etiqueta.startswith('/')
+
+
+async def test_boton_rapido_va_al_comando_y_no_al_agente():
+    app = principal.construir(Settings(TELEGRAM_BOT_TOKEN='123:abc', TELEGRAM_BOT_SECRETO_INTERNO='s'))
+    mensajes = [h for h in app.handlers[0] if type(h).__name__ == 'MessageHandler']
+    rapido = next(h for h in mensajes if h.callback.__name__ == 'al_boton_rapido')
+    texto_libre = next(h for h in mensajes if h.callback is principal.al_texto)
+    assert mensajes.index(rapido) < mensajes.index(texto_libre)
+
+    estados = Estados()
+    estados.de(7).pendiente = CambioPendiente(titulo='x', detalle=[], metodo='POST', ruta='/api/x')
+    respuestas = []
+
+    async def reply_text(texto, **kw):
+        respuestas.append(texto)
+
+    mensaje = SimpleNamespace(text='❌ Cancelar', reply_text=reply_text)
+    update = SimpleNamespace(effective_message=mensaje, effective_user=SimpleNamespace(id=7))
+    await rapido.callback(update, contexto(FakeBackend(), estados))
+    assert respuestas == ['Descartado.']
+    assert estados.de(7).pendiente is None
