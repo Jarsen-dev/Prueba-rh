@@ -141,6 +141,14 @@
         'empleado.html': ['admin', 'reclutamiento'],
     };
 
+    function cargarBotonTelegram() {
+        if (!document.querySelector('.header-right') || document.querySelector('script[data-telegram-vinculo]')) return;
+        const script = document.createElement('script');
+        script.src = 'telegram-vinculo.js?v=20261110-restore-button';
+        script.dataset.telegramVinculo = 'true';
+        document.head.append(script);
+    }
+
     const pageName = decodeURIComponent(window.location.pathname.split('/').pop() || '');
     const allowedPermissions = pagePermissions[pageName];
 
@@ -161,6 +169,7 @@
                 return false;
             }
 
+            cargarBotonTelegram();
             document.documentElement.classList.toggle(
                 'recruitment-limited',
                 permissions.includes('reclutamiento') && !permissions.includes('admin')
