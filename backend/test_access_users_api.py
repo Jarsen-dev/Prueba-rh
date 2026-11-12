@@ -1,4 +1,6 @@
+import os
 import unittest
+from unittest import mock
 from unittest.mock import patch
 
 import utily
@@ -110,6 +112,41 @@ class AccessUserPermissionsTests(unittest.TestCase):
             headers={'Origin': 'http://localhost:3001'},
         ):
             self.assertTrue(utily.origen_es_mismo_host())
+
+    def _es_segura(self, base_url, env=None):
+        origen = base_url
+        with mock.patch.dict(os.environ, env or {}, clear=False):
+            with utily.app.test_request_context('/', base_url=base_url, headers={'Origin': origen}):
+                return utily.solicitud_acceso_es_segura()
+
+    def test_http_login_allowed_on_tailscale_and_lan(self):
+        for url in ('http://100.111.35.87:3001', 'http://192.168.1.20:3001',
+                    'http://10.0.0.5:3001', 'http://localhost:3001', 'http://127.0.0.1:3001'):
+            with self.subTest(url=url):
+                self.assertTrue(self._es_segura(url, {'AUTH_EXIGIR_HTTPS': ''}))
+
+    def test_http_login_rejected_on_public_host(self):
+        self.assertFalse(self._es_segura('http://8.8.8.8:3001', {'AUTH_EXIGIR_HTTPS': ''}))
+        self.assertFalse(self._es_segura('http://rh.example.com', {'AUTH_EXIGIR_HTTPS': '', 'AUTH_HOSTS_HTTP': ''}))
+        self.assertTrue(self._es_segura('https://rh.example.com'))
+
+    def test_http_hosts_configurables(self):
+        self.assertTrue(self._es_segura('http://servidor-rh:3001', {'AUTH_HOSTS_HTTP': 'servidor-rh, otro'}))
+
+    def test_exigir_https_solo_permite_localhost(self):
+        env = {'AUTH_EXIGIR_HTTPS': '1'}
+        self.assertFalse(self._es_segura('http://100.111.35.87:3001', env))
+        self.assertTrue(self._es_segura('http://localhost:3001', env))
+
+    def test_login_from_tailscale_reaches_credentials_check(self):
+        with mock.patch.object(utily, 'get_db_connection', side_effect=RuntimeError('sin bd')):
+            response = utily.app.test_client().post(
+                '/api/auth/login',
+                base_url='http://100.111.35.87:3001',
+                json={'usuario': 'usuario', 'password': 'password'},
+                headers={'Origin': 'http://100.111.35.87:3001'},
+            )
+        self.assertNotEqual(response.status_code, 400)
 
 
 if __name__ == '__main__':

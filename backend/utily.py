@@ -5,6 +5,7 @@ import base64
 import tempfile
 import traceback
 import mimetypes
+import ipaddress
 from functools import wraps
 from urllib.parse import urlsplit
 import requests
@@ -1007,13 +1008,41 @@ def origen_es_mismo_host():
         return False
 
 
+RED_TAILSCALE = ipaddress.ip_network('100.64.0.0/10')
+
+
+def host_permite_http(host):
+    """HTTP sin cifrar solo para el propio equipo, la red local o Tailscale (ya cifrada).
+
+    AUTH_EXIGIR_HTTPS=1 lo limita a localhost; AUTH_HOSTS_HTTP agrega nombres
+    (separados por coma) que se usan en la red interna.
+    """
+    if not host:
+        return False
+    host = host.strip('[]').casefold()
+    if host == 'localhost':
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        ip = None
+    if ip is not None and ip.is_loopback:
+        return True
+    if (os.getenv('AUTH_EXIGIR_HTTPS') or '').strip() == '1':
+        return False
+    if ip is not None and (ip.is_private or ip.is_link_local or ip in RED_TAILSCALE):
+        return True
+    extra = {h.strip().casefold() for h in (os.getenv('AUTH_HOSTS_HTTP') or '').split(',') if h.strip()}
+    return host in extra
+
+
 def solicitud_acceso_es_segura():
     origen = request.headers.get('Origin', '')
     esquema = urlsplit(origen).scheme if origen else request.scheme
     host = urlsplit(f'//{request.host}').hostname
     if esquema == 'https' or request.is_secure:
         return True
-    return host in {'localhost', '127.0.0.1', '::1'}
+    return host_permite_http(host)
 
 
 def admin_acceso_requerido(funcion):
